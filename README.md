@@ -1,9 +1,8 @@
-# FT-BAT
-**F**EniCS **T**hree-Dimensional **B**eam **A**nalysis **T**oolkit
+# FRuIT-BAT
+**F**EniCSx **R**epresenation of **I**ntervals for **T**hree-Dimensional **B**eam **A**nalysis **T**oolkit
 
-(pronounced "Fruit Bat")
 
-Topologically 1D beam models (interval meshes) in 3D ambientspace using FEniCS
+Topologically 1D beam models (interval meshes) in 3D ambient space using FEniCS
 
 Timoshenko 6x6 stiffness matrices with a mixed finite element function space
 
