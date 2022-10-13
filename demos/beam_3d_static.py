@@ -44,7 +44,7 @@ gmsh.model.add_physical_group(tdim,[line])
 
 #generate the mesh and optionally write the gmsh mesh file
 gmsh.model.mesh.generate(gdim)
-gmsh.write("beam_mesh.msh")
+# gmsh.write("output/beam_mesh.msh")
 
 #use meshio to convert msh file to xdmf
 msh, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, MPI.COMM_SELF, 0)
@@ -53,14 +53,14 @@ cell_markers.name = f"{msh.name}_cells"
 facet_markers.name = f"{msh.name}_facets"
 
 #write xdmf mesh file
-with XDMFFile(msh.comm, f"beam_mesh.xdmf", "w") as file:
+with XDMFFile(msh.comm, f"output/beam_mesh.xdmf", "w") as file:
     file.write_mesh(msh)
 
 # close gmsh API
 gmsh.finalize()
 
 #read in xdmf mesh from generation process
-fileName = "beam_mesh.xdmf"
+fileName = "output/beam_mesh.xdmf"
 with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
     beam_msh = xdmf.read_mesh(name="beam_mesh")
 
@@ -147,8 +147,8 @@ locate_BC = locate_dofs_topological(W,tdim,fixed_dof_num)
 
 bcs = dirichletbc(ubc,locate_BC)
 #TODO: figure out application of geometrical dof location for mixed element function spaces
-# locate_BC1 = locate_dofs_geometrical(W.sub(0),lambda x: np.isclose(x[0], 0. ,atol=1e-6))
-# locate_BC2 = locate_dofs_geometrical(W.sub(1),lambda x: np.isclose(x[0], 0. ,atol=1e-6))
+# locate_BC1 = locate_dofs_geometrical((W.sub(0), W.sub(0).collapse()[0]),lambda x: np.isclose(x[0], 0. ,atol=1e-6))
+# locate_BC2 = locate_dofs_geometrical((W.sub(1), W.sub(1).collapse()[0]),lambda x: np.isclose(x[0], 0. ,atol=1e-6))
 # bcs = [dirichletbc(ubc, locate_BC1, W.sub(0)),
 #         dirichletbc(ubc, locate_BC2, W.sub(1)),
 #        ]
@@ -203,7 +203,7 @@ theta.name ="Rotation"
 #     # vtk.write([theta._cpp_object])
 #     # vtk.write([M._cpp_object])
 
-with XDMFFile(MPI.COMM_WORLD, "output.xdmf", "w") as xdmf:
+with XDMFFile(MPI.COMM_WORLD, "output/output.xdmf", "w") as xdmf:
     xdmf.write_mesh(beam_msh)
     xdmf.write_function(v)
     xdmf.write_function(theta)
@@ -211,8 +211,12 @@ with XDMFFile(MPI.COMM_WORLD, "output.xdmf", "w") as xdmf:
 # print(W.sub(0))
 # print(W.sub(0).collapse()[0])
 
+
+# TODO: fix pyvista visualization using plotter3d()
+#  and compute_nodal_disp() from shell module 
+
 #visualize with pyvista:
-if plot_with_pyvista == True:
+if plot_with_pyvista == False:
     # topology, cell_types, geometry = plot.create_vtk_mesh(beam_msh, tdim)
     # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
     # plotter = pyvista.Plotter()
