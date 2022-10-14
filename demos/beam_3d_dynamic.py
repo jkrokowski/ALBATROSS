@@ -107,11 +107,11 @@ def f(t):
 ########### INITIALIZE  #############################
 #################################################################
 
-# Compute transformation Jacobian between reference interval and elements
+#MARKED: Utility fxn for ref-->3D element transformation computation
 def tangent(beam_msh):
     t = Jacobian(beam_msh)
     return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))
-
+# Compute transformation Jacobian between reference interval and elements
 t = tangent(beam_msh)
 
 #compute section local axis
@@ -121,15 +121,40 @@ a1 /= sqrt(dot(a1, a1))
 a2 = cross(t, a1)
 a2 /= sqrt(dot(a2, a2))
 
-#construct mixed element function space
+#MARKED: declare construction beam element using BeamElement()
+#construct mixed element function space; trial+test fxns
+#split functions into disp (w) and rotation (theta) 
 Ue = VectorElement("CG", beam_msh.ufl_cell(), 1, dim=3)
 W = FunctionSpace(beam_msh, Ue*Ue)
 
+#values at current time step
 u_ = TestFunction(W)
 du = TrialFunction(W)
 (w_, theta_) = split(u_)
 (dw, dtheta) = split(du)
 
+#values at previous timestep
+
+#
+
+#compute midpoint values:
+u_mid = 
+theta_mid =
+
+#velocities (computed via implicit midpoint)
+#QUESTION: when should u and du be split?
+udot =
+wdot = 
+thetadot =
+
+
+#accelerations (computed via implicit midpoint)
+uddot = 
+theteaddot =
+wddot =
+
+
+#MARKED: three utility functions for deriv. of element trans, strains, stress
 def tgrad(u):
     return dot(grad(u), t)
 def generalized_strains(u):
@@ -143,25 +168,31 @@ def generalized_strains(u):
 def generalized_stresses(u):
     return dot(diag(as_vector([ES, GS1, GS2, GJ, EI1, EI2])), generalized_strains(u))
 
+#CONSTRUCT LHS FORM:
 Sig = generalized_stresses(du)
 Eps =  generalized_strains(u_)
-
-#TODO: check if this is still an issue in FEniCS and change if quadrature is not needed
+#TODO: check if this is still an issue in FEniCSx and change if quadrature is not needed
+#Construct shear term reduced integration measure
 dx_shear = dx(scheme="default",metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
+#construct LHS, with the two shear terms recieving reduced integration measure
 k_form = sum([Sig[i]*Eps[i]*dx for i in [0, 3, 4, 5]]) + (Sig[1]*Eps[1]+Sig[2]*Eps[2])*dx_shear
-l_form = -rho*S*g*w_[2]*dx
 
+#CONSTRUCT RHS FORM (neglecting BCs)
+#add distributed loading
+l_form = -rho*S*g*w_[2]*dx
+#TODO: general load application method (including pointsource, etc)
 
 #APPLY BOUNDARY CONDITIONS
 #initialize function for boundary condition application
 ubc = Function(W)
+#set degrees of freedom values as 0.
 with ubc.vector.localForm() as uloc:
      uloc.set(0.)
-
+#choose beam node at the origin to lock DOF
 fixed_dof_num = 0
 locate_BC = locate_dofs_topological(W,tdim,fixed_dof_num)
-
 bcs = dirichletbc(ubc,locate_BC)
+
 #TODO: figure out application of geometrical dof location for mixed element function spaces
 # locate_BC1 = locate_dofs_geometrical(W.sub(0),lambda x: np.isclose(x[0], 0. ,atol=1e-6))
 # locate_BC2 = locate_dofs_geometrical(W.sub(1),lambda x: np.isclose(x[0], 0. ,atol=1e-6))
@@ -178,6 +209,27 @@ bcs = dirichletbc(ubc,locate_BC)
 # beam_st_pt = locate_entities_boundary(beam_msh,0,)
 # fixed_endpoint=locate_entities(beam_msh,tdim,lambda x: np.isclose(x[0], 0. ,atol=1e-6))
 # print(fixed_endpoint)
+
+#################################################################
+########### TIME STEPPING LOOP ##########################
+#################################################################
+time = np.linspace(0,T,Nsteps+1)
+u_tip = np.zeros((Nsteps+1,))
+f_t = np.zeros((Nsteps+1,))
+for i in range(0,round(cutoff_Tc/dt)+1):
+    f_t[i] = p0*i*dt/cutoff_Tc
+xdmf_file = XDMFFile(MPI.COMM_WORLD, "solutions/displacement.xdmf", "w")
+xdmf_file.write_mesh(beam_msh)
+# xdmf_file_stress = XDMFFile(MPI.COMM_WORLD, "solutions/stress.xdmf", "w")
+# xdmf_file_stress.write_mesh(beam_msh)
+t = 0.
+
+for i in range(0,Nsteps):
+    #increment time
+    t += dt
+    print("------- Time step "+str(i+1)
+            +" , t = "+str(t)+" -------")
+    
 
 
 #SOLVE VARIATIONAL PROBLEM
