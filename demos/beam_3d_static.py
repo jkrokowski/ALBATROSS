@@ -62,28 +62,28 @@ gmsh.finalize()
 #read in xdmf mesh from generation process
 fileName = "output/beam_mesh.xdmf"
 with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
-    beam_msh = xdmf.read_mesh(name="beam_mesh")
+    domain = xdmf.read_mesh(name="beam_mesh")
 
 #confirm that we have an interval mesh in 3D:
-print('cell_type   :', beam_msh.ufl_cell())
+print('cell_type   :', domain.ufl_cell())
 
 #################################################################
 ##### ENTER MATERIAL PARAMETERS AND CONSTITUTIVE MODEL ##########
 #################################################################
-thick = Constant(beam_msh,0.3)
+thick = Constant(domain,0.3)
 width = thick/3
-E = Constant(beam_msh,70e3)
-nu = Constant(beam_msh,0.3)
+E = Constant(domain,70e3)
+nu = Constant(domain,0.3)
 G = E/2/(1+nu)
-rho = Constant(beam_msh,2.7e-3)
-g = Constant(beam_msh,9.81)
+rho = Constant(domain,2.7e-3)
+g = Constant(domain,9.81)
 
 S = thick*width
 ES = E*S
 EI1 = E*width*thick**3/12
 EI2 = E*width**3*thick/12
 GJ = G*0.26*thick*width**3
-kappa = Constant(beam_msh,5./6.)
+kappa = Constant(domain,5./6.)
 GS1 = kappa*G*S
 GS2 = kappa*G*S
 
@@ -92,11 +92,11 @@ GS2 = kappa*G*S
 #################################################################
 
 # Compute transformation Jacobian between reference interval and elements
-def tangent(beam_msh):
-    t = Jacobian(beam_msh)
+def tangent(domain):
+    t = Jacobian(domain)
     return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))
 
-t = tangent(beam_msh)
+t = tangent(domain)
 
 #compute section local axis
 ez = as_vector([0, 0, 1])
@@ -106,8 +106,8 @@ a2 = cross(t, a1)
 a2 /= sqrt(dot(a2, a2))
 
 #construct mixed element function space
-Ue = VectorElement("CG", beam_msh.ufl_cell(), 1, dim=3)
-W = FunctionSpace(beam_msh, Ue*Ue)
+Ue = VectorElement("CG", domain.ufl_cell(), 1, dim=3)
+W = FunctionSpace(domain, Ue*Ue)
 
 u_ = TestFunction(W)
 du = TrialFunction(W)
@@ -158,9 +158,9 @@ bcs = dirichletbc(ubc,locate_BC)
 
 # def start_boundary(x):
 #     return np.isclose(x[0],0)
-# beam_msh.topology.create_connectivity(0,tdim)
-# beam_st_pt = locate_entities_boundary(beam_msh,0,)
-# fixed_endpoint=locate_entities(beam_msh,tdim,lambda x: np.isclose(x[0], 0. ,atol=1e-6))
+# domain.topology.create_connectivity(0,tdim)
+# beam_st_pt = locate_entities_boundary(domain,0,)
+# fixed_endpoint=locate_entities(domain,tdim,lambda x: np.isclose(x[0], 0. ,atol=1e-6))
 # print(fixed_endpoint)
 
 
@@ -185,7 +185,7 @@ theta = u.sub(1)
 theta.name ="Rotation"
 # File('beam-rotate.pvd') << theta
 #save moments
-# V1 = VectorFunctionSpace(beam_msh, "CG", 1, dim=2)
+# V1 = VectorFunctionSpace(domain, "CG", 1, dim=2)
 # M = Function(V1, name="Bending moments (M1,M2)")
 # Sig = generalized_stresses(u)
 #TODO: fix the projection function like Ru did for the shell tool
@@ -204,7 +204,7 @@ theta.name ="Rotation"
 #     # vtk.write([M._cpp_object])
 
 with XDMFFile(MPI.COMM_WORLD, "output/output.xdmf", "w") as xdmf:
-    xdmf.write_mesh(beam_msh)
+    xdmf.write_mesh(domain)
     xdmf.write_function(v)
     xdmf.write_function(theta)
 
@@ -217,12 +217,12 @@ with XDMFFile(MPI.COMM_WORLD, "output/output.xdmf", "w") as xdmf:
 
 #visualize with pyvista:
 if plot_with_pyvista == False:
-    # topology, cell_types, geometry = plot.create_vtk_mesh(beam_msh, tdim)
+    # topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
     # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
     # plotter = pyvista.Plotter()
     # plotter.add_mesh(grid)
 
-    topology, cell_types, geometry = plot.create_vtk_mesh(beam_msh,tdim)
+    topology, cell_types, geometry = plot.create_vtk_mesh(domain,tdim)
     grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
     plotter = pyvista.Plotter()
 
