@@ -63,8 +63,8 @@ class BeamModelRefined(object):
         self.a2 = cross(self.t, self.a1)
         self.a2 /= sqrt(dot(self.a2, self.a2))
         
-    def tgrad(self,u):
-        return dot(grad(u), self.t)
+    def tgrad(self,w):
+        return dot(grad(w), self.t)
 
     def generalized_strains(self,w):
         (u, theta) = split(w)
