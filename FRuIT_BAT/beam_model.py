@@ -9,6 +9,8 @@ f dynamic analysis is to be completed, a 4x4damping matrix(C)
 and 4x4mass (M) matrix
 '''
 
+from ufl import (Jacobian, as_vector, sqrt, inner)
+
 class BeamModelRefined(object):
     
     '''
@@ -18,6 +20,10 @@ class BeamModelRefined(object):
     def __init(self,domain,w):
         self.domain = domain
         self.w = w
+
+    def tangent(domain):
+        t = Jacobian(domain)
+        return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))     
         
 
 
