@@ -1,9 +1,6 @@
 #single, static 1D Beam in 3D space example based on Jeremy Bleyer's implementation here:
 # https://comet-fenics.readthedocs.io/en/latest/demo/beams_3D/beams_3D.html
 # from dolfinx import fem, mesh, plot
-from FRuIT_BAT 
-
-
 from dolfinx.fem import (VectorFunctionSpace,Function,FunctionSpace,
                         dirichletbc,locate_dofs_geometrical,
                         locate_dofs_topological,Constant)
