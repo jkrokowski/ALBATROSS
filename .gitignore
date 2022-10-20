@@ -7,3 +7,5 @@ FRuIT_BAT/__pycache__/__init__.cpython-310.pyc
 FRuIT_BAT/__pycache__/beam_model.cpython-310.pyc
 FRuIT_BAT/__pycache__/elements.cpython-310.pyc
 FRuIT_BAT/__pycache__/utils.cpython-310.pyc
+
+.gitignore
