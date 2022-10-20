@@ -18,7 +18,10 @@ import numpy as np
 import pyvista
 from dolfinx import plot
 
-plot_with_pyvista = True
+from FRuIT_BAT.beam_model import BeamModelRefined
+from FRuIT_BAT.elements import BeamElementRefined
+
+plot_with_pyvista = False
 
 
 #################################################################
@@ -89,63 +92,75 @@ kappa = Constant(domain,5./6.)
 GS1 = kappa*G*S
 GS2 = kappa*G*S
 
+#initialize cross sectional properties matrices
+beam_properties = [ES,GS1,GS2,GJ,EI1,EI2]
+
 #################################################################
 ########### COMPUTE STATIC SOLUTION #############################
 #################################################################
 
-# Compute transformation Jacobian between reference interval and elements
-def tangent(domain):
-    t = Jacobian(domain)
-    return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))
+#initialize beam element using mesh and beam properties
+beam_model = BeamModelRefined(domain,beam_properties)
+#construct LHS of weak form
+a_form = beam_model.elasticEnergy()
 
-t = tangent(domain)
+#add body force:
+L_form = -rho*S*g*beam_model.u_[2]*dx
 
-#compute section local axis
-ez = as_vector([0, 0, 1])
-a1 = cross(t, ez)
-a1 /= sqrt(dot(a1, a1))
-a2 = cross(t, a1)
-a2 /= sqrt(dot(a2, a2))
+###################################
 
-#construct mixed element function space
-Ue = VectorElement("CG", domain.ufl_cell(), 1, dim=3)
-W = FunctionSpace(domain, Ue*Ue)
+# # Compute transformation Jacobian between reference interval and elements
+# def tangent(domain):
+#     t = Jacobian(domain)
+#     return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))
 
-u_ = TestFunction(W)
-du = TrialFunction(W)
-(w_, theta_) = split(u_)
-(dw, dtheta) = split(du)
+# t = tangent(domain)
 
-def tgrad(u):
-    return dot(grad(u), t)
-def generalized_strains(u):
-    (w, theta) = split(u)
-    return as_vector([dot(tgrad(w), t),
-                      dot(tgrad(w), a1)-dot(theta, a2),
-                      dot(tgrad(w), a2)+dot(theta, a1),
-                      dot(tgrad(theta), t),
-                      dot(tgrad(theta), a1),
-                      dot(tgrad(theta), a2)])
-def generalized_stresses(u):
-    return dot(diag(as_vector([ES, GS1, GS2, GJ, EI1, EI2])), generalized_strains(u))
+# #compute section local axis
+# ez = as_vector([0, 0, 1])
+# a1 = cross(t, ez)
+# a1 /= sqrt(dot(a1, a1))
+# a2 = cross(t, a1)
+# a2 /= sqrt(dot(a2, a2))
 
-Sig = generalized_stresses(du)
-Eps =  generalized_strains(u_)
+# #construct mixed element function space
+# Ue = VectorElement("CG", domain.ufl_cell(), 1, dim=3)
+# W = FunctionSpace(domain, Ue*Ue)
 
-#TODO: check if this is still an issue in FEniCS and change if quadrature is not needed
-dx_shear = dx(scheme="default",metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
-k_form = sum([Sig[i]*Eps[i]*dx for i in [0, 3, 4, 5]]) + (Sig[1]*Eps[1]+Sig[2]*Eps[2])*dx_shear
-l_form = -rho*S*g*w_[2]*dx
+# u_ = TestFunction(W)
+# du = TrialFunction(W)
+# (w_, theta_) = split(u_)
+# (dw, dtheta) = split(du)
 
+# def tgrad(u):
+#     return dot(grad(u), t)
+# def generalized_strains(u):
+#     (w, theta) = split(u)
+#     return as_vector([dot(tgrad(w), t),
+#                       dot(tgrad(w), a1)-dot(theta, a2),
+#                       dot(tgrad(w), a2)+dot(theta, a1),
+#                       dot(tgrad(theta), t),
+#                       dot(tgrad(theta), a1),
+#                       dot(tgrad(theta), a2)])
+# def generalized_stresses(u):
+#     return dot(diag(as_vector([ES, GS1, GS2, GJ, EI1, EI2])), generalized_strains(u))
+
+# Sig = generalized_stresses(du)
+# Eps =  generalized_strains(u_)
+
+# #TODO: check if this is still an issue in FEniCS and change if quadrature is not needed
+# dx_shear = dx(scheme="default",metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
+# k_form = sum([Sig[i]*Eps[i]*dx for i in [0, 3, 4, 5]]) + (Sig[1]*Eps[1]+Sig[2]*Eps[2])*dx_shear
+# l_form = -rho*S*g*w_[2]*dx
 
 #APPLY BOUNDARY CONDITIONS
 #initialize function for boundary condition application
-ubc = Function(W)
+ubc = Function(beam_model.beam_element.W)
 with ubc.vector.localForm() as uloc:
      uloc.set(0.)
 
 fixed_dof_num = 0
-locate_BC = locate_dofs_topological(W,tdim,fixed_dof_num)
+locate_BC = locate_dofs_topological(beam_model.beam_element.W,tdim,fixed_dof_num)
 
 bcs = dirichletbc(ubc,locate_BC)
 #TODO: figure out application of geometrical dof location for mixed element function spaces
@@ -167,10 +182,10 @@ bcs = dirichletbc(ubc,locate_BC)
 
 
 #SOLVE VARIATIONAL PROBLEM
-#initialize function in functionspace for beam properties
-u = Function(W)
+#initialize function for disp/rot vector in beam model function space
+u = Function(beam_model.beam_element.W)
 # solve variational problem
-problem = LinearProblem(k_form, l_form, u=u, bcs=[bcs])
+problem = LinearProblem(a_form, L_form, u=u, bcs=[bcs])
 u = problem.solve()
 
 #################################################################
@@ -218,7 +233,7 @@ with XDMFFile(MPI.COMM_WORLD, "output/output.xdmf", "w") as xdmf:
 #  and compute_nodal_disp() from shell module 
 
 #visualize with pyvista:
-if plot_with_pyvista == False:
+if plot_with_pyvista == True:
     # topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
     # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
     # plotter = pyvista.Plotter()
