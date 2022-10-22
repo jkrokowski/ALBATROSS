@@ -33,7 +33,9 @@ class BeamModelRefined(object):
         self.beam_element = BeamElementRefined(domain)
         self.eleDOFs = 6 #link to fxn space
         self.beam_props = beam_props
-        [self.ES, self.GS1, self.GS2,
+        #TODO: think through where to store XC area
+        [self.S, 
+         self.ES, self.GS1, self.GS2,
          self.GJ, self.EI1, self.EI2] = self.beam_props
         
         self.w = TestFunction(self.beam_element.W)
@@ -76,6 +78,11 @@ class BeamModelRefined(object):
                         dot(self.tgrad(theta), self.a2)])
 
     def generalized_stresses(self,w):
-        return dot(diag(as_vector(self.beam_props)), self.generalized_strains(w))
+        #TODO: reformulate to a "stiffness matrix"
+        return dot(diag(as_vector(self.beam_props[1:])), self.generalized_strains(w))
 
-
+    #constructing RHS:
+    def addBodyForce(self,f,frame='ref',ax=0):
+        if frame == 'ref':
+            vec_dir = self.u_[ax]
+        return -f*self.S*vec_dir*dx

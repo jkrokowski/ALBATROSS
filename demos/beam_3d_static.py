@@ -1,18 +1,15 @@
 #single, static 1D Beam in 3D space example based on Jeremy Bleyer's implementation here:
 # https://comet-fenics.readthedocs.io/en/latest/demo/beams_3D/beams_3D.html
 
-# from FRuIT_BAT 
-
 from dolfinx.fem import (VectorFunctionSpace,Function,FunctionSpace,
                         dirichletbc,locate_dofs_geometrical,
                         locate_dofs_topological,Constant)
 from dolfinx.io import XDMFFile,gmshio,VTKFile
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import locate_entities,locate_entities_boundary
-from ufl import (Jacobian, diag, as_vector, inner, sqrt,cross,dot,
-                VectorElement, TestFunction, TrialFunction,split,grad,dx)
-import meshio
-import gmsh
+# from ufl import (Jacobian, diag, as_vector, inner, sqrt,cross,dot,
+#                 VectorElement, TestFunction, TrialFunction,split,grad,dx)
+from ufl import dx
 from mpi4py import MPI
 import numpy as np
 import pyvista
@@ -20,9 +17,9 @@ from dolfinx import plot
 
 from FRuIT_BAT.beam_model import BeamModelRefined
 from FRuIT_BAT.geometry import beamIntervalMesh3D
+from FRuIT_BAT.material import getBeamProps
 
 plot_with_pyvista = False
-
 
 #################################################################
 ########### CONSTRUCT BEAM MESH #################################
@@ -43,38 +40,6 @@ p2 = (1,2,3)
 #TODO: make sure that one can just call this function and get back a beam mesh
 beamIntervalMesh3D([p1,p2],lc,fileName,meshname)
 
-# gmsh.initialize()
-
-# #construct line in 3D space
-# gmsh.model.add("Beam")
-# gmsh.model.setCurrent("Beam")
-# p1 = gmsh.model.occ.addPoint(0,0,0,lc)
-# p2 = gmsh.model.occ.addPoint(1,2,3,lc)
-# line = gmsh.model.occ.addLine(p1,p2)
-
-# # Synchronize OpenCascade representation with gmsh model
-# gmsh.model.occ.synchronize()
-
-# # add physical marker
-# gmsh.model.add_physical_group(tdim,[line])
-
-# #generate the mesh and optionally write the gmsh mesh file
-# gmsh.model.mesh.generate(gdim)
-# # gmsh.write("output/beam_mesh.msh")
-
-# #use meshio to convert msh file to xdmf
-# msh, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, MPI.COMM_SELF, 0)
-# msh.name = 'beam_mesh'
-# # cell_markers.name = f"{msh.name}_cells"
-# # facet_markers.name = f"{msh.name}_facets"
-
-# #write xdmf mesh file
-# with XDMFFile(msh.comm, f"output/beam_mesh.xdmf", "w") as file:
-#     file.write_mesh(msh)
-
-# # close gmsh API
-# gmsh.finalize()
-
 #read in xdmf mesh from generation process
 with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
     domain = xdmf.read_mesh(name="beam_mesh")
@@ -83,25 +48,19 @@ with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
 #################################################################
 ##### ENTER MATERIAL PARAMETERS AND CONSTITUTIVE MODEL ##########
 #################################################################
+rho = Constant(domain,2.7e-3)
+g = Constant(domain,9.81)
+
 thick = Constant(domain,0.3)
 width = thick/3
 E = Constant(domain,70e3)
 nu = Constant(domain,0.3)
-G = E/2/(1+nu)
-rho = Constant(domain,2.7e-3)
-g = Constant(domain,9.81)
+geo=[thick,width]
+mat=[E,nu]
 
-S = thick*width
-ES = E*S
-EI1 = E*width*thick**3/12
-EI2 = E*width**3*thick/12
-GJ = G*0.26*thick*width**3
-kappa = Constant(domain,5./6.)
-GS1 = kappa*G*S
-GS2 = kappa*G*S
-
-#initialize cross sectional properties matrices
-beam_properties = [ES,GS1,GS2,GJ,EI1,EI2]
+#initialize cross sectional properties
+[S,ES,GS1,GS2,GJ,EI1,EI2] = getBeamProps(domain=domain,xc='rectangular',geo=geo,mat=mat)
+beam_properties = [S,ES,GS1,GS2,GJ,EI1,EI2]
 
 #################################################################
 ########### COMPUTE STATIC SOLUTION #############################
@@ -112,8 +71,9 @@ beam_model = BeamModelRefined(domain,beam_properties)
 #construct LHS of weak form
 a_form = beam_model.elasticEnergy()
 
-#add body force:
-L_form = -rho*S*g*beam_model.u_[2]*dx
+#add body force (note: frame='ref',ax=2 says to applied this body force in the global z direction
+L_form = beam_model.addBodyForce(f=-rho*g,frame='ref',ax=2)
+# L_form = -rho*S*g*beam_model.u_[2]*dx
 
 ###################################
 

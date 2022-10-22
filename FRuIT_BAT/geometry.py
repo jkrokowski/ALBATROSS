@@ -13,16 +13,21 @@ def beamIntervalMesh3D(pts,lc,filename,meshname):
     gmsh.model.add("Beam")
     gmsh.model.setCurrent("Beam")
 
+    pt_tags = []
+    line_tags = []
+    #combine for loops (add pt, then add lines)
     for pt in pts:
-        p1 = gmsh.model.occ.addPoint(pt[0],pt[1],pt[2],lc)
-    for i in range(len(pts)):
-        line = gmsh.model.occ.addLine(pts[i],pts[i])
+        pt_tag = gmsh.model.occ.addPoint(pt[0],pt[1],pt[2],lc)
+        pt_tags.append(pt_tag)
+    for i in range(len(pts)-1):
+        line_tag = gmsh.model.occ.addLine(pt_tags[i],pt_tags[i+1])
+        line_tags.append(line_tag)
 
     # Synchronize OpenCascade representation with gmsh model
     gmsh.model.occ.synchronize()
 
     # add physical marker
-    gmsh.model.add_physical_group(tdim,[line])
+    gmsh.model.add_physical_group(tdim,line_tags)
 
     #generate the mesh and optionally write the gmsh mesh file
     gmsh.model.mesh.generate(gdim)
@@ -35,7 +40,7 @@ def beamIntervalMesh3D(pts,lc,filename,meshname):
     # facet_markers.name = f"{msh.name}_facets"
 
     #write xdmf mesh file
-    with XDMFFile(msh.comm, f"output/beam_mesh.xdmf", "w") as file:
+    with XDMFFile(msh.comm, filename, "w") as file:
         file.write_mesh(msh)
 
     # close gmsh API
