@@ -11,3 +11,7 @@ FRuIT_BAT/__pycache__/utils.cpython-310.pyc
 .gitignore
 FRuIT_BAT/__pycache__/material.cpython-310.pyc
 FRuIT_BAT/__pycache__/geometry.cpython-310.pyc
+mesh/box_girder_bridge.geo
+.gitignore
+demos/EBbeam-ss.py
+demos/demo_neumann-poisson.py
