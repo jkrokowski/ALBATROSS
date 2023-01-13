@@ -75,7 +75,6 @@ def M(u):
 beam_element = basix.ufl_wrapper.create_element(basix.ElementFamily.Hermite, basix.CellType.interval, 3)
 
 #finite element function space on domain, with trial and test fxns
-# W = FunctionSpace(domain,("HER", 3))
 W = FunctionSpace(domain,beam_element)
 print("Number of DOFs: %d" % W.dofmap.index_map.size_global)
 print("Number of elements (intervals): %d" % NUM_ELEM)

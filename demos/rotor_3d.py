@@ -1,26 +1,30 @@
 #single, static 1D Beam in 3D space example based on Jeremy Bleyer's implementation here:
 # https://comet-fenics.readthedocs.io/en/latest/demo/beams_3D/beams_3D.html
 
-#this example has a beam with a kink in it 
+#this example consists of a kinked beam under "gravity", "centrifugal" and point loads
 # (inspired by the sort of centerline of a helicopter rotor axis)
 
 from dolfinx.fem import (VectorFunctionSpace,Function,FunctionSpace,
                         dirichletbc,locate_dofs_geometrical,
-                        locate_dofs_topological,Constant)
+                        locate_dofs_topological,Constant,
+                        form)
 from dolfinx.io import XDMFFile,gmshio,VTKFile
-from dolfinx.fem.petsc import LinearProblem
-from dolfinx.mesh import locate_entities,locate_entities_boundary
-from ufl import (Jacobian, diag, as_vector, inner, sqrt,cross,dot,
-                VectorElement, TestFunction, TrialFunction,split,grad,dx)
+from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
+                                apply_lifting,set_bc,create_vector)
+from dolfinx.mesh import locate_entities,locate_entities_boundary, meshtags
+from ufl import (exp,Jacobian, diag, as_vector, inner, sqrt,cross,dot,
+                VectorElement, TestFunction, TrialFunction,split,grad,Measure,dx)
 import meshio
 import gmsh
 from mpi4py import MPI
 import numpy as np
 import pyvista
 from dolfinx import plot
+from petsc4py import PETSc
 
 plot_with_pyvista = True
 
+DOLFIN_EPS = 3E-16
 
 #################################################################
 ########### CONSTRUCT BEAM MESH #################################
@@ -47,10 +51,11 @@ gmsh.model.occ.synchronize()
 
 # add physical marker
 gmsh.model.add_physical_group(tdim,[line1,line2])
+# gmsh.model.add_physical_group(0,[p2])
 
 #adjust mesh size parameters
-gmsh.option.setNumber('Mesh.MeshSizeMin', 0.05*R)
-gmsh.option.setNumber('Mesh.MeshSizeMax', 0.5*R)
+gmsh.option.setNumber('Mesh.MeshSizeMin', 0.0005*R)
+gmsh.option.setNumber('Mesh.MeshSizeMax', 0.005*R)
 
 #generate the mesh and optionally write the gmsh mesh file
 gmsh.model.mesh.generate(gdim)
@@ -88,6 +93,12 @@ G = E/2/(1+nu)
 rho = Constant(domain,2.7e-3)
 g = Constant(domain,9.81)
 
+#rotor parameters
+r = Constant(domain,R)
+def RPM_to_Hz(rpm):
+    return rpm/60
+omega = Constant(domain,RPM_to_Hz(1000))
+
 S = thick*width
 ES = E*S
 EI1 = E*width*thick**3/12
@@ -101,7 +112,7 @@ GS2 = kappa*G*S
 Q = diag(as_vector([ES, GS1, GS2, GJ, EI1, EI2]))
 
 #################################################################
-########### COMPUTE STATIC SOLUTION #############################
+########### DEFINE AND CONSTRUCT VARIATIONAL FORM ###############
 #################################################################
 
 # Compute transformation Jacobian between reference interval and elements
@@ -122,38 +133,46 @@ a2 /= sqrt(dot(a2, a2))
 Ue = VectorElement("CG", domain.ufl_cell(), 1, dim=3)
 W = FunctionSpace(domain, Ue*Ue)
 
-u_ = TestFunction(W)
-du = TrialFunction(W)
-(w_, theta_) = split(u_)
+u = TrialFunction(W)
+du = TestFunction(W)
+(w, theta) = split(u)
 (dw, dtheta) = split(du)
 
-def tgrad(u):
-    return dot(grad(u), t)
-def generalized_strains(u):
-    (w, theta) = split(u)
-    return as_vector([dot(tgrad(w), t),
-                      dot(tgrad(w), a1)-dot(theta, a2),
-                      dot(tgrad(w), a2)+dot(theta, a1),
-                      dot(tgrad(theta), t),
-                      dot(tgrad(theta), a1),
-                      dot(tgrad(theta), a2)])
-def generalized_stresses(u):
-    return dot(Q, generalized_strains(u))
+def tgrad(u_):
+    return dot(grad(u_), t)
+def generalized_strains(u_):
+    (w_, theta_) = split(u_)
+    return as_vector([dot(tgrad(w_), t),
+                      dot(tgrad(w_), a1)-dot(theta_, a2),
+                      dot(tgrad(w_), a2)+dot(theta_, a1),
+                      dot(tgrad(theta_), t),
+                      dot(tgrad(theta_), a1),
+                      dot(tgrad(theta_), a2)])
+def generalized_stresses(u_):
+    return dot(Q, generalized_strains(u_))
 
 Sig = generalized_stresses(du)
-Eps =  generalized_strains(u_)
+Eps =  generalized_strains(u)
 
 #modify quadrature scheme for shear components
 dx_shear = dx(scheme="default",metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
-#LHS assembly
-k_form = sum([Sig[i]*Eps[i]*dx for i in [0, 3, 4, 5]]) + (Sig[1]*Eps[1]+Sig[2]*Eps[2])*dx_shear
 
+#### LHS construction (bilinear form) ####
+a_form = sum([Sig[i]*Eps[i]*dx for i in [0, 3, 4, 5]]) + (Sig[1]*Eps[1]+Sig[2]*Eps[2])*dx_shear
+
+#### RHS construction (linear form) ####
 #weight per unit length
 q = rho*S*g
-#RHS
-l_form = -q*w_[2]*dx
+gravity =-q*w[2]*dx
 
-#APPLY BOUNDARY CONDITIONS
+#centrifugal force per unit length
+cf = rho*S*omega**2
+centrifugal = cf*w[0]*dx
+
+# gravity + centrifugal + fh_force
+L_form = gravity + centrifugal 
+
+#DEFINE BOUNDARY CONDITIONS
 #initialize function for boundary condition application
 ubc = Function(W)
 with ubc.vector.localForm() as uloc:
@@ -163,43 +182,90 @@ fixed_dof_num = 0
 locate_BC = locate_dofs_topological(W,tdim,fixed_dof_num)
 
 bcs = dirichletbc(ubc,locate_BC)
-#TODO: figure out application of geometrical dof location for mixed element function spaces
-# locate_BC1 = locate_dofs_geometrical((W.sub(0), W.sub(0).collapse()[0]),lambda x: np.isclose(x[0], 0. ,atol=1e-6))
-# locate_BC2 = locate_dofs_geometrical((W.sub(1), W.sub(1).collapse()[0]),lambda x: np.isclose(x[0], 0. ,atol=1e-6))
-# bcs = [dirichletbc(ubc, locate_BC1, W.sub(0)),
-#         dirichletbc(ubc, locate_BC2, W.sub(1)),
-#        ]
-#TODO: figure out intricacies of topological mesh marking
-#the dof's might will need to be split to allow for independent application of 
-# fixed displacements or fixed rotations
-
-# def start_boundary(x):
-#     return np.isclose(x[0],0)
-# domain.topology.create_connectivity(0,tdim)
-# beam_st_pt = locate_entities_boundary(domain,0,)
-# fixed_endpoint=locate_entities(domain,tdim,lambda x: np.isclose(x[0], 0. ,atol=1e-6))
-# print(fixed_endpoint)
-
-
-#SOLVE VARIATIONAL PROBLEM
-#initialize function in functionspace for beam properties
-u = Function(W)
-# solve variational problem
-problem = LinearProblem(k_form, l_form, u=u, bcs=[bcs])
-u = problem.solve()
 
 #################################################################
-########### SAVE AND VISUALIZE RESULTS ##########################
+########### CONSTRUCT AND SOLVE LINEAR SYSTEM ###################
+#################################################################
+# problem = LinearProblem(a_form, L_form, bcs=[bcs])
+# uh=problem.solve()
+#ASSEMBLE THE LINEAR SYSTEM
+#assemble LHS
+A = assemble_matrix(form(a_form), bcs=[bcs])
+A.assemble()
+
+#assemble RHS
+b=create_vector(form(L_form))
+with b.localForm() as b_loc:
+            b_loc.set(0)
+assemble_vector(b,form(L_form))
+# b = assemble_vector(form(L_form))
+# b.assemble()
+
+# APPLY dirchelet bc: these steps are directly pulled from the 
+# petsc.py LinearProblem().solve() method
+a_form = form(a_form)
+apply_lifting(b,[a_form],bcs=[[bcs]])
+b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+set_bc(b,[bcs])
+
+#locate disp and rotation dofs (collapsed subspace one is used to locate 
+#   dofs to apply the nodal force):
+W0, disp_dofs = W.sub(0).collapse()
+W1, rot_dofs = W.sub(1).collapse()
+
+#locate dofs for point forces applied to nodes
+px = 0.2*R
+py = 0.05*R
+pz = 0.1*R
+def flap_hinge_pt_mark(x):
+    x_loc = np.isclose(abs(x[0]-px), DOLFIN_EPS)
+    y_loc = np.isclose(abs(x[1]-py), DOLFIN_EPS)
+    z_loc = np.isclose(abs(x[2]-pz), DOLFIN_EPS)
+    return  x_loc & y_loc & z_loc
+# this requires the collapsing the supspace and using it to locate the dofs
+#  geometrically via the map to the parent space, see:
+# https://fenicsproject.discourse.group/t/dolfinx-dirichlet-bcs-for-mixed-function-spaces/7844/2
+fh_dofs = locate_dofs_geometrical((W.sub(0),W0), flap_hinge_pt_mark)
+
+#apply forces to relevant dofs
+f_fh = [-.25,-.25,-.25]
+b.array[fh_dofs[0]] = f_fh
+
+# Solve with PETSc Krylov solver
+uh_ptld = Function(W)
+uvec = uh_ptld.vector
+uvec.setUp()
+ksp = PETSc.KSP().create()
+ksp.setType(PETSc.KSP.Type.CG)
+ksp.setTolerances(rtol=1e-15)
+ksp.setOperators(A)
+ksp.setFromOptions()
+ksp.solve(b,uvec)
+
+#save PETsC displacment solution vector to dolfinx function
+# this requires separating the displacement solution from the 
+# rotation solution (which is done with the previously save dof maps)
+uh = Function(W)
+uh.sub(0).vector.array[disp_dofs]= uvec[disp_dofs]
+uh.sub(1).vector.array[rot_dofs] = uvec[rot_dofs]
+#separate the displacement solution and the rotation solution
+wh = uh.sub(0)
+wh.name = "Displacement"
+thetah = uh.sub(1)
+thetah.name = "Rotation"
+
+#################################################################
+########### POST PROCESSING #####################################
 #################################################################
 
 #save relevant fields for Paraview visualization
 #save displacements
-v = u.sub(0)
-v.name= "Displacement"
+# v = uvec.sub(0)
+# v.name= "Displacement"
 # File('beam-disp.pvd') << v
 #save rotations
-theta = u.sub(1)
-theta.name ="Rotation"
+# theta = uvec.sub(1)
+# theta.name ="Rotation"
 # File('beam-rotate.pvd') << theta
 #save moments
 # V1 = VectorFunctionSpace(domain, "CG", 1, dim=2)
@@ -208,29 +274,25 @@ theta.name ="Rotation"
 #TODO: fix the projection function like Ru did for the shell tool
 """
     Solution from
-    https://fenicsproject.discourse.group/t/problem-interpolating-mixed-
-    function-dolfinx/4142/6
+    https://fenicsproject.discourse.group/t/problem-interpolating-mixed-function-dolfinx/4142/6
     """
 # M.assign(project(as_vector([Sig[4], Sig[5]]), V1))
 # File('beam-moments.pvd') << M
 
+# file = VTKFile('output/rotor.pvd')
+# file << (v,theta)
 
-# with VTKFile(MPI.COMM_WORLD, "output.pvd", "w") as vtk:
+# with VTKFile(domain.comm, "rotor.pvd", "w") as vtk:
 #     vtk.write([v._cpp_object])
-#     # vtk.write([theta._cpp_object])
-#     # vtk.write([M._cpp_object])
+#     # vtk.write(theta) 
+    # vtk.write([v._cpp_object])
+    # vtk.write([theta._cpp_object])
+    # vtk.write([M._cpp_object])
 
-with XDMFFile(MPI.COMM_WORLD, "output/output.xdmf", "w") as xdmf:
+with XDMFFile(MPI.COMM_WORLD, "output/rotor_flap.xdmf", "w") as xdmf:
     xdmf.write_mesh(domain)
-    xdmf.write_function(v)
-    xdmf.write_function(theta)
-
-# print(W.sub(0))
-# print(W.sub(0).collapse()[0])
-
-
-# TODO: fix pyvista visualization using plotter3d()
-#  and compute_nodal_disp() from shell module 
+    xdmf.write_function(wh)
+    xdmf.write_function(thetah)
 
 #visualize with pyvista:
 if plot_with_pyvista == False:
