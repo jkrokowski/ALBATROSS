@@ -1,8 +1,19 @@
-#single, static 1D Beam in 3D space example based on Jeremy Bleyer's implementation here:
+# static 1D Beam in 3D space example based on Jeremy Bleyer's implementation here:
 # https://comet-fenics.readthedocs.io/en/latest/demo/beams_3D/beams_3D.html
-
-#this example consists of a kinked beam under "gravity", "centrifugal" and point loads
-# (inspired by the sort of centerline of a helicopter rotor axis)
+# 
+# The beam cross-section in this example is:
+#   -homogenous
+#   -isotropic
+#   -rectangular
+#   -constant along the beam axis
+#   
+# this example consists of a kinked beam under two classes of loading:
+#   -distributed loads:
+#       -gravity
+#       -centrifugal
+#   -point loads:
+#       -point forces (applied at a node)
+#       -torques/moments (applied at a node)
 
 from dolfinx.fem import (VectorFunctionSpace,Function,FunctionSpace,
                         dirichletbc,locate_dofs_geometrical,
@@ -11,10 +22,8 @@ from dolfinx.fem import (VectorFunctionSpace,Function,FunctionSpace,
 from dolfinx.io import XDMFFile,gmshio,VTKFile
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
-from dolfinx.mesh import locate_entities,locate_entities_boundary, meshtags
-from ufl import (exp,Jacobian, diag, as_vector, inner, sqrt,cross,dot,
+from ufl import (Jacobian, diag, as_vector, inner, sqrt,cross,dot,
                 VectorElement, TestFunction, TrialFunction,split,grad,Measure,dx)
-import meshio
 import gmsh
 from mpi4py import MPI
 import numpy as np
@@ -186,8 +195,11 @@ bcs = dirichletbc(ubc,locate_BC)
 #################################################################
 ########### CONSTRUCT AND SOLVE LINEAR SYSTEM ###################
 #################################################################
+#If no point loads or point moments are required, the following
+# two lines can be used to solve the system in a more compact manner:
 # problem = LinearProblem(a_form, L_form, bcs=[bcs])
 # uh=problem.solve()
+
 #ASSEMBLE THE LINEAR SYSTEM
 #assemble LHS
 A = assemble_matrix(form(a_form), bcs=[bcs])
@@ -198,8 +210,6 @@ b=create_vector(form(L_form))
 with b.localForm() as b_loc:
             b_loc.set(0)
 assemble_vector(b,form(L_form))
-# b = assemble_vector(form(L_form))
-# b.assemble()
 
 # APPLY dirchelet bc: these steps are directly pulled from the 
 # petsc.py LinearProblem().solve() method
@@ -208,7 +218,7 @@ apply_lifting(b,[a_form],bcs=[[bcs]])
 b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 set_bc(b,[bcs])
 
-#locate disp and rotation dofs (collapsed subspace one is used to locate 
+#locate disp and rotation dofs (collapsed subspace zero is used to locate 
 #   dofs to apply the nodal force):
 W0, disp_dofs = W.sub(0).collapse()
 W1, rot_dofs = W.sub(1).collapse()
@@ -225,11 +235,17 @@ def flap_hinge_pt_mark(x):
 # this requires the collapsing the supspace and using it to locate the dofs
 #  geometrically via the map to the parent space, see:
 # https://fenicsproject.discourse.group/t/dolfinx-dirichlet-bcs-for-mixed-function-spaces/7844/2
-fh_dofs = locate_dofs_geometrical((W.sub(0),W0), flap_hinge_pt_mark)
+fh_force_dofs = locate_dofs_geometrical((W.sub(0),W0), flap_hinge_pt_mark)
 
-#apply forces to relevant dofs
+fh_mom_dofs = locate_dofs_geometrical((W.sub(1),W1), flap_hinge_pt_mark)
+
+#apply point force by modified RHS vector at relevant dofs
 f_fh = [-.25,-.25,-.25]
-b.array[fh_dofs[0]] = f_fh
+b.array[fh_force_dofs[0]] = f_fh
+
+#apply point moment by modifying RHS vector at relevant dofs
+m_fh = [-.25,-.25,-.25]
+b.array[fh_mom_dofs[0]] = m_fh
 
 # Solve with PETSc Krylov solver
 uh_ptld = Function(W)
@@ -258,63 +274,47 @@ thetah.name = "Rotation"
 ########### POST PROCESSING #####################################
 #################################################################
 
-#save relevant fields for Paraview visualization
-#save displacements
-# v = uvec.sub(0)
-# v.name= "Displacement"
-# File('beam-disp.pvd') << v
-#save rotations
-# theta = uvec.sub(1)
-# theta.name ="Rotation"
-# File('beam-rotate.pvd') << theta
-#save moments
-# V1 = VectorFunctionSpace(domain, "CG", 1, dim=2)
-# M = Function(V1, name="Bending moments (M1,M2)")
-# Sig = generalized_stresses(u)
-#TODO: fix the projection function like Ru did for the shell tool
+#save compute moment field for Paraview visualization
+V1 = VectorFunctionSpace(domain, ("CG", 1), dim=2)
+M = Function(V1, name="Bending moments (M1,M2)")
+Sig = generalized_stresses(uh)
+
 """
-    Solution from
+    Project function does not work the same between legacy FEniCS and FEniCSx,
+    so the following project function must be defined based on this forum post:
     https://fenicsproject.discourse.group/t/problem-interpolating-mixed-function-dolfinx/4142/6
+    and inspired by Ru Xiang's Shell module project function
+    https://github.com/RuruX/shell_analysis_fenicsx/blob/b842670f4e7fbdd6528090fc6061e300a74bf892/shell_analysis_fenicsx/utils.py#L22
     """
-# M.assign(project(as_vector([Sig[4], Sig[5]]), V1))
-# File('beam-moments.pvd') << M
 
-# file = VTKFile('output/rotor.pvd')
-# file << (v,theta)
+def project(v, target_func, bcs=[]):
+    # Ensure we have a mesh and attach to measure
+    V = target_func.function_space
 
-# with VTKFile(domain.comm, "rotor.pvd", "w") as vtk:
-#     vtk.write([v._cpp_object])
-#     # vtk.write(theta) 
-    # vtk.write([v._cpp_object])
-    # vtk.write([theta._cpp_object])
-    # vtk.write([M._cpp_object])
+    # Define variational problem for projection
+    w = TestFunction(V)
+    Pv = TrialFunction(V)
+    a = inner(Pv, w) * dx
+    L = inner(v, w) * dx
+
+    # Assemble linear system
+    A = assemble_matrix(form(a), bcs)
+    A.assemble()
+    b = assemble_vector(form(L))
+    apply_lifting(b, [form(a)], [bcs])
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    set_bc(b, bcs)
+
+    # Solve linear system
+    solver = PETSc.KSP().create(A.getComm())
+    solver.setOperators(A)
+    solver.solve(b, target_func.vector)
+project(as_vector([Sig[4], Sig[5]]), M)
+print(M.vector.array)
+M.name = "Bending Moments (M1,M2)"
 
 with XDMFFile(MPI.COMM_WORLD, "output/rotor_flap.xdmf", "w") as xdmf:
     xdmf.write_mesh(domain)
     xdmf.write_function(wh)
     xdmf.write_function(thetah)
-
-#visualize with pyvista:
-if plot_with_pyvista == False:
-    # topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
-    # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-    # plotter = pyvista.Plotter()
-    # plotter.add_mesh(grid)
-
-    topology, cell_types, geometry = plot.create_vtk_mesh(domain,tdim)
-    grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-    plotter = pyvista.Plotter()
-
-    # v_topology, v_cell_types, v_geometry = plot.create_vtk_mesh(W.sub(0))
-    # u_grid = pyvista.UnstructuredGrid(v_topology, v_cell_types, v_geometry)
-    grid.point_data["u"] = u.x.array.reshape((geometry.shape[0],3))
-    actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
-    warped = grid.warp_by_vector("u", factor=1.5)
-    actor_1 = plotter.add_mesh(warped, show_edges=True)
-    plotter.show_axes()
-
-    if not pyvista.OFF_SCREEN:
-        plotter.show()
-    else:
-        pyvista.start_xvfb()
-        figure = plot.screenshot("beam_mesh.png")
+    xdmf.write_function(M)
