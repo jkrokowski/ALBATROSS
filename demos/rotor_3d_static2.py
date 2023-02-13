@@ -1,25 +1,25 @@
 # static 1D Beam in 3D space example based on Jeremy Bleyer's implementation here:
 # https://comet-fenics.readthedocs.io/en/latest/demo/beams_3D/beams_3D.html
-# 
-# The beam cross-section in this example is:
-#   -homogenous
-#   -isotropic
-#   -rectangular
-#   -constant along the beam axis
-#   
-# this example consists of a kinked beam under two classes of loading:
-#   -distributed loads:
-#       -gravity
-#       -centrifugal
-#   -point loads:
-#       -point forces (applied at a node)
-#       -torques/moments (applied at a node)
+''' The beam cross-section in this example is:
+    -homogenous
+    -isotropic
+    -rectangular
+    -constant along the beam axis
+    
+    this example consists of a kinked beam under two classes of loading:
+    -distributed loads:
+        -gravity
+        -centrifugal
+    -point loads:
+        -point forces (applied at a node)
+        -torques/moments (applied at a node)'''
 
 from dolfinx.fem import (VectorFunctionSpace,Function,FunctionSpace,
                         dirichletbc,locate_dofs_geometrical,
                         locate_dofs_topological,Constant,
                         form)
 from dolfinx.io import XDMFFile,gmshio,VTKFile
+from dolfinx.mesh import meshtags,locate_entities
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, diag, as_vector, inner, sqrt,cross,dot,
@@ -30,14 +30,15 @@ import numpy as np
 import pyvista
 from dolfinx import plot
 from petsc4py import PETSc
+from petsc4py.PETSc import ScalarType
 
 plot_with_pyvista = True
 
 DOLFIN_EPS = 3E-16
 
-#################################################################
-########### CONSTRUCT BEAM MESH #################################
-#################################################################
+#================================================================
+#========== CONSTRUCT BEAM MESH =================================
+#================================================================
 gmsh.initialize()
 
 # model and mesh parameters
@@ -91,9 +92,9 @@ with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
 #confirm that we have an interval mesh in 3D:
 print('cell_type   :', domain.ufl_cell())
 
-#################################################################
-##### ENTER MATERIAL PARAMETERS AND CONSTITUTIVE MODEL ##########
-#################################################################
+#================================================================
+#==== ENTER MATERIAL PARAMETERS AND CONSTITUTIVE MODEL ==========
+#================================================================
 thick = Constant(domain,0.3)
 width = thick/3
 E = Constant(domain,70e3)
@@ -120,9 +121,9 @@ GS2 = kappa*G*S
 #construct constitutive matrix
 Q = diag(as_vector([ES, GS1, GS2, GJ, EI1, EI2]))
 
-#################################################################
-########### DEFINE AND CONSTRUCT VARIATIONAL FORM ###############
-#################################################################
+#================================================================
+#========== DEFINE AND CONSTRUCT VARIATIONAL FORM ===============
+#================================================================
 
 # Compute transformation Jacobian between reference interval and elements
 def tangent(domain):
@@ -139,7 +140,7 @@ a2 = cross(t, a1)
 a2 /= sqrt(dot(a2, a2))
 
 #construct mixed element function space
-Ue = VectorElement("CG", domain.ufl_cell(), 1, dim=3)
+Ue = VectorElement("CG", domain.ufl_cell(), domain.topology.dim, dim=3)
 W = FunctionSpace(domain, Ue*Ue)
 
 u = TrialFunction(W)
@@ -178,8 +179,55 @@ gravity =-q*w[2]*dx
 cf = rho*S*omega**2
 centrifugal = cf*w[0]*dx
 
+#apply element forces
+T = FunctionSpace(domain,('DG',0))
+# T = VectorFunctionSpace(domain,('DG',0),dim=3)
+thrust = Function(T)
+def thrust_element(x):
+    return  x[0] >=0.4*R #& x[0] <= 0.8*R 
+W0, disp_dofs = W.sub(0).collapse()
+thrust_dofs_xyz = locate_dofs_geometrical((W.sub(0),W0), thrust_element)
+#how do i just get the x-dofs?
+#one other thought: can I just apply a constant vector three times the length of the number of elements with the x value as the thrust and the y and z =0?
+print(thrust_dofs_xyz[0].shape)
+thrust_dofs = np.empty((0),dtype=int)
+for i,dof in enumerate(thrust_dofs_xyz[0]):
+     if (i %3)==0:
+        thrust_dofs = np.append(thrust_dofs,dof)
+
+print(thrust_dofs_xyz[0])
+
+print(thrust.x.array.shape)
+print(thrust_dofs)
+print(thrust_dofs.shape)
+thrust_dofs2 = locate_dofs_geometrical(T,thrust_element)
+print(thrust_dofs2)
+print(thrust_dofs2.shape)
+thrust.x.array[thrust_dofs2] = np.full_like(thrust_dofs2, 1, dtype=ScalarType)
+print(thrust.x.array)
+
+
+
+exit()
+# def thrust_element(x):
+#     return  x[0] >=0.3*R #& x <= 0.8*R 
+
+# W0, disp_dofs = W.sub(0).collapse()
+# thrust_dofs = locate_dofs_geometrical((W.sub(0),W0), thrust_element)
+# tag_label = 100
+# facet_tag = meshtags(domain, 1, thrust_dofs[0],
+#                     np.full(len(thrust_dofs[0]),tag_label,dtype=np.int32))
+# print(facet_tag)
+# dx_thrust = Measure('dx',domain=domain,subdomain_id=tuple(thrust_dofs[0]))
+# dT = Constant(domain,(3.0))
+# print(dT.ufl_shape)
+# print(dw.ufl_shape)
+# print(du.ufl_shape)
+# print(dx_thrust.subdomain_data)
+# thrust = -inner(dT,dw[0])*dx_thrust
+
 # gravity + centrifugal + fh_force
-L_form = gravity + centrifugal 
+L_form = gravity + centrifugal + thrust
 
 #DEFINE BOUNDARY CONDITIONS
 #initialize function for boundary condition application
@@ -192,9 +240,10 @@ locate_BC = locate_dofs_topological(W,tdim,fixed_dof_num)
 
 bcs = dirichletbc(ubc,locate_BC)
 
-#################################################################
-########### CONSTRUCT AND SOLVE LINEAR SYSTEM ###################
-#################################################################
+#================================================================
+#========== CONSTRUCT AND SOLVE LINEAR SYSTEM ===================
+#================================================================
+
 #If no point loads or point moments are required, the following
 # two lines can be used to solve the system in a more compact manner:
 # problem = LinearProblem(a_form, L_form, bcs=[bcs])
@@ -270,9 +319,9 @@ wh.name = "Displacement"
 thetah = uh.sub(1)
 thetah.name = "Rotation"
 
-#################################################################
-########### POST PROCESSING #####################################
-#################################################################
+#================================================================
+#========== POST PROCESSING =====================================
+#================================================================
 
 #save compute moment field for Paraview visualization
 V1 = VectorFunctionSpace(domain, ("CG", 1), dim=2)
@@ -313,7 +362,7 @@ project(as_vector([Sig[4], Sig[5]]), M)
 print(M.vector.array)
 M.name = "Bending Moments (M1,M2)"
 
-with XDMFFile(MPI.COMM_WORLD, "output/rotor_flap.xdmf", "w") as xdmf:
+with XDMFFile(MPI.COMM_WORLD, "output/rotor_thrust.xdmf", "w") as xdmf:
     xdmf.write_mesh(domain)
     xdmf.write_function(wh)
     xdmf.write_function(thetah)
