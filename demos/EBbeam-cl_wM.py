@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpi4py import MPI
 import basix
-from dolfinx.fem import (Function, FunctionSpace, dirichletbc,
+from dolfinx.fem import (Function, VectorFunctionSpace,FunctionSpace, dirichletbc,
                          locate_dofs_topological,Constant,Expression)
 from dolfinx.io import VTKFile
 from dolfinx.fem.petsc import LinearProblem
@@ -23,7 +23,7 @@ g = 9.81
 #################################################################
 ########### CONSTRUCT BEAM MESH #################################
 #################################################################
-NUM_ELEM = 100
+NUM_ELEM = 8
 domain = create_interval(MPI.COMM_WORLD, NUM_ELEM, [0, L])
 
 #################################################################
@@ -113,9 +113,20 @@ u = Function(W)
 # solve variational problem
 problem = LinearProblem(k_form, l_form, u=u, bcs=[fixed_disp,fixed_rot])
 uh=problem.solve()
-uh.name = "Displacement and Rotation "
+uh.name = "Displacement_and_Rotation "
 
-M = EI*div(grad(uh))
+'''
+Compute moment
+'''
+
+# My_ = EI*div(grad(uh))
+
+# V = VectorFunctionSpace(domain,("CG",1))
+# My_expr = Expression(My_, V.element.interpolation_points())
+# My = Function(V)
+# My.interpolate(My_expr)
+
+# print(My.x.array)
 #################################################################
 ########### SAVE AND VISUALIZE RESULTS ##########################
 #################################################################
@@ -144,6 +155,7 @@ for i,x in enumerate(uh.x.array):
 
 #evaluate derivatives and interpolate to higher order function space
 T = FunctionSpace(domain,("CG",1))
+T = FunctionSpace(domain,("CG",3))
 
 #interpolate exact ufl expression onto high-order function space
 disp_expr = Expression(w_cl,T.element.interpolation_points())
@@ -169,10 +181,12 @@ exact_mom = mom_exact.x.array
 exact_shr = shr_exact.x.array
 
 x_exact = np.linspace(0,1,exact_disp.shape[0])
-
+x_exactS = np.linspace(0,1,exact_shr.shape[0])
 x_fem = np.linspace(0,1,disp.shape[0])
 
 figure, axis = plt.subplots(2, 2)
+
+print(uh.x.array)
 
 print("Maximum magnitude displacement (cantilever exact solution) is: %e" % np.min(exact_disp))
 print("Maximum magnitude displacement (cantilever FEM solution) is: %e" % np.min(disp))
@@ -181,12 +195,13 @@ print("Maximum magnitude displacement (cantilever FEM solution) is: %e" % np.min
 #Displacement
 axis[0,0].plot(x_exact,exact_disp,label='exact')
 axis[0,0].plot(x_fem, disp,label='FEM')
+# axis[0,0].plot(x_fem, uh.x.array,label='FEM')
 axis[0,0].set_title("Displacement")
 axis[0,0].legend()
 
 #Rotation
 axis[0,1].plot(x_exact,exact_rot,label='exact')
-axis[0,1].plot(x_fem, rot,label='FEM')
+axis[0,1].plot(x_fem, NUM_ELEM*rot,label='FEM')
 axis[0,1].set_title("Rotation")
 axis[0,1].legend()
 
@@ -197,7 +212,7 @@ axis[1,0].set_title("Moment")
 axis[1,0].legend()
 
 #Shear
-axis[1,1].plot(x_exact,exact_shr,label='exact')
+axis[1,1].plot(x_exactS,exact_shr,label='exact')
 # axis[1,1].plot(x_fem, rot,label='FEM')
 axis[1,1].set_title("Shear")
 axis[1,1].legend()

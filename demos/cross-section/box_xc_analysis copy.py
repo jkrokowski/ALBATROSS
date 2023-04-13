@@ -238,7 +238,6 @@ yTC = Sy / EA
 xEA = xTC
 yEA = yTC
 
-print('xtc')
 print(xTC)
 print(yTC)
 print(xEA)
@@ -270,7 +269,7 @@ kappa = 0.1 #estimate (need to follow this method when
 K22 = kappa*assemble_scalar(form(G*dx))
 K33 = kappa*assemble_scalar(form(G*dx))
 #bending stiffness:
-K55 = assemble_scalar(form((E*(x[1]-yEA)**2)*dx))
+K55= assemble_scalar(form(((E*x[1]-yEA)**2)*dx))
 K66 = assemble_scalar(form((E*(x[0]-xEA)**2)*dx))
 #bending-bending coupling stiffness
 K56 = assemble_scalar(form((E*(x[0]-xEA)*(x[1]-yEA))*dx))
@@ -309,6 +308,7 @@ K = as_matrix(((K11,K12,K13,K14,K15,K16),
               (K51,K52,K53,K54,K55,K56),
               (K61,K62,K63,K64,K65,K66)))
 
-print()
+print(K)
+
 #mass matrix is diagonal? 
 #mass matrix should just be density weighted values?

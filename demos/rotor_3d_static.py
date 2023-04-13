@@ -63,8 +63,8 @@ gmsh.model.add_physical_group(tdim,[line1,line2])
 # gmsh.model.add_physical_group(0,[p2])
 
 #adjust mesh size parameters
-gmsh.option.setNumber('Mesh.MeshSizeMin', 0.05*R)
-gmsh.option.setNumber('Mesh.MeshSizeMax', 0.5*R)
+gmsh.option.setNumber('Mesh.MeshSizeMin', 0.0005*R)
+gmsh.option.setNumber('Mesh.MeshSizeMax', 0.005*R)
 
 #generate the mesh and optionally write the gmsh mesh file
 gmsh.model.mesh.generate(gdim)
@@ -239,13 +239,13 @@ fh_force_dofs = locate_dofs_geometrical((W.sub(0),W0), flap_hinge_pt_mark)
 
 fh_mom_dofs = locate_dofs_geometrical((W.sub(1),W1), flap_hinge_pt_mark)
 
-#apply point force by modified RHS vector at relevant dofs
-f_fh = [-.25,-.25,-.25]
-b.array[fh_force_dofs[0]] = f_fh
+# #apply point force by modified RHS vector at relevant dofs
+# f_fh = [-.25,-.25,-.25]
+# b.array[fh_force_dofs[0]] = f_fh
 
 #apply point moment by modifying RHS vector at relevant dofs
-m_fh = [-.25,-.25,-.25]
-b.array[fh_mom_dofs[0]] = m_fh
+# m_fh = [-.25,-.25,-.25]
+# b.array[fh_mom_dofs[0]] = m_fh
 
 # Solve with PETSc Krylov solver
 uh_ptld = Function(W)
