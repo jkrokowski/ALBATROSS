@@ -14,11 +14,14 @@ from scipy.linalg import null_space
 import matplotlib.pylab as plt
 
 # Create mesh and define function space
-N = 1
+N = 3
 domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
-Ue = VectorElement("CG",domain.ufl_cell(),1,dim=3)
+L,W,H = 1,1,1
+domain2 = mesh.create_box(MPI.COMM_WORLD, [np.array([0,0,0]), np.array([L, W, W])],
+                  [N,N,N], cell_type=mesh.CellType.hexahedron)
+Ve = VectorElement("CG",domain.ufl_cell(),1,dim=3)
 #TODO:check on whether TensorFxnSpace is more suitable for this
-V = FunctionSpace(domain, MixedElement([Ue,Ue,Ue,Ue]))
+V = FunctionSpace(domain, MixedElement([Ve,Ve,Ve,Ve]))
 
 #displacement and test functions
 u = TrialFunction(V)
@@ -133,11 +136,11 @@ print(b.getSize())
 m,n1=A.getSize()
 
 Anp = A.getValues(range(m),range(n1))
-print("rank:")
-print(np.linalg.matrix_rank(Anp))
+# print("rank:")
+# print(np.linalg.matrix_rank(Anp))
 
-nullspace = null_space(Anp)
-print(nullspace.shape)
+# nullspace = null_space(Anp)
+# print(nullspace.shape)
 
 # print("stiffness matrix:")
 # print(Anp)
@@ -188,52 +191,40 @@ def get_vtx_to_dofs(domain,V):
      # vtx_to_dof = np.reshape(vtx_to_dof, (-1,1))
 
      return vtx_to_dof
-
+#get maps of vertice to displacemnnt coefficients DOFs 
 ubar_vtx_to_dof = get_vtx_to_dofs(domain,V.sub(0))
 uhat_vtx_to_dof = get_vtx_to_dofs(domain,V.sub(1))
 utilde_vtx_to_dof = get_vtx_to_dofs(domain,V.sub(2))
 ubreve_vtx_to_dof = get_vtx_to_dofs(domain,V.sub(3))
 
-# dofs = V.dofmap.list.array
-# ubar_dofs = V.sub(0).dofmap.list.array
-# uhat_dofs = V.sub(1).dofmap.list.array
-# utilde_dofs = V.sub(2).dofmap.list.array
-# ubreve_dofs = V.sub(3).dofmap.list.array
-
-# num_vertices = domain.topology.index_map(0).size_local + domain.topology.index_map(0).num_ghosts
-# vertex_to_dof_map = np.empty(num_vertices, dtype=np.int32)
-# num_cells = domain.topology.index_map(
-#     domain.topology.dim).size_local + domain.topology.index_map(
-#     domain.topology.dim).num_ghosts
-# c_to_v = domain.topology.connectivity(domain.topology.dim, 0)
-# for cell in range(num_cells):
-#     vertices = c_to_v.links(cell)
-#     dofs = V.sub(2).dofmap.cell_dofs(cell)
-#     for i, vertex in enumerate(vertices):
-#         vertex_to_dof_map[vertex] = dofs[V.sub(2).dofmap.dof_layout.entity_dofs(0, i)]
+ubar_coeff = u_coeff.flatten()[ubar_vtx_to_dof]
+uhat_coeff = u_coeff.flatten()[uhat_vtx_to_dof]
+utilde_coeff = u_coeff.flatten()[utilde_vtx_to_dof]
+ubreve_coeff = u_coeff.flatten()[ubreve_vtx_to_dof]
 
 #construct displacement fxn space
+Ue = VectorElement("CG",domain.ufl_cell(),1,dim=3)
 U = FunctionSpace(domain,Ue)
 U.dofmap
 u_sol = Function(U)
-# print(domain.topology.connectivity(0,1))
-# print(V.dofmap.dofs())
-print()
 
+def get_disp(ubar,uhat,utilde,ubreve,x1):
+     '''
+     Args:
+     x: location along beam axis
+     ubar,uhat,utilde,ubreve: coeff. fxns
 
-#get map from mixedspace to displacement
-# points = mesh.points
-
-# def u(ubar,uhat,utilde,ubreve,x1,x2,x3):
-#      '''
-#      x: location along beam axis
-#      ubar,uhat,utilde,ubreve: coeff. fxns
-#      '''
-#      return ubar(x2,x3)+uhat(x2,x3)*x1+utilde(x2,x3)*x1**2 + ubreve(x2,x3)*x1**3
+     returns:
+     displacement of nodes in (NumNodes)x3 matrix
+     '''
+     return ubar+uhat*x1+utilde*x1**2 + ubreve*x1**3
 
 # map each node solution to u_sol given u_nod_coeff 
+u_sol.vector.array = get_disp(ubar_coeff,uhat_coeff,utilde_coeff,ubreve_coeff,0).flatten()
 
 # construct stress tensor based on u_sol
+# X = SpatialCoordinate(domain2)
+sigma = C[i,j,k,l]*grad(u_sol)
 
 
 #integrate stresses over cross-section and construct xc load vector
@@ -243,10 +234,8 @@ print()
 #compute K2 by solving matrix equation c^T*K2*c = L^t*K1^-T*K2*K1^-1*L
 
 
-print()
-exit()
-sigma = C[i,j,k,l]*grad(sols)
-# exit()
+
+
 # # Solution Function
 # uh = Function(V)
 
@@ -272,14 +261,15 @@ topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
 grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
 plotter = pyvista.Plotter()
 plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-# u_topology, u_cell_types, u_geometry = plot.create_vtk_mesh(V)
-# u_grid = pyvista.UnstructuredGrid(u_topology, u_cell_types, u_geometry)
-# u_grid.point_data["u"] = uh.x.array.real
-# u_grid.set_active_scalars("u")
-# plotter.add_mesh(u_grid.warp_by_scalar("u",factor=2), show_edges=True)
-# plotter.view_vector((-0.25,-1,0.5))
-# if not pyvista.OFF_SCREEN:
-#     plotter.show()
+u_topology, u_cell_types, u_geometry = plot.create_vtk_mesh(U)
+u_grid = pyvista.UnstructuredGrid(u_topology, u_cell_types, u_geometry)
+print()
+u_grid.point_data["u"] = u_sol.x.array.reshape((geometry.shape[0], 3))
+u_grid.set_active_scalars("u")
+plotter.add_mesh(u_grid.warp_by_scalar("u",factor=.1), show_edges=True)
+plotter.view_vector((-0.25,-1,0.5))
+if not pyvista.OFF_SCREEN:
+    plotter.show()
 
 # # #plot warping
 # tdim = domain.topology.dim
@@ -293,8 +283,8 @@ plotter.add_mesh(grid, show_edges=True,opacity=0.25)
 # u_grid.set_active_scalars("w")
 # plotter.add_mesh(u_grid.warp_by_scalar("w",factor=2), show_edges=True)
 # plotter.view_vector((-0.25,-1,0.5))
-# if not pyvista.OFF_SCREEN:
-#     plotter.show()
+if not pyvista.OFF_SCREEN:
+    plotter.show()
 
 # #======= PLOT GRAD OF WARPING FUNCTION =========#
 # grad_plotter = pyvista.Plotter()
