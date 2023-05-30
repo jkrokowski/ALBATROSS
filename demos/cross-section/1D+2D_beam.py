@@ -4,47 +4,104 @@
 from mpi4py import MPI
 import dolfinx.cpp.mesh
 from dolfinx import mesh,plot
-from dolfinx.fem import locate_dofs_topological,Constant,FunctionSpace,Function,form,assemble_scalar,VectorFunctionSpace,Expression,TensorFunctionSpace,locate_dofs_geometrical
-from dolfinx.fem.petsc import create_vector,assemble_matrix,assemble_vector
-from ufl import (sym,FiniteElement,split,MixedElement,dot,lhs,rhs,Identity,inner,outer,TrialFunction,TestFunction,Measure,grad,exp,sin,SpatialCoordinate,FacetNormal,indices,as_tensor,as_matrix,as_vector,VectorElement,TensorElement,Dx)
+from dolfinx.fem import dirichletbc,locate_dofs_topological,Constant,FunctionSpace,Function,form,assemble_scalar,VectorFunctionSpace,Expression,TensorFunctionSpace,locate_dofs_geometrical
+from dolfinx.fem.petsc import  LinearProblem,create_vector,assemble_matrix,assemble_vector
+from ufl import (cross,sqrt,Jacobian,sym,FiniteElement,split,MixedElement,dot,lhs,rhs,Identity,inner,outer,TrialFunction,TestFunction,Measure,grad,exp,sin,SpatialCoordinate,FacetNormal,indices,as_tensor,as_matrix,as_vector,VectorElement,TensorElement,Dx)
 from petsc4py import PETSc
 import pyvista
 import numpy as np
 from scipy.linalg import null_space
 import matplotlib.pylab as plt
 import time
+import gmsh
+from dolfinx.io import XDMFFile,gmshio
 
 from dolfinx import geometry
+pyvista.global_theme.background = [255, 255, 255, 255]
+pyvista.global_theme.font.color = 'black'
+
 t0 = time.time()
 # Create 2d mesh and define function space
 N = 10
-W = .1
-H = .1
+W = 1
+H = 1
+L = 5
+Nx = 1000
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-# domain2 = mesh.create_interval( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N])
-# Create 3d mesh (to be used to calculate perturbed displacement field)
-# L,W,H = 10,1,1
-# domain2 = mesh.create_box(MPI.COMM_WORLD, [np.array([0,0,0]), np.array([L, W, H])],
-#                   [1,N,N], cell_type=mesh.CellType.hexahedron)
-pyvista.global_theme.background = [255, 255, 255, 255]
-pyvista.global_theme.font.color = 'black'
-if True:
+
+#################################################################
+########### CONSTRUCT BEAM MESH #################################
+#################################################################
+gmsh.initialize()
+
+# model and mesh parameters
+gdim = 3
+tdim = 1
+lc = 1e-1 #TODO: find if there is an easier way to set the number of elements
+
+#construct line in 3D space
+gmsh.model.add("Beam")
+gmsh.model.setCurrent("Beam")
+p1 = gmsh.model.occ.addPoint(0.5000000001,0.5000000001,0)
+p2 = gmsh.model.occ.addPoint(0.5, 0.5, L)
+line1 = gmsh.model.occ.addLine(p1,p2)
+
+# Synchronize OpenCascade representation with gmsh model
+gmsh.model.occ.synchronize()
+
+# add physical marker
+gmsh.model.add_physical_group(tdim,[line1])
+
+#adjust mesh size parameters
+gmsh.option.setNumber('Mesh.MeshSizeMin', L/Nx)
+gmsh.option.setNumber('Mesh.MeshSizeMax', L/Nx)
+
+#generate the mesh and optionally write the gmsh mesh file
+gmsh.model.mesh.generate(gdim)
+gmsh.write("output/beam_mesh.msh")
+
+#use meshio to convert msh file to xdmf
+msh, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, MPI.COMM_SELF, 0)
+msh.name = 'beam_mesh'
+cell_markers.name = f"{msh.name}_cells"
+facet_markers.name = f"{msh.name}_facets"
+
+#write xdmf mesh file
+with XDMFFile(msh.comm, f"output/beam_mesh.xdmf", "w") as file:
+    file.write_mesh(msh)
+
+# close gmsh API
+gmsh.finalize()
+
+#read in xdmf mesh from generation process
+fileName = "output/beam_mesh.xdmf"
+with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
+    domain2 = xdmf.read_mesh(name="beam_mesh")
+
+if False:
      tdim = domain.topology.dim
      topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
      grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
      plotter = pyvista.Plotter()
      plotter.add_mesh(grid, show_edges=True,opacity=0.25)
      plotter.view_isometric()
-     if not pyvista.OFF_SCREEN:
-          plotter.show()
-     # tdim = domain2.topology.dim
-     # topology, cell_types, geometry = plot.create_vtk_mesh(domain2, tdim)
-     # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-     # plotter = pyvista.Plotter()
-     # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+     # plotter.view_vector((0.7,.7,.7))
      # if not pyvista.OFF_SCREEN:
      #      plotter.show()
+     tdim = domain2.topology.dim
+     topology, cell_types, geometry = plot.create_vtk_mesh(domain2, tdim)
+     grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+     # plotter = pyvista.Plotter()
+     plotter.add_mesh(grid, show_edges=True,opacity=0.75)
+     if not pyvista.OFF_SCREEN:
+          plotter.show()
+
+
+t1= time.time()
+#==================================================#
+#============ SOLVE 2D PROBLEM  ===================#
+#==================================================#
 
 # Construct Displacment Coefficient mixed function space
 Ve = VectorElement("CG",domain.ufl_cell(),1,dim=3)
@@ -78,15 +135,11 @@ E = 100 #70e9
 nu = 0.2
 _lam = (E*nu)/((1+nu)*(1-2*nu))
 mu = E/(2*(1+nu))
+rho = 1
+g = .1
 
 #d x d indentity matrix
 delta = Identity(d)
-
-# C_ufl = (E/(1+nu))*(0.5*(delta_ik*delta_jl + delta_jk*delta_il) + (nu/(1-2*nu))*delta_ij*delta_kl)
-# C = as_tensor((E/(1+nu))*(0.5*(delta[i,k]*delta[j,l] \
-#                 + delta[j,k]*delta[i,l]) \
-#                     + (nu/(1-(2*nu)))*delta[i,j]*delta[k,l])  ,(i,j,k,l))
-
 C = as_tensor(_lam*(delta[i,j]*delta[k,l]) \
                 + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
 
@@ -112,46 +165,25 @@ vhat_a = grad(vhat)
 vtilde_a = grad(vtilde)
 vbreve_a = grad(vbreve)
 
-#traction free boundary conditions
-Tbar = Ciak1[i,a,k]*uhat[k]*n[a]*vbar[i]*ds \
-          + CiakB[i,a,k,B]*ubar_B[k,B]*n[a]*vbar[i]*ds 
-That = 2*Ciak1[i,a,k]*utilde[k]*n[a]*vhat[i]*ds \
-          + CiakB[i,a,k,B]*uhat_B[k,B]*n[a]*vhat[i]*ds
-Ttilde = 3*Ciak1[i,a,k]*ubreve[k]*n[a]*vtilde[i]*ds \
-          + CiakB[i,a,k,B]*utilde_B[k,B]*n[a]*vtilde[i]*ds 
-Tbreve = CiakB[i,a,k,B]*ubreve_B[k,B]*n[a]*vbreve[i]*ds 
-
-# Tbar = Ciak1[i,a,k]*uhat[k]*n[a]*vbar[i]*ds \
-#           + CiakB[i,a,k,B]*ubar_B[k,B]*vbar_a[i,a]*ds 
-# That = 2*Ciak1[i,a,k]*utilde[k]*n[a]*vhat[i]*ds \
-#           + CiakB[i,a,k,B]*uhat_B[k,B]*vhat_a[i,a]*ds
-# Ttilde = 3*Ciak1[i,a,k]*ubreve[k]*n[a]*vtilde[i]*ds \
-#           + CiakB[i,a,k,B]*utilde_B[k,B]*vtilde_a[i,a]*ds 
-# Tbreve = CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*ds 
-
 # equation 1,2,3
 L1= 2*Ci1k1[i,k]*utilde[k]*vbar[i]*dx\
      + Ci1kB[i,k,B]*uhat_B[k,B]*vbar[i]*dx \
      - Ciak1[i,a,k]*uhat[k]*vbar_a[i,a]*dx \
      - CiakB[i,a,k,B]*ubar_B[k,B]*vbar_a[i,a]*dx \
-     # + Tbar
 
 # # equation 4,5,6
 L2 = 6*Ci1k1[i,k]*ubreve[k]*vhat[i]*dx\
      + 2*Ci1kB[i,k,B]*utilde_B[k,B]*vhat[i]*dx \
      - 2*Ciak1[i,a,k]*utilde[k]*vhat_a[i,a]*dx \
      - CiakB[i,a,k,B]*uhat_B[k,B]*vhat_a[i,a]*dx \
-     # + That
 
 # equation 7,8,9
 L3 = 3*Ci1kB[i,k,B]*ubreve_B[k,B]*vtilde[i]*dx \
      - 3*Ciak1[i,a,k]*ubreve[k]*vtilde_a[i,a]*dx \
      - CiakB[i,a,k,B]*utilde_B[k,B]*vtilde_a[i,a]*dx\
-     # + Ttilde
 
 #equation 10,11,12
 L4= -CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*dx\
-     # + Tbreve
 
 Residual = L1+L2+L3+L4
 
@@ -159,41 +191,31 @@ LHS = lhs(Residual)
 # RHS = rhs(Residual)
 RHS = Constant(domain,0.0)*v[0]*ds
 
+t2 = time.time()
+
 #assemble system matrices
 A = assemble_matrix(form(Residual))
 A.assemble()
 b=create_vector(form(RHS))
-with b.localForm() as b_loc:
-      b_loc.set(0)
-assemble_vector(b,form(RHS))
+# with b.localForm() as b_loc:
+#       b_loc.set(0)
+# assemble_vector(b,form(RHS))
+
+t3 = time.time()
 
 print(A.getSize())
-print(b.getSize())
+# print(b.getSize())
 m,n1=A.getSize()
 
 Anp = A.getValues(range(m),range(n1))
 # print("rank:")
 # print(np.linalg.matrix_rank(Anp))
 
-# nullspace = null_space(Anp)
-# print(nullspace.shape)
-
-# print("stiffness matrix:")
-# print(Anp)
 Usvd,sv,Vsvd = np.linalg.svd(Anp)
-# nullspace = A.getNullSpace()
-# print(nullspace.test(A))
 
-# sols = Vsvd[:,-12:]
 sols = Vsvd[-12:,:].T
-# sols = Usvd[:,-12:]
-# sols = Usvd[-12:,:].T
 
-# plt.spy(Anp)
-# plt.show()
-
-#add in dirichlet BC to prevent rigid body translations?
-#add in neumann BC to prevent rigid body rotations?
+t4 = time.time()
 
 #==================================================#
 #======== GET MAPS FROM VERTICES TO DOFS ==========#
@@ -239,6 +261,17 @@ utilde_vtx_to_dof = get_vtx_to_dofs(domain,V.sub(2))
 ubreve_vtx_to_dof = get_vtx_to_dofs(domain,V.sub(3))
 
 #==================================================#
+#=== COMPUTE RELEVANT CROSS-SECTIONAL VALUES ======#
+#==================================================#
+
+#compute area
+A = assemble_scalar(form(1.0*dx))
+
+#compute average y and z locations for each cell
+yavg = assemble_scalar(form(x[0]*dx))/A
+zavg = assemble_scalar(form(x[1]*dx))/A
+
+#==================================================#
 #==============DECOUPLE THE SOLUTIONS==============# 
 #===(SEPARATE RIGID BODY MODES FROM ELASTIC MODES)=#
 #==================================================#
@@ -256,36 +289,12 @@ UHAT = V.sub(1).collapse()[0]
 ubar_mode = Function(UBAR)
 uhat_mode = Function(UBAR)
 
-#compute area
-A = assemble_scalar(form(1.0*dx))
-
-#compute average y and z locations for each cell
-yavg = assemble_scalar(form(x[0]*dx))/A
-zavg = assemble_scalar(form(x[1]*dx))/A
-print(yavg)
-print(zavg)
-
 #TODO: fix the 0.5's to be the average x 
 #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
 for mode in range(mat.shape[1]):
      #construct function from mode
      ubar_mode.vector.array = ubar_modes[:,:,mode].flatten()
      uhat_mode.vector.array = uhat_modes[:,:,mode].flatten()
-
-     #plot ubar modes
-     if False:
-          tdim = domain.topology.dim
-          topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
-          grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-          plotter = pyvista.Plotter()
-          plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-          u_topology, u_cell_types, u_geometry = plot.create_vtk_mesh(UBAR)
-          u_grid = pyvista.UnstructuredGrid(u_topology, u_cell_types, u_geometry)
-          u_grid.point_data["u"] = ubar_mode.x.array.reshape((geometry.shape[0], 3))
-          u_grid.set_active_scalars("u")
-          plotter.add_mesh(u_grid.warp_by_scalar("u",factor=1), show_edges=True)
-          if not pyvista.OFF_SCREEN:
-               plotter.show()
 
      #FIRST THREE ROWS : AVERAGE UBAR_i VALUE FOR THAT MODE
      # mat[0:3,mode]=np.average(np.average(ubar_modes,axis=0),axis=1)
@@ -339,48 +348,9 @@ from scipy import sparse
 sparse_mat = sparse.csr_matrix(mat)
 sols_decoup = sols@np.linalg.inv(mat)
 
-#====PLOT DECOUPLED MODES========#
- 
-# #GET UBAR AND UHAT RELATED MODES FROM SVD
-# ubar_modes_sol = sols_decoup[ubar_vtx_to_dof,:]
-
-# #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
-# ubar_mode_sol = Function(UBAR)
-
-# #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
-# coeff_vecs = np.vstack((np.zeros((6,6)),np.eye(6)))
-# for idx,c in enumerate(coeff_vecs.T):
-
-#      c = np.reshape(c,(-1,1))
-#      u_coeff=sols_decoup@c
-#      ubar_mode_sol.vector.array = u_coeff.flatten()[ubar_vtx_to_dof].flatten()
-
-#      #plot ubar modes
-#      if True:
-#           tdim = domain.topology.dim
-#           topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
-#           grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-#           plotter = pyvista.Plotter()
-#           plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-#           u_topology, u_cell_types, u_geometry = plot.create_vtk_mesh(UBAR)
-#           u_grid = pyvista.UnstructuredGrid(u_topology, u_cell_types, u_geometry)
-#           u_grid.point_data["u"] = ubar_mode_sol.x.array.reshape((geometry.shape[0], 3))
-#           u_grid.set_active_scalars("u")
-#           plotter.add_mesh(u_grid.warp_by_scalar("u",factor=1), show_edges=True)
-#           if not pyvista.OFF_SCREEN:
-#                plotter.show()
-
 #==================================================#
 #============ Define 3d fields  ===================#
 #==================================================#
-
-#construct displacement fxn space
-# Ue = VectorElement("CG",domain2.ufl_cell(),1,dim=3)
-# U = FunctionSpace(domain2,Ue)
-# u_sol = Function(U)
-
-# X = SpatialCoordinate(domain2)
-# dX = Measure("dx",domain=domain2)
 
 #construct coefficient fields over 2D mesh
 U2d = FunctionSpace(domain,Ve)
@@ -388,40 +358,6 @@ ubar_field = Function(U2d)
 uhat_field = Function(U2d)
 utilde_field = Function(U2d)
 ubreve_field = Function(U2d)
-
-#class for constructing 3D displacement expresssion
-class U3D:
-     def __init__(self,disp_coeff_fxns):
-          self.ubarh = disp_coeff_fxns[0]
-          self.uhath = disp_coeff_fxns[1]
-          self.utildeh = disp_coeff_fxns[2]
-          self.ubreveh = disp_coeff_fxns[3]
-
-     def u3d(self,x):
-          '''expression values from:
-          https://jsdokken.com/dolfinx-tutorial/chapter1/membrane_code.html#making-curve-plots-throughout-the-domain
-          and
-          https://fenicsproject.discourse.group/t/equivalent-to-expression-for-a-vector-valued-function-in-dolfinx/8669/1
-          '''
-          points = np.stack((x[1],x[2],np.zeros_like(x[1])))
-          bb_tree = geometry.BoundingBoxTree(domain, domain.topology.dim)
-          cells = []
-          points_on_proc = []
-          # Find cells whose bounding-box collide with the the points
-          cell_candidates = geometry.compute_collisions(bb_tree, points.T)
-          # Choose one of the cells that contains the point
-          colliding_cells = geometry.compute_colliding_cells(domain, cell_candidates, points.T)
-          for i, point in enumerate(points.T):
-               if len(colliding_cells.links(i))>0:
-                    points_on_proc.append(point)
-                    cells.append(colliding_cells.links(i)[0])
-          vals = np.zeros((domain2.geometry.dim, x.shape[1]))
-          for idx in range(3):
-               vals[idx] = self.ubarh.eval(points.T,cells)[:,idx] \
-                    + self.uhath.eval(points.T,cells)[:,idx]*x[0] \
-                    + self.utildeh.eval(points.T,cells)[:,idx]*x[0]**2 \
-                    + self.ubreveh.eval(points.T,cells)[:,idx]*x[0]**3
-          return vals
 
 #==================================================#
 #======== LOOP FOR BUILDING LOAD MATRICES =========#
@@ -500,46 +436,140 @@ for idx,c in enumerate(Ctotal.T):
           K2[idx1,idx2] = Kxx
           K2[idx2,idx1] = Kxx
 
-
-
-     # #======= PLOT DISPLACEMENT FROM PERTURBATION =========#
-     # tdim = domain.topology.dim
-     # topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
-     # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-     # plotter = pyvista.Plotter()
-     # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-     # u_topology, u_cell_types, u_geometry = plot.create_vtk_mesh(UBAR)
-     # u_grid = pyvista.UnstructuredGrid(u_topology, u_cell_types, u_geometry)
-     # u_grid.point_data["u"] = ubar_field.x.array.reshape((geometry.shape[0], 3))
-     # u_grid.set_active_scalars("u")
-     # plotter.add_mesh(u_grid.warp_by_scalar("u",factor=1), show_edges=True)
-     # # plotter.view_vector((-0.25,-1,0.5))
-     # if not pyvista.OFF_SCREEN:
-     #      plotter.show()
-#compute Flexibility matrix
 K1_inv = np.linalg.inv(K1)
 
 S = K1_inv.T@K2@K1_inv
+print("Flexibility:")
 print(S)
+print("Stiffness:")
 print(np.linalg.inv(S))
-t1 = time.time()
-print(t1-t0)
 
-# #======= PLOT DISPLACEMENT FROM PERTURBATION =========#
-# tdim = domain.topology.dim
-# topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
-# grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-# plotter = pyvista.Plotter()
-# plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-# u_topology, u_cell_types, u_geometry = plot.create_vtk_mesh(UBAR)
-# ubar_plot = Function(UBAR)
-# ubar_modes_decoup = sols_decoup[ubar_vtx_to_dof,:]
-# ubar_plot.vector.array = ubar_modes_decoup[:,:,7].flatten()
-# u_grid = pyvista.UnstructuredGrid(u_topology, u_cell_types, u_geometry)
-# # u_grid.point_data["u"] = ubar_modes_decoup[:,:,7]
-# u_grid.point_data["u"] = ubar_plot.x.array.reshape((geometry.shape[0], 3))
-# u_grid.set_active_scalars("u")
-# plotter.add_mesh(u_grid.warp_by_scalar("u",factor=1), show_edges=True)
-# # plotter.view_vector((-0.25,-1,0.5))
-# if not pyvista.OFF_SCREEN:
-#     plotter.show()
+t5 = time.time()
+
+#==================================================#
+#============ SOLVE 1D PROBLEM  ===================#
+#==================================================#
+
+#compute constitutive matrix from Flexibility Matrix:
+Q = as_matrix(np.linalg.inv(S))
+
+# Compute transformation Jacobian between reference interval and elements
+def tangent(domain2):
+    t = Jacobian(domain2)
+    return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))
+
+t = tangent(domain2)
+
+#compute section local axis
+ez = as_vector([0, 0, 1])
+a1 = cross(t, ez)
+a1 /= sqrt(dot(a1, a1))
+a2 = cross(t, a1)
+a2 /= sqrt(dot(a2, a2))
+
+#construct mixed element function space
+Ue = VectorElement("CG", domain2.ufl_cell(), 1, dim=3)
+W = FunctionSpace(domain2, Ue*Ue)
+
+u_ = TestFunction(W)
+du = TrialFunction(W)
+(w_, theta_) = split(u_)
+(dw, dtheta) = split(du)
+
+def tgrad(u):
+    return dot(grad(u), t)
+def generalized_strains(u):
+    (w, theta) = split(u)
+    return as_vector([dot(tgrad(w), t),
+                      dot(tgrad(w), a1)-dot(theta, a2),
+                      dot(tgrad(w), a2)+dot(theta, a1),
+                      dot(tgrad(theta), t),
+                      dot(tgrad(theta), a1),
+                      dot(tgrad(theta), a2)])
+def generalized_stresses(u):
+    return dot(Q, generalized_strains(u))
+
+Sig = generalized_stresses(du)
+Eps =  generalized_strains(u_)
+
+#modify quadrature scheme for shear components
+dx_beam = Measure("dx",domain=domain2)
+dx_shear = dx_beam(scheme="default",metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
+#LHS assembly
+k_form = sum([Sig[i]*Eps[i]*dx_beam for i in [0, 3, 4, 5]]) + (Sig[1]*Eps[1]+Sig[2]*Eps[2])*dx_shear
+
+#weight per unit length
+q = rho*A*g
+#RHS
+l_form = -q*w_[1]*dx_beam
+
+#APPLY BOUNDARY CONDITIONS
+#initialize function for boundary condition application
+ubc = Function(W)
+with ubc.vector.localForm() as uloc:
+     uloc.set(0.)
+
+fixed_dof_num = 0
+locate_BC = locate_dofs_topological(W,tdim,fixed_dof_num)
+
+bcs = dirichletbc(ubc,locate_BC)
+
+#SOLVE VARIATIONAL PROBLEM
+#initialize function in functionspace for beam properties
+uh = Function(W)
+# solve variational problem
+problem = LinearProblem(k_form, l_form, u=uh, bcs=[bcs])
+uh = problem.solve()
+t6 = time.time()
+print("Total time:")
+print(t6-t0)
+print("Total 2D analysis:")
+print(t5-t1)
+print("Total 1D analysis:")
+print(t6-t5)
+print("Time for mesh construction:")
+print(t1-t0)
+print("Time for Variational problem setup (2D):")
+print(t2-t1)
+print("Time for 2D matrix assembly:")
+print(t3-t2)
+print("Time to compute modes (SVD in numpy)")
+print(t4-t3)
+print("Time to compute Stiffness Matrix (2D analysis):")
+print(t5-t4)
+print("Time to compute 1D solution:")
+print(t6-t5)
+
+#==================================================#
+#================ POST-PROCESS  ===================#
+#========== (DISP. & STRESS RECOVERY)  ============#
+#==================================================#
+
+#plot interval displacement
+if True:
+     tdim = domain.topology.dim
+     topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
+     grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+     plotter = pyvista.Plotter()
+     plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+     plotter.view_isometric()
+     # plotter.view_vector((0.7,.7,.7))
+     # if not pyvista.OFF_SCREEN:
+     #      plotter.show()
+     tdim = domain2.topology.dim
+     topology, cell_types, geometry = plot.create_vtk_mesh(domain2, tdim)
+     grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+     # plotter = pyvista.Plotter()
+     # plotter.add_mesh(grid, show_edges=True,opacity=0.1)
+
+     # Attach vector values to grid and warp grid by vector
+     grid["u"] = uh.sub(0).collapse().x.array.reshape((geometry.shape[0], 3))
+     actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
+     warped = grid.warp_by_vector("u", factor=1)
+     actor_1 = plotter.add_mesh(warped, show_edges=True)
+     if not pyvista.OFF_SCREEN:
+          plotter.show()
+
+print('Maximum neutral axis displacment:')
+print(uh.sub(0).collapse().x.array.reshape((geometry.shape[0], 3)))
+#plot 3D field displacement

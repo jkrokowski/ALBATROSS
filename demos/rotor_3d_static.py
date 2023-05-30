@@ -270,6 +270,7 @@ wh.name = "Displacement"
 thetah = uh.sub(1)
 thetah.name = "Rotation"
 
+
 #################################################################
 ########### POST PROCESSING #####################################
 #################################################################
@@ -318,3 +319,5 @@ with XDMFFile(MPI.COMM_WORLD, "output/rotor_flap.xdmf", "w") as xdmf:
     xdmf.write_function(wh)
     xdmf.write_function(thetah)
     xdmf.write_function(M)
+
+print(wh.vector.array)

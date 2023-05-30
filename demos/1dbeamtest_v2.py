@@ -10,7 +10,7 @@ from dolfinx.fem import (VectorFunctionSpace,Function,FunctionSpace,
 from dolfinx.io import XDMFFile,gmshio,VTKFile
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import locate_entities,locate_entities_boundary
-from ufl import (Jacobian, diag, as_vector, inner, sqrt,cross,dot,
+from ufl import (as_matrix,Jacobian, diag, as_vector, inner, sqrt,cross,dot,
                 VectorElement, TestFunction, TrialFunction,split,grad,dx)
 import meshio
 import gmsh
@@ -37,16 +37,16 @@ lc = 1e-1 #TODO: find if there is an easier way to set the number of elements
 gmsh.model.add("Beam")
 gmsh.model.setCurrent("Beam")
 p1 = gmsh.model.occ.addPoint(0,0,0)
-p2 = gmsh.model.occ.addPoint(0.2*R, 0.05*R, 0.1*R)
-p3 = gmsh.model.occ.addPoint(R, -0.025*R, -0.05*R)
+p2 = gmsh.model.occ.addPoint(0.001, 0.001, R)
+# p3 = gmsh.model.occ.addPoint(R, -0.025*R, -0.05*R)
 line1 = gmsh.model.occ.addLine(p1,p2)
-line2 = gmsh.model.occ.addLine(p2,p3)
+# line2 = gmsh.model.occ.addLine(p2,p3)
 
 # Synchronize OpenCascade representation with gmsh model
 gmsh.model.occ.synchronize()
 
 # add physical marker
-gmsh.model.add_physical_group(tdim,[line1,line2])
+gmsh.model.add_physical_group(tdim,[line1])
 
 #adjust mesh size parameters
 gmsh.option.setNumber('Mesh.MeshSizeMin', 0.05*R)
@@ -80,25 +80,23 @@ print('cell_type   :', domain.ufl_cell())
 #################################################################
 ##### ENTER MATERIAL PARAMETERS AND CONSTITUTIVE MODEL ##########
 #################################################################
-thick = Constant(domain,0.3)
-width = thick/3
-E = Constant(domain,70e3)
-nu = Constant(domain,0.3)
-G = E/2/(1+nu)
-rho = Constant(domain,2.7e-3)
-g = Constant(domain,9.81)
+thick = Constant(domain,1.0)
+width = thick
+# E = Constant(domain,100)
+# nu = Constant(domain,0.3)
+# G = E/2/(1+nu)
+rho = Constant(domain,1.0)
+g = Constant(domain,.1)
 
 S = thick*width
-ES = E*S
-EI1 = E*width*thick**3/12
-EI2 = E*width**3*thick/12
-GJ = G*0.26*thick*width**3
-kappa = Constant(domain,5./6.)
-GS1 = kappa*G*S
-GS2 = kappa*G*S
 
-#construct constitutive matrix
-Q = diag(as_vector([ES, GS1, GS2, GJ, EI1, EI2]))
+# construct constitutive matrix
+Q = as_matrix(np.linalg.inv(np.array([[ 1.00000000e-02, -9.55042934e-15,  9.88547364e-15, -2.43110605e-15, -2.47639244e-14, -3.58755674e-14],
+ [-9.79451567e-15,  2.86538070e-02, -8.53443335e-14,  2.26021536e-14,  2.20673380e-13,  3.05837338e-13],
+ [ 1.02544120e-14, -8.63386082e-14,  2.86538070e-02, -2.48375484e-14, -2.29409747e-13, -3.19401283e-13],
+ [-2.49591552e-15,  2.21173053e-14, -2.43662401e-14,  1.69251094e-01,  6.03246742e-14,  9.07611533e-14],
+ [-2.50345920e-14,  2.18061250e-13, -2.24140124e-13,  5.95064637e-14,  1.19926729e-01,  8.04328770e-13],
+ [-3.75481441e-14,  3.12573695e-13, -3.22686728e-13,  9.46644254e-14,  8.32584918e-13,  1.19926729e-01]])))
 
 #################################################################
 ########### COMPUTE STATIC SOLUTION #############################
@@ -151,7 +149,7 @@ k_form = sum([Sig[i]*Eps[i]*dx for i in [0, 3, 4, 5]]) + (Sig[1]*Eps[1]+Sig[2]*E
 #weight per unit length
 q = rho*S*g
 #RHS
-l_form = -q*w_[2]*dx
+l_form = -q*w_[0]*dx
 
 #APPLY BOUNDARY CONDITIONS
 #initialize function for boundary condition application
