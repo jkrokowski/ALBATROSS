@@ -10,16 +10,15 @@ from ufl import (sym,FiniteElement,split,MixedElement,dot,lhs,rhs,Identity,inner
 from petsc4py import PETSc
 import pyvista
 import numpy as np
-from scipy.linalg import null_space
 import matplotlib.pylab as plt
 import time
 
 from dolfinx import geometry
 t0 = time.time()
 # Create 2d mesh and define function space
-N = 3
-W = .1
-H = .1
+N = 8
+W = 1
+H = 1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 # domain2 = mesh.create_interval( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N])
@@ -29,7 +28,7 @@ domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], c
 #                   [1,N,N], cell_type=mesh.CellType.hexahedron)
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
-if True:
+if False:
      tdim = domain.topology.dim
      topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
      grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
@@ -162,27 +161,99 @@ RHS = Constant(domain,0.0)*v[0]*ds
 #assemble system matrices
 A = assemble_matrix(form(Residual))
 A.assemble()
+
 b=create_vector(form(RHS))
 with b.localForm() as b_loc:
       b_loc.set(0)
 assemble_vector(b,form(RHS))
 
-print(A.getSize())
-print(b.getSize())
-m,n1=A.getSize()
+import slepc4py,sys
+slepc4py.init(sys.argv)
 
-Anp = A.getValues(range(m),range(n1))
-# print("rank:")
-# print(np.linalg.matrix_rank(Anp))
+t1 = time.time()
+
+# Prob = slepc4py.SLEPc.SVD()
+# Prob.create()
+# Prob.setOperators(A)
+# # Prob.setProblemType(slepc4py.SLEPc.SVD.ProblemType.STANDARD)
+# # Prob.setType(slepc4py.SLEPc.SVD.ProblemType.LAPACK)
+# Prob.setType("lapack")
+# # Prob.setTolerances(1E-8, 100)
+# # Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)
+# Prob.solve()
+# #========
+# Prob = slepc4py.SLEPc.SVD().create()
+# Prob.setOperators(A)
+# # Prob.setProblemType(slepc4py.SLEPc.SVD.ProblemType.STANDARD)
+# # Prob.setType(slepc4py.SLEPc.SVD.ProblemType.LAPACK)
+# Prob.setType("trlanczos")
+# Prob.setDimensions(3,PETSc.DECIDE,PETSc.DECIDE)
+# Prob.setWhichSingularTriplets(Prob.Which.LARGEST)
+# Prob.setTolerances(1e-8, 10000)
+# Prob.setImplicitTranspose(True)
+# Prob.solve()
+
+# print(Prob.getConverged())
+# nconv = Prob.getConverged()
+# niters = Prob.getIterationNumber()
+# print("Number of eigenvalues successfully computed: ", nconv)
+# print("Iterations used", niters)
+# #========
+t2 = time.time()
 
 # nullspace = null_space(Anp)
 # print(nullspace.shape)
-
 # print("stiffness matrix:")
 # print(Anp)
+print(A.getSize())
+print(b.getSize())
+m,n1=A.getSize()
+Anp = A.getValues(range(m),range(n1))
 Usvd,sv,Vsvd = np.linalg.svd(Anp)
-# nullspace = A.getNullSpace()
-# print(nullspace.test(A))
+
+t3 = time.time()
+
+from scipy.linalg import null_space
+
+m,n1=A.getSize()
+Anp = A.getValues(range(m),range(n1))
+sols_scipy = null_space(Anp)
+
+t4 = time.time()
+
+from scipy.sparse.linalg import svds
+from scipy.sparse import csr_matrix
+
+# m,n1=A.getSize()
+# Anp = A.getValues(range(m),range(n1))
+# Amat =as_backend_type(A.mat()
+# assert isinstance(A, PETSc.Mat)
+# ai,aj,av =A.getValuesCSR()
+# Acsr = csr_matrix((av,ai,aj),A.size)
+Acsr = csr_matrix(A.getValuesCSR()[::-1], shape=A.size)
+
+sols_sps= svds(Acsr,k=12,which='SM',tol=1e-2,maxiter=10000,solver='lobpcg')
+
+t5 = time.time()
+
+m,n1=A.getSize()
+Anp = A.getValues(range(m),range(n1))
+q,r = np.linalg.qr(Anp)
+
+t6 = time.time()
+
+print('problem setup')
+print(t1-t0)
+print('slepc solve')
+print(t2-t1)
+print('numpy solve')
+print(t3-t2)
+print('scipy nullspace')
+print(t4-t3)
+print('scipy sparse')
+print(t5-t4)
+print('numpy qr')
+print(t6-t5)
 
 # sols = Vsvd[:,-12:]
 sols = Vsvd[-12:,:].T
@@ -335,52 +406,12 @@ for mode in range(mat.shape[1]):
 
 #CONSTRUCT DECOUPLED MODES BY LEFT MULTIPLYING BY THE INVERSE OF "mat"
 # sols_decoup = sols@np.linalg.inv(mat)
-from scipy import sparse
-sparse_mat = sparse.csr_matrix(mat)
+# from scipy import sparse
+# sparse_mat = sparse.csr_matrix(mat)
 sols_decoup = sols@np.linalg.inv(mat)
-
-#====PLOT DECOUPLED MODES========#
- 
-# #GET UBAR AND UHAT RELATED MODES FROM SVD
-# ubar_modes_sol = sols_decoup[ubar_vtx_to_dof,:]
-
-# #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
-# ubar_mode_sol = Function(UBAR)
-
-# #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
-# coeff_vecs = np.vstack((np.zeros((6,6)),np.eye(6)))
-# for idx,c in enumerate(coeff_vecs.T):
-
-#      c = np.reshape(c,(-1,1))
-#      u_coeff=sols_decoup@c
-#      ubar_mode_sol.vector.array = u_coeff.flatten()[ubar_vtx_to_dof].flatten()
-
-#      #plot ubar modes
-#      if True:
-#           tdim = domain.topology.dim
-#           topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
-#           grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-#           plotter = pyvista.Plotter()
-#           plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-#           u_topology, u_cell_types, u_geometry = plot.create_vtk_mesh(UBAR)
-#           u_grid = pyvista.UnstructuredGrid(u_topology, u_cell_types, u_geometry)
-#           u_grid.point_data["u"] = ubar_mode_sol.x.array.reshape((geometry.shape[0], 3))
-#           u_grid.set_active_scalars("u")
-#           plotter.add_mesh(u_grid.warp_by_scalar("u",factor=1), show_edges=True)
-#           if not pyvista.OFF_SCREEN:
-#                plotter.show()
-
 #==================================================#
 #============ Define 3d fields  ===================#
 #==================================================#
-
-#construct displacement fxn space
-# Ue = VectorElement("CG",domain2.ufl_cell(),1,dim=3)
-# U = FunctionSpace(domain2,Ue)
-# u_sol = Function(U)
-
-# X = SpatialCoordinate(domain2)
-# dX = Measure("dx",domain=domain2)
 
 #construct coefficient fields over 2D mesh
 U2d = FunctionSpace(domain,Ve)
@@ -388,40 +419,6 @@ ubar_field = Function(U2d)
 uhat_field = Function(U2d)
 utilde_field = Function(U2d)
 ubreve_field = Function(U2d)
-
-#class for constructing 3D displacement expresssion
-class U3D:
-     def __init__(self,disp_coeff_fxns):
-          self.ubarh = disp_coeff_fxns[0]
-          self.uhath = disp_coeff_fxns[1]
-          self.utildeh = disp_coeff_fxns[2]
-          self.ubreveh = disp_coeff_fxns[3]
-
-     def u3d(self,x):
-          '''expression values from:
-          https://jsdokken.com/dolfinx-tutorial/chapter1/membrane_code.html#making-curve-plots-throughout-the-domain
-          and
-          https://fenicsproject.discourse.group/t/equivalent-to-expression-for-a-vector-valued-function-in-dolfinx/8669/1
-          '''
-          points = np.stack((x[1],x[2],np.zeros_like(x[1])))
-          bb_tree = geometry.BoundingBoxTree(domain, domain.topology.dim)
-          cells = []
-          points_on_proc = []
-          # Find cells whose bounding-box collide with the the points
-          cell_candidates = geometry.compute_collisions(bb_tree, points.T)
-          # Choose one of the cells that contains the point
-          colliding_cells = geometry.compute_colliding_cells(domain, cell_candidates, points.T)
-          for i, point in enumerate(points.T):
-               if len(colliding_cells.links(i))>0:
-                    points_on_proc.append(point)
-                    cells.append(colliding_cells.links(i)[0])
-          vals = np.zeros((domain2.geometry.dim, x.shape[1]))
-          for idx in range(3):
-               vals[idx] = self.ubarh.eval(points.T,cells)[:,idx] \
-                    + self.uhath.eval(points.T,cells)[:,idx]*x[0] \
-                    + self.utildeh.eval(points.T,cells)[:,idx]*x[0]**2 \
-                    + self.ubreveh.eval(points.T,cells)[:,idx]*x[0]**3
-          return vals
 
 #==================================================#
 #======== LOOP FOR BUILDING LOAD MATRICES =========#
