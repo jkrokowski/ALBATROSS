@@ -15,9 +15,9 @@ import numpy as np
 import pyvista
 from dolfinx import plot
 
-from FRuIT_BAT.beam_model import BeamModelRefined
-from FRuIT_BAT.geometry import beamIntervalMesh3D
-from FRuIT_BAT.material import getBeamProps
+from FROOT_BAT.beam_model import BeamModelRefined
+from FROOT_BAT.geometry import beamIntervalMesh3D
+from FROOT_BAT.material import getBeamProps
 
 plot_with_pyvista = False
 

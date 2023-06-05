@@ -1,15 +1,15 @@
 from distutils.core import setup
 import setuptools
 setup(
-    name='FRuIT_BAT',
+    name='FROOT_BAT',
     version='0.1',
     packages=[
-        'FRuIT_BAT'
+        'FROOT_BAT'
     ],
-    url='https://github.com/jkrokowski/FRuIT_BAT',
-    author='Josh Krokowski',
+    url='https://github.com/jkrokowski/FROOT_BAT',
+    author='Joshua Krokowski',
     author_email='jkrokowski@ucsd.edu',
-    description="FEniCSx Represenation of Intervals for Three-Dimensional Beam Analysis Toolkit",
+    description="FEniCSx Represenation Of slender Objects for Three-Dimensional Beam Analysis Tasks",
     install_requires=[
         'numpy'
     ]
