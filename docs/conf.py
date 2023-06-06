@@ -35,7 +35,7 @@ extensions = [
     "sphinx_copybutton",            # allows copying code embedded in the docs rendered from .md or .ipynb files
     "myst_nb",                      # renders .md, .myst, .ipynb files
     "sphinx.ext.viewcode",          # adds the source code for classes and functions in auto generated api ref
-    "sphinxcontrib.collections",    # adds files from outside src and executes functions before Sphinx builds
+    # "sphinxcontrib.collections",    # adds files from outside src and executes functions before Sphinx builds
     "sphinxcontrib.bibtex",         # for references and citations
 ]
 
@@ -50,7 +50,7 @@ nb_execution_mode = 'off'
 # autodoc_typehints = 'description'
 
 # autoapi options
-autoapi_dirs = ["../lsdo_project_template/core"]
+autoapi_dirs = ["../FROOT_BAT/core"]
 autoapi_root = 'src/autoapi'
 autoapi_type = 'python'
 autoapi_file_patterns = ['*.py', '*.pyi']

@@ -1,0 +1,6 @@
+:py:mod:`blah`
+==============
+
+.. py:module:: blah
+
+
