@@ -2,6 +2,11 @@ import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
 
+
+
+
+
+#OLD BELOW HERE
 def beamIntervalMesh3D(pts,lc,filename,meshname):
 
     gdim = 3

@@ -12,8 +12,15 @@ and 4x4mass (M) matrix
 from dolfinx.fem import Function
 from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
                 inner,dot,grad,split,cross)
-from FRuIT_BAT.elements import *
+from FROOT_BAT.elements import *
 
+
+
+
+
+
+
+#old below here
 class BeamModelRefined(object):
     
     '''

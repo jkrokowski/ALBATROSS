@@ -1,4 +1,4 @@
-# Cross Sectional Analysis using the Principle of Minimum Total Complementary Energy
+# Cross-sectional analysis and 1D analysis for comparison with a 3D solution
 # ================
 
 from mpi4py import MPI
@@ -22,10 +22,10 @@ pyvista.global_theme.font.color = 'black'
 
 t0 = time.time()
 # Create 2d mesh and define function space
-N = 10
+N = 15
 W = 1
 H = 1
-L = 5
+L = 12
 Nx = 1000
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
@@ -131,7 +131,7 @@ x = SpatialCoordinate(domain)
 n = FacetNormal(domain)
 
 #material parameters
-E = 100 #70e9
+E = 1000 #70e9
 nu = 0.2
 _lam = (E*nu)/((1+nu)*(1-2*nu))
 mu = E/(2*(1+nu))
@@ -289,7 +289,6 @@ UHAT = V.sub(1).collapse()[0]
 ubar_mode = Function(UBAR)
 uhat_mode = Function(UBAR)
 
-#TODO: fix the 0.5's to be the average x 
 #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
 for mode in range(mat.shape[1]):
      #construct function from mode
@@ -344,8 +343,8 @@ for mode in range(mat.shape[1]):
 
 #CONSTRUCT DECOUPLED MODES BY LEFT MULTIPLYING BY THE INVERSE OF "mat"
 # sols_decoup = sols@np.linalg.inv(mat)
-from scipy import sparse
-sparse_mat = sparse.csr_matrix(mat)
+# from scipy import sparse
+# sparse_mat = sparse.csr_matrix(mat)
 sols_decoup = sols@np.linalg.inv(mat)
 
 #==================================================#
