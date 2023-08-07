@@ -1,5 +1,5 @@
 # FROOT-BAT 
-**F**EniCSx **R**epresenation of **O**f slender **O**bjects for  **T**hree-Dimensional **B**eam **A**nalysis **T**asks
+**F**EniCSx **R**epresenation **O**f slender **O**bjects for  **T**hree-Dimensional **B**eam **A**nalysis **T**asks
 
 Cross-sectional Analysis via polynomial expansion for displacements via BAT-CAVE (**C**ross-Sectional **A**nalysis from **V**ariable **E**pansions) 
 
