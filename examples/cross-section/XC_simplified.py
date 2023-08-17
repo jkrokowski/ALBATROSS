@@ -13,7 +13,7 @@ import numpy as np
 
 from dolfinx import geometry
 # Create 2d mesh and define function space
-N = 3
+N = 10
 W = .1
 H = .1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
@@ -115,7 +115,6 @@ L4= -CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*dx\
 Residual = L1+L2+L3+L4
 
 LHS = lhs(Residual)
-# RHS = rhs(Residual)
 RHS = Constant(domain,0.0)*v[0]*ds
 
 #assemble system matrices
@@ -337,5 +336,6 @@ for idx,c in enumerate(Ctotal.T):
 K1_inv = np.linalg.inv(K1)
 
 S = K1_inv.T@K2@K1_inv
-print(S)
-print(np.linalg.inv(S))
+K = np.linalg.inv(S)
+
+print(K)
