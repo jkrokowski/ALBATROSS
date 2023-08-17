@@ -17,7 +17,7 @@ import time
 from dolfinx import geometry
 t0 = time.time()
 # Create 2d mesh and define function space
-N = 3
+N = 5
 W = .1
 H = .1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
@@ -534,7 +534,7 @@ print(t1-t0)
 # u_topology, u_cell_types, u_geometry = plot.create_vtk_mesh(UBAR)
 # ubar_plot = Function(UBAR)
 # ubar_modes_decoup = sols_decoup[ubar_vtx_to_dof,:]
-# ubar_plot.vector.array = ubar_modes_decoup[:,:,7].flatten()
+# ubar_plot.vector.array = ubar_modes_decoup[:,:,8].flatten()
 # u_grid = pyvista.UnstructuredGrid(u_topology, u_cell_types, u_geometry)
 # # u_grid.point_data["u"] = ubar_modes_decoup[:,:,7]
 # u_grid.point_data["u"] = ubar_plot.x.array.reshape((geometry.shape[0], 3))

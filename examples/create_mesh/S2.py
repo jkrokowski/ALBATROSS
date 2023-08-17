@@ -9,7 +9,7 @@ gmsh.initialize()
 
 gmsh.model.add("square_2iso")
 
-xcName = "square_2iso"
+xcName = "square_2iso_quads"
 #mesh parameters
 gdim=2
 tdim=2

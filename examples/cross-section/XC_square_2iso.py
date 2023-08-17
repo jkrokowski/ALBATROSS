@@ -20,13 +20,11 @@ from dolfinx import geometry
 N = 3
 W = .1
 H = .1
-# domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
-domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
 #read in mesh
-xcName = "square_2iso"
+xcName = "square_2iso_quads"
 fileName = "output/"+ xcName + ".xdmf"
 with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
     #mesh generation with meshio seems to have difficulty renaming the mesh name
@@ -35,15 +33,15 @@ with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
     ct = xdmf.read_meshtags(domain, name="Grid")   
 domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
 
-# #plot mesh:
-# p = pyvista.Plotter(window_size=[800, 800])
-# num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-# topology, cell_types, x = plot.create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
-# grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-# # grid.cell_data["Marker"] = ct.values
-# p.add_mesh(grid, show_edges=True)
-# p.view_xy()
-# p.show()
+#plot mesh:
+p = pyvista.Plotter(window_size=[800, 800])
+num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
+topology, cell_types, x = plot.create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+# grid.cell_data["Marker"] = ct.values
+p.add_mesh(grid, show_edges=True)
+p.view_xy()
+p.show()
 
 #right
 right_marker=0
@@ -92,7 +90,7 @@ n = FacetNormal(domain)
 
 #material parameters
 E1 = 100 #70e9
-alpha = .01
+alpha = .1
 E2 = alpha*E1
 E_mat = [E1,E2]
 nu = 0.2

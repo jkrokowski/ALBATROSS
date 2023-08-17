@@ -2,6 +2,7 @@ import gmsh
 import numpy as np
 from dolfinx.io import XDMFFile,gmshio
 from mpi4py import MPI
+import sys
 
 #mesh parameters
 gdim=2
@@ -39,6 +40,10 @@ gmsh.option.setNumber('Mesh.MeshSizeMax', 0.004)
 #generate the mesh and optionally write the gmsh mesh file
 gmsh.model.mesh.generate(gdim)
 gmsh.write("output/hollow_disk.msh")
+
+# Launch the GUI to see the results:
+if '-nopopup' not in sys.argv:
+    gmsh.fltk.run()
 
 #use meshio to convert msh file to xdmf
 msh, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, MPI.COMM_SELF,0,gdim=gdim)

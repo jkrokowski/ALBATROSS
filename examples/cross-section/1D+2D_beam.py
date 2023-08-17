@@ -22,10 +22,10 @@ pyvista.global_theme.font.color = 'black'
 
 t0 = time.time()
 # Create 2d mesh and define function space
-N = 15
+N = 10
 W = 1
 H = 1
-L = 12
+L = 5
 Nx = 1000
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
@@ -131,7 +131,7 @@ x = SpatialCoordinate(domain)
 n = FacetNormal(domain)
 
 #material parameters
-E = 1000 #70e9
+E = 100000 #70e9
 nu = 0.2
 _lam = (E*nu)/((1+nu)*(1-2*nu))
 mu = E/(2*(1+nu))

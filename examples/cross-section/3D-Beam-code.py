@@ -1,18 +1,18 @@
 #Reference 3D Solution for comparison with the beam analysis approach
 
 # Scaled variable
-L = 12
+Lx = 5
 W = 1
 H = 1
 
-E = 1000
+E = 100000
 nu = 0.2
 mu = E/(2*(1+nu))
 lambda_ = (E*nu)/((1+nu)*(1-2*nu))
 rho = 1
 g = .1
 N=15
-Nx = 180
+Nx = N*Lx
 
 import numpy as np
 import ufl
@@ -24,7 +24,7 @@ from dolfinx import mesh, fem, plot, io
 
 import time
 t0 = time.time()
-domain = mesh.create_box(MPI.COMM_WORLD, [np.array([0,-W/2,-H/2]), np.array([L, W/2, H/2])],
+domain = mesh.create_box(MPI.COMM_WORLD, [np.array([0,-W/2,-H/2]), np.array([Lx, W/2, H/2])],
                   [Nx,N,N], cell_type=mesh.CellType.hexahedron)
 t1 = time.time()
 V = fem.VectorFunctionSpace(domain, ("CG", 1))
@@ -84,7 +84,7 @@ else:
 
 print("displacement at neutral axis:")
 tol = 0.001 # Avoid hitting the outside of the domain
-points = np.array([[12-tol,0+tol,0+tol]]).T
+points = np.array([[Lx-tol,0+tol,0+tol]]).T
 u_values = []
 tol = 0.001 # Avoid hitting the outside of the domain
 # y = np.linspace(-1 + tol, 1 - tol, 101)
