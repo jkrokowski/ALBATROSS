@@ -4,62 +4,32 @@
 from mpi4py import MPI
 import dolfinx.cpp.mesh
 from dolfinx import mesh,plot
-from dolfinx.mesh import meshtags
 from dolfinx.fem import locate_dofs_topological,Constant,FunctionSpace,Function,form,assemble_scalar,VectorFunctionSpace,Expression,TensorFunctionSpace,locate_dofs_geometrical
 from dolfinx.fem.petsc import create_vector,assemble_matrix,assemble_vector
 from ufl import (sym,FiniteElement,split,MixedElement,dot,lhs,rhs,Identity,inner,outer,TrialFunction,TestFunction,Measure,grad,exp,sin,SpatialCoordinate,FacetNormal,indices,as_tensor,as_matrix,as_vector,VectorElement,TensorElement,Dx)
 from petsc4py import PETSc
 import pyvista
 import numpy as np
-from dolfinx.io import XDMFFile
-from dolfinx.plot import create_vtk_mesh
 
-tdim = 2
 from dolfinx import geometry
 # Create 2d mesh and define function space
-N = 3
+N = 10
 W = .1
 H = .1
+# domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
+domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
-#read in mesh
-xcName = "square_2iso_quads"
-fileName = "output/"+ xcName + ".xdmf"
-with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
-    #mesh generation with meshio seems to have difficulty renaming the mesh name
-    # (but not the file, hence the "Grid" name property)
-    domain = xdmf.read_mesh(name="Grid")
-    ct = xdmf.read_meshtags(domain, name="Grid")   
-domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
-
-#plot mesh:
-p = pyvista.Plotter(window_size=[800, 800])
-num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-topology, cell_types, x = plot.create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
-grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-# grid.cell_data["Marker"] = ct.values
-p.add_mesh(grid, show_edges=True)
-p.view_xy()
-p.show()
-
-#right
-right_marker=0
-right_facets = ct.find(right_marker)
-right_mt = meshtags(domain, tdim, right_facets, right_marker)
-#left
-left_marker=1
-left_facets = ct.find(left_marker)
-left_mt = meshtags(domain, tdim, left_facets, left_marker)
-
-p = pyvista.Plotter(window_size=[800, 800])
-num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
-grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-grid.cell_data["Marker"] = ct.values
-p.add_mesh(grid, show_edges=True)
-p.view_xy()
-p.show()
+if True:
+     tdim = domain.topology.dim
+     topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
+     grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+     plotter = pyvista.Plotter()
+     plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+     plotter.view_isometric()
+     if not pyvista.OFF_SCREEN:
+          plotter.show()
 
 # Construct Displacment Coefficient mixed function space
 Ve = VectorElement("CG",domain.ufl_cell(),1,dim=3)
@@ -89,56 +59,16 @@ x = SpatialCoordinate(domain)
 n = FacetNormal(domain)
 
 #material parameters
-E1 = 100 #70e9
-alpha = .1
-E2 = alpha*E1
-E_mat = [E1,E2]
+E = 100 #70e9
 nu = 0.2
-
-#material region assignment
-region_to_mat = [0,1]
-
-def construct_C(E,nu):   
-     _lam = (E*nu)/((1+nu)*(1-2*nu))
-     mu = E/(2*(1+nu))
-
-     #elasticity tensor construction
-     delta = Identity(d)
-     C = as_tensor(_lam*(delta[i,j]*delta[k,l]) \
-                    + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
-     return C
-
-C1 = construct_C(E1,nu)
-C2 = construct_C(E2,nu)
-
-
-#construct a DGO function space to assign material properties:
-Q = FunctionSpace(domain,("DG",0))
-material_tags = np.unique(ct.values)
-
-E = Function(Q)
-
-for tag in material_tags:
-    cells = ct.find(tag)
-    E.x.array[cells] = np.full_like(cells,E_mat[region_to_mat[tag]],dtype=float)
-
 _lam = (E*nu)/((1+nu)*(1-2*nu))
 mu = E/(2*(1+nu))
+
 
 #elasticity tensor construction
 delta = Identity(d)
 C = as_tensor(_lam*(delta[i,j]*delta[k,l]) \
-               + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
-
-# #plot the elastic modulus for each region
-# p = pyvista.Plotter(window_size=[800, 800])
-# num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-# topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
-# grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-# grid.cell_data["Marker"] = E.x.array
-# p.add_mesh(grid, show_edges=True)
-# p.view_xy()
-# p.show()
+                + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
 
 #sub-tensors of stiffness tensor
 Ci1k1 = as_tensor(C[i,0,k,0],(i,k))
@@ -185,7 +115,6 @@ L4= -CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*dx\
 Residual = L1+L2+L3+L4
 
 LHS = lhs(Residual)
-# RHS = rhs(Residual)
 RHS = Constant(domain,0.0)*v[0]*ds
 
 #assemble system matrices
@@ -383,9 +312,9 @@ for idx,c in enumerate(Ctotal.T):
      P1 = assemble_scalar(form(sigma11*dx))
      V2 = assemble_scalar(form(sigma12*dx))
      V3 = assemble_scalar(form(sigma13*dx))
-     T1 = assemble_scalar(form(-((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
-     M2 = assemble_scalar(form(-(x[1]-zavg)*sigma11*dx))
-     M3 = assemble_scalar(form((x[0]-yavg)*sigma11*dx))
+     T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
+     M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
+     M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
 
      #assemble loads into load vector
      P = np.array([P1,V2,V3,T1,M2,M3])
@@ -407,8 +336,6 @@ for idx,c in enumerate(Ctotal.T):
 K1_inv = np.linalg.inv(K1)
 
 S = K1_inv.T@K2@K1_inv
-# print(S)
-
 K = np.linalg.inv(S)
 
 print(K)

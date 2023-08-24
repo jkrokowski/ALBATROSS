@@ -33,15 +33,15 @@ with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
     ct = xdmf.read_meshtags(domain, name="Grid")   
 domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
 
-#plot mesh:
-p = pyvista.Plotter(window_size=[800, 800])
-num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-topology, cell_types, x = plot.create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
-grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-# grid.cell_data["Marker"] = ct.values
-p.add_mesh(grid, show_edges=True)
-p.view_xy()
-p.show()
+# #plot mesh:
+# p = pyvista.Plotter(window_size=[800, 800])
+# num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
+# topology, cell_types, x = plot.create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+# grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+# # grid.cell_data["Marker"] = ct.values
+# p.add_mesh(grid, show_edges=True)
+# p.view_xy()
+# p.show()
 
 #right
 right_marker=0
@@ -52,14 +52,14 @@ left_marker=1
 left_facets = ct.find(left_marker)
 left_mt = meshtags(domain, tdim, left_facets, left_marker)
 
-p = pyvista.Plotter(window_size=[800, 800])
-num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
-grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-grid.cell_data["Marker"] = ct.values
-p.add_mesh(grid, show_edges=True)
-p.view_xy()
-p.show()
+# p = pyvista.Plotter(window_size=[800, 800])
+# num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
+# topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+# grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+# grid.cell_data["Marker"] = ct.values
+# p.add_mesh(grid, show_edges=True)
+# p.view_xy()
+# p.show()
 
 # Construct Displacment Coefficient mixed function space
 Ve = VectorElement("CG",domain.ufl_cell(),1,dim=3)
@@ -111,19 +111,28 @@ def construct_C(E,nu):
 C1 = construct_C(E1,nu)
 C2 = construct_C(E2,nu)
 
+#add development module file location
+import sys
+sys.path.append('FROOT_BAT/FROOT_BAT')
+from material import getMatConstitutiveIsotropic,getMatConstitutiveOrthotropic
+
+C3 = getMatConstitutiveIsotropic(E1,.2)
+
+C4 = getMatConstitutiveOrthotropic(480,120,120,60,60,50,0.19,0.19,0.26)
 
 #construct a DGO function space to assign material properties:
-Q = FunctionSpace(domain,("DG",0))
-material_tags = np.unique(ct.values)
+TESTELEMENT = TensorElement("DG",domain.ufl_cell(),0,shape=(6,6))
+TESTSPACE = FunctionSpace(domain, TESTELEMENT)
+testfxn= Function(TESTSPACE)
 
-E = Function(Q)
+material_tags = np.unique(ct.values)
+C_mat = [C1,C2]
+
+C = Function(Q)
 
 for tag in material_tags:
     cells = ct.find(tag)
-    E.x.array[cells] = np.full_like(cells,E_mat[region_to_mat[tag]],dtype=float)
-
-_lam = (E*nu)/((1+nu)*(1-2*nu))
-mu = E/(2*(1+nu))
+    C.x.array[cells] = np.full_like(cells,C_mat[region_to_mat[tag]],dtype=float)
 
 #elasticity tensor construction
 delta = Identity(d)
@@ -383,9 +392,9 @@ for idx,c in enumerate(Ctotal.T):
      P1 = assemble_scalar(form(sigma11*dx))
      V2 = assemble_scalar(form(sigma12*dx))
      V3 = assemble_scalar(form(sigma13*dx))
-     T1 = assemble_scalar(form(-((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
-     M2 = assemble_scalar(form(-(x[1]-zavg)*sigma11*dx))
-     M3 = assemble_scalar(form((x[0]-yavg)*sigma11*dx))
+     T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
+     M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
+     M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
 
      #assemble loads into load vector
      P = np.array([P1,V2,V3,T1,M2,M3])
