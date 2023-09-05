@@ -2,10 +2,10 @@
 2. assign internal structure or read internal structure
 3. label material regions
 4. construct material tensors for each material
-5. construct DG0 fxn space for each element based on material data and region labels
-6. Construct Residual
-7. Compute SVD 
-8. decouple modes
-9. Compute K1 and K2
+    5. construct DG0 fxn space for each element based on material data and region labels
+    6. Construct Residual
+    7. Compute SVD 
+    8. decouple modes
+    9. Compute K1 and K2
 10. Compute stiffness matrix
 11. Compute mass matrix

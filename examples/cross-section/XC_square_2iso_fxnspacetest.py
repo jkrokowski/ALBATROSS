@@ -13,6 +13,8 @@ import pyvista
 import numpy as np
 from dolfinx.io import XDMFFile
 from dolfinx.plot import create_vtk_mesh
+from FROOT_BAT.material import getMatConstitutiveIsotropic
+
 
 tdim = 2
 from dolfinx import geometry
@@ -98,18 +100,18 @@ nu = 0.2
 #material region assignment
 region_to_mat = [0,1]
 
-def construct_C(E,nu):   
-     _lam = (E*nu)/((1+nu)*(1-2*nu))
-     mu = E/(2*(1+nu))
+# def construct_C(E,nu):   
+#      _lam = (E*nu)/((1+nu)*(1-2*nu))
+#      mu = E/(2*(1+nu))
 
-     #elasticity tensor construction
-     delta = Identity(d)
-     C = as_tensor(_lam*(delta[i,j]*delta[k,l]) \
-                    + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
-     return C
+#      #elasticity tensor construction
+#      delta = Identity(d)
+#      C = as_tensor(_lam*(delta[i,j]*delta[k,l]) \
+#                     + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
+#      return C
 
-C1 = construct_C(E1,nu)
-C2 = construct_C(E2,nu)
+C1 = getMatConstitutiveIsotropic(E1,nu)
+C2 = getMatConstitutiveIsotropic(E2,nu)
 
 
 #construct a DGO function space to assign material properties:

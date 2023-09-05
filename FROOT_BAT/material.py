@@ -1,6 +1,23 @@
 from dolfinx.fem import Constant
 from ufl import Identity,as_tensor,indices,diag,as_vector,as_matrix
 
+
+def getMatConstitutive(mat_data):
+    if mat_data['type'] == 'isotropic':
+        return getMatConstitutiveIsotropic(mat_data['E'],mat_data['nu'])
+    elif mat_data['type'] == 'orthotropic':
+        mat_consts = [mat_data['E1'],
+                      mat_data['E2'],
+                      mat_data['E3'],
+                      mat_data['G12'],
+                      mat_data['G13'],
+                      mat_data['G23'],
+                      mat_data['nu12'],
+                      mat_data['nu13'],
+                      mat_data['nu23']]
+        return getMatConstitutiveIsotropic(mat_consts)
+    else:
+        return 'ERROR: please use existing material model'
 def getMatConstitutiveIsotropic(E,nu):
     #lame parameters from Young's Modulus and Poisson Ratio
     _lam = (E*nu)/((1+nu)*(1-2*nu))
@@ -9,10 +26,10 @@ def getMatConstitutiveIsotropic(E,nu):
     #elasticity tensor construction
     delta = Identity(3)
     i,j,k,l=indices(4)
-    D = as_tensor(_lam*(delta[i,j]*delta[k,l]) \
+    C = as_tensor(_lam*(delta[i,j]*delta[k,l]) \
                     + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
 
-    return D
+    return C
 
 def getMatConstitutiveOrthotropic(E11,E22,E33,G12,G13,G23,nu12,nu13,nu23):
     
@@ -22,62 +39,62 @@ def getMatConstitutiveOrthotropic(E11,E22,E33,G12,G13,G23,nu12,nu13,nu23):
     
     gamma = 1 / (1-nu12*nu21-nu23*nu23-nu13*nu31-2*nu21*nu32*nu13)
 
-    D1111 = E11*(1-nu23*nu32)*gamma
-    D2222 = E22*(1-nu13*nu31)*gamma
-    D3333 = E33*(1-nu12*nu21)*gamma
-    D1122 = E11*(nu21+nu31*nu23)*gamma
-    D1133 = E11*(nu31+nu21*nu32)*gamma
-    D2233 = E22*(nu32+nu12*nu31)*gamma
-    D1212 = G12
-    D1313 = G13
-    D2323 = G23
+    C1111 = E11*(1-nu23*nu32)*gamma
+    C2222 = E22*(1-nu13*nu31)*gamma
+    C3333 = E33*(1-nu12*nu21)*gamma
+    C1122 = E11*(nu21+nu31*nu23)*gamma
+    C1133 = E11*(nu31+nu21*nu32)*gamma
+    C2233 = E22*(nu32+nu12*nu31)*gamma
+    C1212 = G12
+    C1313 = G13
+    C2323 = G23
 
-    D_voigt = as_matrix([[D1111,D1122,D1133,0,    0,    0    ],
-                         [D1122,D2222,D2233,0,    0,    0    ],
-                         [D1133,D2233,D3333,0,    0,    0    ],
-                         [0,    0,    0,    D1212,0,    0    ],
-                         [0,    0,    0,    0,    D1313,0    ],
-                         [0,    0,    0,    0,    0,    D2323]])
+    C_voigt = as_matrix([[C1111,C1122,C1133,0,    0,    0    ],
+                         [C1122,C2222,C2233,0,    0,    0    ],
+                         [C1133,C2233,C3333,0,    0,    0    ],
+                         [0,    0,    0,    C1212,0,    0    ],
+                         [0,    0,    0,    0,    C1313,0    ],
+                         [0,    0,    0,    0,    0,    C2323]])
     
-    D = voigt2tensor(D_voigt)
+    C = voigt2tensor(C_voigt)
 
-    return D
+    return C
 
-def voigt2tensor(D_voigt):
+def voigt2tensor(C_voigt):
     '''converts a 6x6 matrix into the appropriately constructed
       3 dimensional, Fourth order tensor
       '''
     
-    D = as_tensor([[as_matrix([[D_voigt[0,0],D_voigt[0,3],D_voigt[0,4]],\
-                               [D_voigt[0,3],D_voigt[0,1],D_voigt[0,5]],\
-                               [D_voigt[0,4],D_voigt[0,5],D_voigt[0,2]]]),\
-                   as_matrix([[D_voigt[0,3],D_voigt[3,3],D_voigt[3,4]],\
-                               [D_voigt[3,3],D_voigt[1,3],D_voigt[3,5]],\
-                               [D_voigt[3,4],D_voigt[3,5],D_voigt[2,3]]]),\
-                   as_matrix([[D_voigt[0,4],D_voigt[3,4],D_voigt[4,4]],\
-                               [D_voigt[3,4],D_voigt[1,4],D_voigt[4,5]],\
-                               [D_voigt[4,4],D_voigt[4,5],D_voigt[2,4]]])],\
-                   [as_matrix([[D_voigt[0,3],D_voigt[3,3],D_voigt[3,4]],\
-                               [D_voigt[3,3],D_voigt[1,3],D_voigt[3,5]],\
-                               [D_voigt[3,4],D_voigt[3,5],D_voigt[2,3]]]),\
-                    as_matrix([[D_voigt[0,1],D_voigt[1,3],D_voigt[1,4]],\
-                               [D_voigt[1,3],D_voigt[1,1],D_voigt[1,5]],\
-                               [D_voigt[1,4],D_voigt[1,5],D_voigt[1,2]]]),\
-                    as_matrix([[D_voigt[0,5],D_voigt[3,5],D_voigt[4,5]],\
-                               [D_voigt[3,5],D_voigt[1,5],D_voigt[5,5]],\
-                               [D_voigt[4,5],D_voigt[5,5],D_voigt[2,5]]])],\
-                   [as_matrix([[D_voigt[0,4],D_voigt[3,4],D_voigt[4,4]],\
-                               [D_voigt[3,4],D_voigt[1,4],D_voigt[4,5]],\
-                               [D_voigt[4,4],D_voigt[4,5],D_voigt[2,4]]]),\
-                    as_matrix([[D_voigt[0,5],D_voigt[3,5],D_voigt[4,5]],\
-                               [D_voigt[3,5],D_voigt[1,5],D_voigt[5,5]],\
-                               [D_voigt[4,5],D_voigt[5,5],D_voigt[2,5]]]),\
-                    as_matrix([[D_voigt[0,2],D_voigt[2,3],D_voigt[2,4]],\
-                               [D_voigt[2,3],D_voigt[1,2],D_voigt[2,5]],\
-                               [D_voigt[2,4],D_voigt[2,5],D_voigt[2,2]]])]   ])
-    return D
+    C = as_tensor([[as_matrix([[C_voigt[0,0],C_voigt[0,3],C_voigt[0,4]],\
+                               [C_voigt[0,3],C_voigt[0,1],C_voigt[0,5]],\
+                               [C_voigt[0,4],C_voigt[0,5],C_voigt[0,2]]]),\
+                   as_matrix([[C_voigt[0,3],C_voigt[3,3],C_voigt[3,4]],\
+                               [C_voigt[3,3],C_voigt[1,3],C_voigt[3,5]],\
+                               [C_voigt[3,4],C_voigt[3,5],C_voigt[2,3]]]),\
+                   as_matrix([[C_voigt[0,4],C_voigt[3,4],C_voigt[4,4]],\
+                               [C_voigt[3,4],C_voigt[1,4],C_voigt[4,5]],\
+                               [C_voigt[4,4],C_voigt[4,5],C_voigt[2,4]]])],\
+                   [as_matrix([[C_voigt[0,3],C_voigt[3,3],C_voigt[3,4]],\
+                               [C_voigt[3,3],C_voigt[1,3],C_voigt[3,5]],\
+                               [C_voigt[3,4],C_voigt[3,5],C_voigt[2,3]]]),\
+                    as_matrix([[C_voigt[0,1],C_voigt[1,3],C_voigt[1,4]],\
+                               [C_voigt[1,3],C_voigt[1,1],C_voigt[1,5]],\
+                               [C_voigt[1,4],C_voigt[1,5],C_voigt[1,2]]]),\
+                    as_matrix([[C_voigt[0,5],C_voigt[3,5],C_voigt[4,5]],\
+                               [C_voigt[3,5],C_voigt[1,5],C_voigt[5,5]],\
+                               [C_voigt[4,5],C_voigt[5,5],C_voigt[2,5]]])],\
+                   [as_matrix([[C_voigt[0,4],C_voigt[3,4],C_voigt[4,4]],\
+                               [C_voigt[3,4],C_voigt[1,4],C_voigt[4,5]],\
+                               [C_voigt[4,4],C_voigt[4,5],C_voigt[2,4]]]),\
+                    as_matrix([[C_voigt[0,5],C_voigt[3,5],C_voigt[4,5]],\
+                               [C_voigt[3,5],C_voigt[1,5],C_voigt[5,5]],\
+                               [C_voigt[4,5],C_voigt[5,5],C_voigt[2,5]]]),\
+                    as_matrix([[C_voigt[0,2],C_voigt[2,3],C_voigt[2,4]],\
+                               [C_voigt[2,3],C_voigt[1,2],C_voigt[2,5]],\
+                               [C_voigt[2,4],C_voigt[2,5],C_voigt[2,2]]])]   ])
+    return C
 
-def tensor2voigt(D):
+def tensor2voigt(C):
     
     return
 
