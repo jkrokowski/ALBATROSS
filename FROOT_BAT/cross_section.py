@@ -1,7 +1,7 @@
-from ufl import (as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
-from dolfinx.fem import (sin,cos,FunctionSpace,VectorFunctionSpace)
+from ufl import (grad,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
+from dolfinx.fem import (sin,cos,Function,FunctionSpace,VectorFunctionSpace)
 
-from FROOT_BAT.material import getMatConstitutiveIsotropic,getMatConstitutiveOrthotropic
+from FROOT_BAT.material import *
 
 
 class CrossSection:
@@ -56,13 +56,14 @@ class CrossSection:
         #construct residual by looping through materials
         self.Residual = 0
         for mat_id in self.mat_ids:
-            self.Residual += constructMatResidual(mat_id)
+            self.Residual += self.constructMatResidual(mat_id)
 
         
    
-    def applyRotation(C,alpha,beta,gamma):
-        i,j,k,l=indices(4)
-        p,q,r,s=indices(4)
+    def applyRotation(self,C,alpha,beta,gamma):
+        #indices
+        i,j,k,l=self.i,self.j,self.k,self.l
+        p,q,r,s=self.p,self.q,self.r,self.s
         #rotation about X-axis
         Rx = as_matrix([[1,         0,         0],
                         [0,cos(alpha),-sin(alpha)],
@@ -82,6 +83,13 @@ class CrossSection:
         Cprime = as_tensor(R[p,i]*R[q,j]*C[i,j,k,l]*R.T[k,r]*R.T[l,s],(p,q,r,s))
 
         return Cprime
+    
+    def constructMatOrientation(self,orientation):
+        #orientation is a 
+        self.Q = VectorFunctionSpace(self.msh,("DG",0),dim=3)
+        self.theta = Function(self.Q)
+
+        self.theta.interpolate(orientation)
 
     def constructMatResidual(self,mat_id):
         #geometric dimension
@@ -89,8 +97,20 @@ class CrossSection:
         #indices
         i,j,k,l=self.i,self.j,self.k,self.l
         a,B = self.a,self.b
+        #trial and test functions
+        ubar,uhat,utilde,ubreve=self.ubar,self.uhat,self.utilde,self.ubreve
+        vbar,vhat,vtilde,vbreve=self.vbar,self.vhat,self.vtilde,self.vbreve
+        #restricted integration domain
+        dx = self.dx(mat_id)
+                
+        C_mat = getMatConstitutive(self.material[mat_id])
 
-        C = getMatConstitutive(self.material[mat_id])
+        #if an orthotropic material is used, the constructMatOrientation method
+        #must be called prior to applying rotations
+        if self.material['type'] == 'orthotropic':
+            C = self.applyRotation(C_mat,self.theta[0],self.theta[1],self.theta[2])
+        elif self.material['type'] == 'isotropic':
+            C = C_mat
 
         #sub-tensors of stiffness tensor
         Ci1k1 = as_tensor(C[i,0,k,0],(i,k))
@@ -137,12 +157,10 @@ class CrossSection:
         return L1+L2+L3+L4
 
     def getModes(self):
-
+        return
     def decoupleModes(self):
-
+        return
     def computeXCStiffnessMat(self):
-
-    
+        return
     def getXCMassMatrix(self):
-
         return
