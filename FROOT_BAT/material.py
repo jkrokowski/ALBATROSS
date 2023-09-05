@@ -18,6 +18,7 @@ def getMatConstitutive(mat_data):
         return getMatConstitutiveIsotropic(mat_consts)
     else:
         return 'ERROR: please use existing material model'
+    
 def getMatConstitutiveIsotropic(E,nu):
     #lame parameters from Young's Modulus and Poisson Ratio
     _lam = (E*nu)/((1+nu)*(1-2*nu))
