@@ -87,7 +87,6 @@ def orientation(x):
 
 Theta.interpolate(orientation)
 
-
 C_mat = getMatConstitutiveOrthotropic(480,120,120,60,50,60,0.19,0.26,0.19)
 
 alpha = Theta[0]
@@ -102,19 +101,6 @@ Ry = as_matrix([[cos(beta), 0,sin(beta)],
 Rz = as_matrix([[cos(gamma),-sin(gamma),0],
                 [sin(gamma),cos(gamma), 0],
                 [0,         0,          1]])
-
-# alpha = pi/2
-# beta = pi/4
-# gamma = 0
-# Rx = as_matrix([[1,         0,         0],
-#                 [0,cos(alpha),-sin(alpha)],
-#                 [0,sin(alpha),cos(alpha)]])
-# Ry = as_matrix([[cos(beta), 0,sin(beta)],
-#                 [0,         1,        0],
-#                 [-sin(beta),0,cos(beta)]])
-# Rz = as_matrix([[cos(gamma),-sin(gamma),0],
-#                 [sin(gamma),cos(gamma), 0],
-#                 [0,         0,          1]])
 
 R = Rz*Ry*Rx
 # R = as_matrix(Rz[i,j]*Ry[j,k]*Rx[k,l],(i,l))
