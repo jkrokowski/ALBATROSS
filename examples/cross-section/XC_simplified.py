@@ -186,7 +186,7 @@ mat = np.zeros((12,12))
 UBAR = V.sub(0).collapse()[0]
 UHAT = V.sub(1).collapse()[0]
 ubar_mode = Function(UBAR)
-uhat_mode = Function(UBAR)
+uhat_mode = Function(UHAT)
 
 #compute area
 A = assemble_scalar(form(1.0*dx))

@@ -1,8 +1,10 @@
 from ufl import (grad,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
-from dolfinx.fem import (sin,cos,Function,FunctionSpace,VectorFunctionSpace)
+from dolfinx.fem import (assemble_scalar,form,sin,cos,Function,FunctionSpace,VectorFunctionSpace)
+from dolfinx.fem.petsc import assemble_matrix
+import numpy as np
 
 from FROOT_BAT.material import *
-
+from FROOT_BAT.utils import *
 
 class CrossSection:
     def __init__(self, msh, celltags, material):
@@ -58,6 +60,9 @@ class CrossSection:
         for mat_id in self.mat_ids:
             self.Residual += self.constructMatResidual(mat_id)
 
+        self.getModes()
+        self.decoupleModes()
+
         
    
     def applyRotation(self,C,alpha,beta,gamma):
@@ -96,7 +101,7 @@ class CrossSection:
         d = self.d
         #indices
         i,j,k,l=self.i,self.j,self.k,self.l
-        a,B = self.a,self.b
+        a,B = self.a,self.B
         #trial and test functions
         ubar,uhat,utilde,ubreve=self.ubar,self.uhat,self.utilde,self.ubreve
         vbar,vhat,vtilde,vbreve=self.vbar,self.vhat,self.vtilde,self.vbreve
@@ -110,7 +115,8 @@ class CrossSection:
         if self.material['type'] == 'orthotropic':
             C = self.applyRotation(C_mat,self.theta[0],self.theta[1],self.theta[2])
         elif self.material['type'] == 'isotropic':
-            C = C_mat
+            self.C = C_mat
+            C = self.C
 
         #sub-tensors of stiffness tensor
         Ci1k1 = as_tensor(C[i,0,k,0],(i,k))
@@ -156,11 +162,206 @@ class CrossSection:
         
         return L1+L2+L3+L4
 
-    def getModes(self):
-        return
+    def getModes(self):   
+        self.A = assemble_matrix(form(self.Residual))
+        self.A.assemble()
+
+        m1,n1=self.A.getSize()
+        Anp = self.A.getValues(range(m1),range(n1))
+
+        Usvd,sv,Vsvd = np.linalg.svd(Anp)
+        self.sols = Vsvd[-12:,:].T
+        
     def decoupleModes(self):
-        return
+        x = self.x
+        dx = self.dx
+        C = self.C
+        #indices
+        i,j,k,l=self.i,self.j,self.k,self.l
+        a,B = self.a,self.B
+
+        #get maps of vertices to displacemnnt coefficients DOFs 
+        self.ubar_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(0))
+        self.uhat_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(1))
+        # utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
+        # ubreve_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(3))
+        
+        ubar_vtx_to_dof = self.ubar_vtx_to_dof
+        uhat_vtx_to_dof = self.uhat_vtx_to_dof
+
+        #GET UBAR AND UHAT RELATED MODES FROM SVD
+        ubar_modes = self.sols[ubar_vtx_to_dof,:]
+        uhat_modes = self.sols[uhat_vtx_to_dof,:]
+
+        #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
+        UBAR = self.V.sub(0).collapse()[0]
+        UHAT = self.V.sub(1).collapse()[0]
+        ubar_mode = Function(UBAR)
+        uhat_mode = Function(UHAT)
+
+        #compute area
+        self.A = assemble_scalar(form(1.0*self.dx))
+        A = self.A
+
+        #compute average y and z locations for each cell
+        self.yavg = assemble_scalar(form(x[0]*dx))/A
+        self.zavg = assemble_scalar(form(x[1]*dx))/A
+        yavg = self.yavg
+        zavg = self.zavg
+
+        #INITIALIZE DECOUPLING MATRIX (12X12)
+        mat = np.zeros((12,12))
+        
+        #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
+        for mode in range(mat.shape[1]):
+            #construct function from mode
+            ubar_mode.vector.array = ubar_modes[:,:,mode].flatten()
+            uhat_mode.vector.array = uhat_modes[:,:,mode].flatten()
+
+            #FIRST THREE ROWS : AVERAGE UBAR_i VALUE FOR THAT MODE
+            mat[0,mode]=assemble_scalar(form(ubar_mode[0]*dx))/A
+            mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))/A
+            mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))/A
+            
+            #SECOND THREE ROWS : AVERAGE ROTATION (COMPUTED USING UBAR x Xi, WHERE X1=0, X2,XY=Y,Z)
+            mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0]-yavg)-ubar_mode[1]*(x[1]-zavg))*dx)))
+            mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]-zavg))*dx)))
+            mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]-yavg))*dx)))
+
+            # CONSTRUCT STRESSES FOR LAST SIX ROWS
+
+            #compute strains at x1=0
+            gradubar=grad(ubar_mode)
+            eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
+                            [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+                            [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+            
+            # construct strain and stress tensors based on u_sol
+            sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
+
+            #relevant components of stress tensor
+            sigma11 = sigma[0,0]
+            sigma12 = sigma[0,1]
+            sigma13 = sigma[0,2]
+
+            #integrate stresses over cross-section at "root" of beam and construct xc load vector
+            P1 = assemble_scalar(form(sigma11*dx))
+            V2 = assemble_scalar(form(sigma12*dx))
+            V3 = assemble_scalar(form(sigma13*dx))
+            T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
+            M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
+            M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
+
+            #THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
+            mat[6,mode]=P1
+            mat[7,mode]=V2
+            mat[8,mode]=V3   
+
+            #FOURTH THREE ROWS: AVERAGE MOMENTS (COMPUTED WITH UBAR AND UHAT)
+            mat[9,mode]=T1
+            mat[10,mode]=M2
+            mat[11,mode]=M3
+
+        self.sols_decoup = self.sols@np.linalg.inv(mat)
     def computeXCStiffnessMat(self):
+        x = self.x
+        dx = self.dx
+        yavg = self.yavg
+        zavg = self.zavg
+        C = self.C
+        #indices
+        i,j,k,l=self.i,self.j,self.k,self.l
+        a,B = self.a,self.B
+        #vtx to dof maps
+        ubar_vtx_to_dof = self.ubar_vtx_to_dof
+        uhat_vtx_to_dof = self.uhat_vtx_to_dof
+
+        #construct coefficient fields over 2D mesh
+        U2d = FunctionSpace(self.msh,self.Ve)
+        ubar_field = Function(U2d)
+        uhat_field = Function(U2d)
+        utilde_field = Function(U2d)
+        ubreve_field = Function(U2d)
+
+        #==================================================#
+        #======== LOOP FOR BUILDING LOAD MATRICES =========#
+        #==================================================#
+
+        Cstack = np.vstack((np.zeros((6,6)),np.eye(6)))
+
+        from itertools import combinations
+        idx_ops = [0,1,2,3,4,5]
+        comb_list = list(combinations(idx_ops,2))
+        Ccomb = np.zeros((6,len(comb_list)))
+        for idx,ind in enumerate(comb_list):
+            np.put(Ccomb[:,idx],ind,1)
+        Ccomb = np.vstack((np.zeros_like(Ccomb),Ccomb))
+
+        Ctotal = np.hstack((Cstack,Ccomb))
+
+        K1 = np.zeros((6,6))
+        K2 = np.zeros((6,6))
+
+        #START LOOP HERE and loop through unit vectors for K1 and diagonal entries of K2
+        # then combinations of ci=1 where there is more than one nonzero entry
+        for idx,c in enumerate(Ctotal.T):
+            # use right singular vectors (nullspace) to find corresponding
+            # coefficient solutions given arbitrary coefficient vector c
+            c = np.reshape(c,(-1,1))
+            u_coeff=self.sols_decoup@c
+
+            #use previous dof maps to populate arrays of the individual dofs that depend on the solution coefficients
+            ubar_coeff = u_coeff.flatten()[ubar_vtx_to_dof]
+            uhat_coeff = u_coeff.flatten()[uhat_vtx_to_dof]
+
+            #populate functions with coefficient function values
+            ubar_field.vector.array = ubar_coeff.flatten()
+            uhat_field.vector.array = uhat_coeff.flatten()
+            
+            #compute strains at x1=0
+            gradubar=grad(ubar_field)
+            eps = as_tensor([[uhat_field[0],uhat_field[1],uhat_field[2]],
+                            [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+                            [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+            
+            # construct strain and stress tensors based on u_sol
+            sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
+
+            #relevant components of stress tensor
+            sigma11 = sigma[0,0]
+            sigma12 = sigma[0,1]
+            sigma13 = sigma[0,2]
+
+            #integrate stresses over cross-section at "root" of beam and construct xc load vector
+            P1 = assemble_scalar(form(sigma11*dx))
+            V2 = assemble_scalar(form(sigma12*dx))
+            V3 = assemble_scalar(form(sigma13*dx))
+            T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
+            M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
+            M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
+
+            #assemble loads into load vector
+            P = np.array([P1,V2,V3,T1,M2,M3])
+
+            #compute complementary energy given coefficient vector
+            Uc = assemble_scalar(form(sigma[i,j]*eps[i,j]*dx))
+            
+            if idx<=5:
+                K1[:,idx]= P
+                K2[idx,idx] = Uc
+            else:
+                idx1 = comb_list[idx-6][0]
+                idx2 = comb_list[idx-6][1]
+                Kxx = 0.5 * ( Uc - K2[idx1,idx1] - K2[idx2,idx2])
+                K2[idx1,idx2] = Kxx
+                K2[idx2,idx1] = Kxx
+
+        #compute Flexibility matrix
+        K1_inv = np.linalg.inv(K1)
+
+        S = K1_inv.T@K2@K1_inv
+        self.K = np.linalg.inv(S)
+                
         return
     def getXCMassMatrix(self):
         return
