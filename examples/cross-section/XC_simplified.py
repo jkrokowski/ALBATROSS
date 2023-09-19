@@ -150,7 +150,8 @@ def get_vtx_to_dofs(domain,V):
           vertices = c_to_v.links(cell)
           dofs = V0.dofmap.cell_dofs(cell)
           for i, vertex in enumerate(vertices):
-               vertex_to_par_dof_map[vertex] = dofs[dof_layout.entity_dofs(0, i)]
+               # print(dof_layout.entity_dofs(0, i)[0])
+               vertex_to_par_dof_map[vertex] = dofs[dof_layout.entity_dofs(0, i)[0]]
 
      geometry_indices = dolfinx.cpp.mesh.entities_to_geometry(
           domain, 0, np.arange(num_vertices, dtype=np.int32), False)

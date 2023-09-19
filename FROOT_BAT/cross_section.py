@@ -1,5 +1,5 @@
-from ufl import (grad,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
-from dolfinx.fem import (assemble_scalar,form,sin,cos,Function,FunctionSpace,VectorFunctionSpace)
+from ufl import (grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
+from dolfinx.fem import (assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
 
@@ -7,7 +7,7 @@ from FROOT_BAT.material import *
 from FROOT_BAT.utils import *
 
 class CrossSection:
-    def __init__(self, msh, celltags, material):
+    def __init__(self, msh, material ,celltags=None):
         #analysis domain
         self.msh = msh
         self.ct = celltags
@@ -26,14 +26,18 @@ class CrossSection:
         self.d = 3
         #number of materials
         self.num_mat = len(self.material)
-        self.mat_ids = list(range(self.num_mat))
+        #tuple of material names and ids
+        self.mat_ids = list(zip(list(self.material.keys()),list(range(self.num_mat))))
         #indices
         self.i,self.j,self.k,self.l=indices(4)
         self.p,self.q,self.r,self.s=indices(4)
         self.a,self.B = indices(2)
 
         #integration measures (subdomain data accounts for different materials)
-        self.dx = Measure("dx",domain=self.msh,subdomain_data=self.ct)
+        if celltags==None:
+            self.dx = Measure("dx",domain=self.msh)
+        else:
+            self.dx = Measure("dx",domain=self.msh,subdomain_data=self.ct)
         self.ds = Measure("ds",domain=self.msh)
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
@@ -62,8 +66,7 @@ class CrossSection:
 
         self.getModes()
         self.decoupleModes()
-
-        
+        self.computeXCStiffnessMat()
    
     def applyRotation(self,C,alpha,beta,gamma):
         #indices
@@ -106,15 +109,16 @@ class CrossSection:
         ubar,uhat,utilde,ubreve=self.ubar,self.uhat,self.utilde,self.ubreve
         vbar,vhat,vtilde,vbreve=self.vbar,self.vhat,self.vtilde,self.vbreve
         #restricted integration domain
-        dx = self.dx(mat_id)
-                
-        C_mat = getMatConstitutive(self.material[mat_id])
+        # dx = self.dx(mat_id[1])
+        dx = self.dx      
+        
+        C_mat = getMatConstitutive(self.material[mat_id[0]])
 
         #if an orthotropic material is used, the constructMatOrientation method
         #must be called prior to applying rotations
-        if self.material['type'] == 'orthotropic':
+        if self.material[mat_id[0]]['TYPE'] == 'ORTHOTROPIC':
             C = self.applyRotation(C_mat,self.theta[0],self.theta[1],self.theta[2])
-        elif self.material['type'] == 'isotropic':
+        elif self.material[mat_id[0]]['TYPE'] == 'ISOTROPIC':
             self.C = C_mat
             C = self.C
 
@@ -361,7 +365,6 @@ class CrossSection:
 
         S = K1_inv.T@K2@K1_inv
         self.K = np.linalg.inv(S)
-                
-        return
+        
     def getXCMassMatrix(self):
         return

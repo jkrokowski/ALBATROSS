@@ -3,9 +3,9 @@ from ufl import Identity,as_tensor,indices,diag,as_vector,as_matrix
 
 
 def getMatConstitutive(mat_data):
-    if mat_data['type'] == 'isotropic':
-        return getMatConstitutiveIsotropic(mat_data['E'],mat_data['nu'])
-    elif mat_data['type'] == 'orthotropic':
+    if mat_data['TYPE'] == 'ISOTROPIC':
+        return getMatConstitutiveIsotropic(mat_data['MECH_PROPS']['E'],mat_data['MECH_PROPS']['nu'])
+    elif mat_data['TYPE'] == 'ORTHOTROPIC':
         mat_consts = [mat_data['E1'],
                       mat_data['E2'],
                       mat_data['E3'],
