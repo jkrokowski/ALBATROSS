@@ -5,7 +5,7 @@ First, a 1D mesh based with nodes located at the point the cross-sections are de
 Then, a series of 2D meshes are analyzed and the stiffness matrices are used to populate
     a 2-tensor (6x6) tensor fxn space
 Finally, a finer mesh is constructed (e.g. to be used in the 1D analysis) and the 
-    course mesh is interpolated into the fine mesh 2-tensor (6x6) fnx space. This allows
+    course mesh is interpolated into the fine mesh 2-tensor (6x6) fxn space. This allows
     ufl expresssion using the stiffness matrix at any point to be used.
 '''
 from FROOT_BAT import cross_section,geometry
@@ -23,14 +23,14 @@ W = .1
 H = .1
 H1 = 0.05
 L = 5
-nx = 1 #number of elements
+nx = 2 #number of elements
 pts = [(0,0,0),(L,0,0)]
 filename = "output/test_beam.xdmf"
 meshname = 'test_beam'
 
 mesh1D = geometry.beamIntervalMesh3D(pts,[nx],meshname)
 
-if True:
+if False:
     #plot mesh
     pyvista.global_theme.background = [255, 255, 255, 255]
     pyvista.global_theme.font.color = 'black'

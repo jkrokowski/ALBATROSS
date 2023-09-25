@@ -49,7 +49,7 @@ class LinearTimoshenko(object):
         self.compute_local_axes()
 
     def getResidual():
-
+        return
         
     def elasticEnergy(self):
         self.Sig = self.generalized_stresses(self.dw)

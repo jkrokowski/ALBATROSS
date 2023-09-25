@@ -29,7 +29,7 @@ def beamIntervalMesh3D(pts,ne,meshname):
         line_tags.append(line_tag)
         gmsh.model.geo.mesh.setTransfiniteCurve(line_tag, int(n + 1))
 
-    # Synchronize OpenCascade representation with gmsh model
+    # Synchronize model representation with gmsh model
     gmsh.model.geo.synchronize()
 
     # add physical marker

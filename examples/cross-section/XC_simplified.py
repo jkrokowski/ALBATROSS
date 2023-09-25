@@ -11,7 +11,6 @@ from petsc4py import PETSc
 import pyvista
 import numpy as np
 
-from dolfinx import geometry
 # Create 2d mesh and define function space
 N = 10
 W = .1
@@ -21,7 +20,7 @@ domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], c
 
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
-if True:
+if False:
      tdim = domain.topology.dim
      topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
      grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
