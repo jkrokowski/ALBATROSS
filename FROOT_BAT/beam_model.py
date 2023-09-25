@@ -14,24 +14,18 @@ from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt,
                 inner,dot,grad,split,cross)
 from FROOT_BAT.elements import *
 
-
-
-
-
-
-
-#old below here
-class BeamModelRefined(object):
+class LinearTimoshenko(object):
     
     '''
     Timoshenko shear deformable beam formulation
-
-    domain: mesh in ___ format, 
-    w: function in beam element function space
-    dw: test function in beam element function space
-    beam props: list of cross section beam properties (assumed constant along length of element)
     
-    returns an assembled weak form, 
+    Inputs:
+
+    domain: 1D analysis mesh
+    beam_props: 2-tensor (6x6) function defining beam properties along span
+    
+    OUTPUT:
+        Residual: assembled weak form
     '''
 
     def __init__(self,domain,beam_props):
@@ -40,7 +34,7 @@ class BeamModelRefined(object):
         self.beam_element = BeamElementRefined(domain)
         self.eleDOFs = 6 #link to fxn space
         self.beam_props = beam_props
-        #TODO: think through where to store XC area
+        #TODO: incorporate beam fxn space
         [self.S, 
          self.ES, self.GS1, self.GS2,
          self.GJ, self.EI1, self.EI2] = self.beam_props
@@ -53,6 +47,9 @@ class BeamModelRefined(object):
         self.t = self.tangent(domain)
 
         self.compute_local_axes()
+
+    def getResidual():
+
         
     def elasticEnergy(self):
         self.Sig = self.generalized_stresses(self.dw)
