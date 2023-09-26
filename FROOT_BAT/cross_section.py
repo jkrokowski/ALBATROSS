@@ -1,10 +1,56 @@
 from ufl import (grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
-from dolfinx.fem import (assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
+from dolfinx.fem import (TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
 
 from FROOT_BAT.material import *
 from FROOT_BAT.utils import *
+
+def defineXCsFor1D(info2D,info1D):
+    '''
+    CORE FUNCTION FOR PROCESSING MULTIPLE 2D XCs TO PREPARE A 1D MODEL
+
+    info2D = (mesh1D_2D,(meshes2D,mats2D))
+        mesh1D_2D : the beam axis discretized into the number of elements 
+                    with nodes at the spanwise locations of the XCs
+        meshes2d : list of 2D xdmf meshes for each cross-section
+        mats2d : list of materials used corresponding to each XC
+
+    mesh1D_1D: mesh used for 1D analysis (often this will be a fine 
+                discretization than the 1D mesh used for locating the 
+                cross-sections)
+    '''
+    (mesh1D_2D,(meshes2D,mats2D)) = info2D 
+    mesh1D_1D = info1D
+
+    K_list = []
+    for mesh2d,mat2D in zip(meshes2D,mats2D):
+        #analyze cross section
+        squareXC = CrossSection(mesh2d,mat2D)
+        squareXC.getXCStiffnessMatrix()
+
+        #output stiffess matrix
+        K_list.append(squareXC.K)
+    
+    K1 = TensorFunctionSpace(mesh1D_2D,('CG',1),shape=(6,6),symmetry=True)
+
+    k1 = Function(K1)
+
+    def get_flat_sym_stiff(K_mat):
+        K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
+        return K_flat
+
+    K_entries = np.concatenate([get_flat_sym_stiff(K_list[i]) for i in range(2)])
+
+    k1.vector.array = K_entries
+
+    K2 = TensorFunctionSpace(mesh1D_1D,('CG',1),shape=(6,6),symmetry=True)
+
+    k2 = Function(K2)
+
+    k2.interpolate(k1)
+            
+    return k2
 
 class CrossSection:
     def __init__(self, msh, material ,celltags=None):

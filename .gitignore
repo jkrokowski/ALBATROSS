@@ -48,3 +48,6 @@ FROOT_BAT/__pycache__/geometry.cpython-310.pyc
 FROOT_BAT/__pycache__/material.cpython-310.pyc
 FROOT_BAT/__pycache__/utils.cpython-310.pyc
 examples/cross-section/__pycache__/material.cpython-310.pyc
+examples/static/beam_timoshenko+XC.py
+FROOT_BAT/__pycache__/__init__.cpython-310.pyc
+examples/cross-section/__pycache__/material.cpython-310.pyc

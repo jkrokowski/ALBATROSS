@@ -1,5 +1,7 @@
 import dolfinx.cpp.mesh
 import numpy as np
+import pyvista
+from dolfinx import plot
 
 def get_vtx_to_dofs(domain,V):
      '''
@@ -34,3 +36,18 @@ def get_vtx_to_dofs(domain,V):
      # vtx_to_dof = np.reshape(vtx_to_dof, (-1,1))
 
      return vtx_to_dof
+
+def plot_xdmf_mesh(msh,add_nodes=False):
+     #plot mesh
+     pyvista.global_theme.background = [255, 255, 255, 255]
+     pyvista.global_theme.font.color = 'black'
+     tdim = msh.topology.dim
+     topology, cell_types, geom = plot.create_vtk_mesh(msh, tdim)
+     grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+     plotter = pyvista.Plotter()
+     plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+     if add_nodes==True:
+          plotter.add_mesh(grid, style='points')
+     plotter.view_isometric()
+     if not pyvista.OFF_SCREEN:
+          plotter.show()

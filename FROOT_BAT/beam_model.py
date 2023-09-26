@@ -5,14 +5,17 @@ Contains the most important classes for beam formulations using either
 Euler-Bernoulli Beam Theory or shear-deformable Timoshenko Beam Theory
 
 Euler-Bernoulli Beam models consist of a 4x4 stiffness matrix (K) for static cases.
-f dynamic analysis is to be completed, a 4x4damping matrix(C) 
+
+Dynamic analysis is to be completed, a 4x4damping matrix(C) 
 and 4x4mass (M) matrix
 '''
 
-from dolfinx.fem import Function
+from dolfinx.fem import Function,Constant
+from dolfinx.fem.petsc import LinearProblem
 from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
-                inner,dot,grad,split,cross)
+                inner,dot,grad,split,cross,dx)
 from FROOT_BAT.elements import *
+from petsc4py.PETSc import ScalarType
 
 class LinearTimoshenko(object):
     
@@ -28,34 +31,30 @@ class LinearTimoshenko(object):
         Residual: assembled weak form
     '''
 
-    def __init__(self,domain,beam_props):
+    def __init__(self,domain,xcinfo):
         #import domain, function, and beam properties
         self.domain = domain
         self.beam_element = BeamElementRefined(domain)
-        self.eleDOFs = 6 #link to fxn space
-        self.beam_props = beam_props
-        #TODO: incorporate beam fxn space
-        [self.S, 
-         self.ES, self.GS1, self.GS2,
-         self.GJ, self.EI1, self.EI2] = self.beam_props
+        self.eleDOFs = 6
+        self.xcinfo = xcinfo
         
         self.w = TestFunction(self.beam_element.W)
         self.dw = TrialFunction(self.beam_element.W)
         (self.u_, self.theta_) = split(self.w)
         (self.du_, self.dtheta) = split(self.dw)
+
+        self.a_form = None
+        self.L_form = None
     
         self.t = self.tangent(domain)
 
         self.compute_local_axes()
-
-    def getResidual():
-        return
-        
+       
     def elasticEnergy(self):
         self.Sig = self.generalized_stresses(self.dw)
         self.Eps = self.generalized_strains(self.w)
 
-        return sum([self.Sig[i]*self.Eps[i]*self.beam_element.dx_beam[i] for i in range(self.eleDOFs)])
+        self.a_form = sum([self.Sig[i]*self.Eps[i]*self.beam_element.dx_beam[i] for i in range(self.eleDOFs)])
 
     def tangent(self,domain):
         t = Jacobian(domain)
@@ -82,11 +81,26 @@ class LinearTimoshenko(object):
                         dot(self.tgrad(theta), self.a2)])
 
     def generalized_stresses(self,w):
-        #TODO: reformulate to a "stiffness matrix"
-        return dot(diag(as_vector(self.beam_props[1:])), self.generalized_strains(w))
+        return dot(self.xcinfo, self.generalized_strains(w))
 
     #constructing RHS:
-    def addBodyForce(self,f,frame='ref',ax=0):
-        if frame == 'ref':
-            vec_dir = self.u_[ax]
-        return -f*self.S*vec_dir*dx
+    def addBodyForce(self,f):
+        '''
+        f = tuple for (x,y,z) components of body force
+        '''
+        if self.L_form ==None:
+            self.L_form = -dot(f,self.u_)*dx
+        else:
+            self.L_form += -dot(f,self.u_)*dx
+
+    def solve(self):
+        self.uh = Function(self.beam_element.W)
+        if self.L_form == None:
+            f = Constant(self.domain,ScalarType((0,0,0)))
+            self.L_form = -dot(f,self.u_)*dx
+        self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=[bcs])
+        self.uh = self.problem.solve()
+
+        
+    
+
