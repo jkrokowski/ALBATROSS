@@ -10,13 +10,17 @@ Dynamic analysis is to be completed, a 4x4damping matrix(C)
 and 4x4mass (M) matrix
 '''
 
-from dolfinx.fem import Function,Constant, locate_dofs_geometrical,dirichletbc
-from dolfinx.fem.petsc import LinearProblem
+from dolfinx.fem import Function,Constant, locate_dofs_geometrical,dirichletbc,form
+# from dolfinx.fem.petsc import LinearProblem
+from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
+                                apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
                 inner,dot,grad,split,cross,dx,Measure)
 from FROOT_BAT.elements import *
 from petsc4py.PETSc import ScalarType
 import numpy as np
+
+from petsc4py import PETSc
 
 class LinearTimoshenko(object):
     
@@ -85,6 +89,8 @@ class LinearTimoshenko(object):
                         dot(self.tgrad(theta), self.a2)])
 
     def generalized_stresses(self,w):
+        # Q = diag(as_vector([1,2,3,4,5,6]))
+        # return dot(Q, self.generalized_strains(w))
         return dot(self.xcinfo, self.generalized_strains(w))
 
     #constructing RHS:
@@ -102,10 +108,39 @@ class LinearTimoshenko(object):
         self.uh = Function(self.beam_element.W)
         if self.L_form == None:
             f = Constant(self.domain,ScalarType((0,0,0)))
-            self.L_form = -dot(f,self.u_)*self.dx
+            # self.L_form = -dot(f,self.u_)*self.dx
+            self.L_form = -10*self.u_[2]*self.dx    
         
         self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
         self.uh = self.problem.solve()
+
+    def solve2(self):
+        self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
+        self.A_mat.assemble()
+
+        print('VVVV The error is between here VVVV')
+        self.b=create_vector(form(self.L_form))
+        with self.b.localForm() as b_loc:
+                    b_loc.set(0)
+        assemble_vector(self.b,form(self.L_form))
+        print('^^^^ The error is between here ^^^^^')
+
+        # APPLY dirchelet bc: these steps are directly pulled from the 
+        # petsc.py LinearProblem().solve() method
+        self.a_form = form(self.a_form)
+        apply_lifting(self.b,[self.a_form],bcs=self.bcs)
+        self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        set_bc(self.b,self.bcs)
+
+        uh_ptld = Function(self.beam_element.W)
+        uvec = uh_ptld.vector
+        uvec.setUp()
+        ksp = PETSc.KSP().create()
+        ksp.setType(PETSc.KSP.Type.CG)
+        ksp.setTolerances(rtol=1e-15)
+        ksp.setOperators(self.A_mat)
+        ksp.setFromOptions()
+        ksp.solve(self.b,uvec)
 
     def addClampedPoint(self,pt):
         '''
@@ -135,6 +170,11 @@ class LinearTimoshenko(object):
         clamped_rot_dofs = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),clamped_point)
         rot_bc = dirichletbc(urotbc,clamped_rot_dofs)
         self.bcs.append(rot_bc)
+
+        # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+        udispbc.vector.destroy()    #need to add to prevent PETSc memory leak 
+        urotbc.vector.destroy()     #need to add to prevent PETSc memory leak 
+
 
 
 

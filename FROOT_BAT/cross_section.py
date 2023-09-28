@@ -55,7 +55,9 @@ def defineXCsFor1D(info2D,info1D):
     k2 = Function(K2)
 
     k2.interpolate(k1)
-            
+    # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+    k1.vector.destroy()     #need to add to prevent PETSc memory leak 
+     
     return k2
 
 class CrossSection:
@@ -220,11 +222,11 @@ class CrossSection:
         return L1+L2+L3+L4
 
     def getModes(self):   
-        self.A = assemble_matrix(form(self.Residual))
-        self.A.assemble()
-
-        m1,n1=self.A.getSize()
-        Anp = self.A.getValues(range(m1),range(n1))
+        self.A_mat = assemble_matrix(form(self.Residual))
+        self.A_mat.assemble()
+        
+        m1,n1=self.A_mat.getSize()
+        Anp = self.A_mat.getValues(range(m1),range(n1))
 
         Usvd,sv,Vsvd = np.linalg.svd(Anp)
         self.sols = Vsvd[-12:,:].T
@@ -259,7 +261,7 @@ class CrossSection:
         #compute area
         self.A = assemble_scalar(form(1.0*self.dx))
         A = self.A
-
+        
         #compute average y and z locations for each cell
         self.yavg = assemble_scalar(form(x[0]*dx))/A
         self.zavg = assemble_scalar(form(x[1]*dx))/A
@@ -318,6 +320,10 @@ class CrossSection:
             mat[9,mode]=T1
             mat[10,mode]=M2
             mat[11,mode]=M3
+        
+        # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+        ubar_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
+        uhat_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
 
         self.sols_decoup = self.sols@np.linalg.inv(mat)
     def computeXCStiffnessMat(self):
@@ -337,8 +343,8 @@ class CrossSection:
         U2d = FunctionSpace(self.msh,self.Ve)
         ubar_field = Function(U2d)
         uhat_field = Function(U2d)
-        utilde_field = Function(U2d)
-        ubreve_field = Function(U2d)
+        # utilde_field = Function(U2d)
+        # ubreve_field = Function(U2d)
 
         #==================================================#
         #======== LOOP FOR BUILDING LOAD MATRICES =========#
@@ -374,7 +380,7 @@ class CrossSection:
             #populate functions with coefficient function values
             ubar_field.vector.array = ubar_coeff.flatten()
             uhat_field.vector.array = uhat_coeff.flatten()
-            
+
             #compute strains at x1=0
             gradubar=grad(ubar_field)
             eps = as_tensor([[uhat_field[0],uhat_field[1],uhat_field[2]],
@@ -412,6 +418,10 @@ class CrossSection:
                 Kxx = 0.5 * ( Uc - K2[idx1,idx1] - K2[idx2,idx2])
                 K2[idx1,idx2] = Kxx
                 K2[idx2,idx1] = Kxx
+
+        #see https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+        ubar_field.vector.destroy()     #need to add to prevent PETSc memory leak   
+        uhat_field.vector.destroy()     #need to add to prevent PETSc memory leak 
 
         #compute Flexibility matrix
         K1_inv = np.linalg.inv(K1)

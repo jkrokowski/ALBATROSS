@@ -12,7 +12,7 @@ from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import locate_entities,locate_entities_boundary
 from ufl import (Jacobian, diag, as_vector, inner, sqrt,cross,dot,
                 VectorElement, TestFunction, TrialFunction,split,grad,dx)
-import meshio
+# import meshio
 import gmsh
 from mpi4py import MPI
 import numpy as np

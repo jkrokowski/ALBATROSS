@@ -79,3 +79,4 @@ K2 = fem.TensorFunctionSpace(mesh1D_fine,('CG',1),shape=(6,6),symmetry=True)
 k2 = fem.Function(K2)
 
 k2.interpolate(k1)
+k1.vector.destroy()

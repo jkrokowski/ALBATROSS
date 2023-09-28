@@ -68,7 +68,6 @@ mesh1D_1D = geometry.beamIntervalMesh3D([p1,p2],[ne_1D],meshname1D_1D)
 mats2D = [mats for i in range(len(meshes2D))]
 xcdata=[meshes2D,mats2D]
 xcinfo = cross_section.defineXCsFor1D([mesh1D_2D,xcdata],mesh1D_1D)
-
 #intialize 1D analysis model
 square_tapered_beam = beam_model.LinearTimoshenko(mesh1D_1D,xcinfo)
 square_tapered_beam.elasticEnergy()
@@ -93,8 +92,11 @@ square_tapered_beam.addClampedPoint(p1)
 # square_tapered_beam.restrictRotation()
 
 #find displacement solution for beam axis
-square_tapered_beam.solve()
+print('hello darkness my old friend')
+print('ive come to speak with you again')
+square_tapered_beam.solve2()
 
+print('gently sleeping')
 v = square_tapered_beam.uh.sub(0)
 v.name= "Displacement"
 # File('beam-disp.pvd') << v

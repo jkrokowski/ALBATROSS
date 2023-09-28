@@ -1,0 +1,7 @@
+#if you have an issue with "something, something failed with exit code 1",
+# see https://fenicsproject.discourse.group/t/warning-when-solving-parametric-problem/10422
+# and downgrade the setuptools package
+
+#another common issue is with gmsh installation. while not recommended, I 
+#ended up mixing gmsh being installed with pip and the rest of the packages 
+installed with conda
