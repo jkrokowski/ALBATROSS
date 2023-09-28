@@ -40,19 +40,19 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
                         'MECH_PROPS':{'E':100,'nu':0.2} }
                         }
 
-K_list = []
-for mesh2d in meshes2D:
-    #analyze cross section
-    squareXC = cross_section.CrossSection(mesh2d,mats)
-    squareXC.getXCStiffnessMatrix()
+# K_list = []
+# for mesh2d in meshes2D:
+#     #analyze cross section
+#     squareXC = cross_section.CrossSection(mesh2d,mats)
+#     squareXC.getXCStiffnessMatrix()
 
-    #output stiffess matrix
-    K_list.append(squareXC.K)
+#     #output stiffess matrix
+#     K_list.append(squareXC.K)
 
 #define spanwise locations of XCs with a 1D mesh
 p1 = (0,0,0)
 p2 = (5,0,0)
-ne_2D = len(meshes2D)
+ne_2D = len(meshes2D)-1
 ne_1D = 10
 
 meshname1D_2D = 'square_tapered_beam_1D_2D'
@@ -71,26 +71,45 @@ xcinfo = cross_section.defineXCsFor1D([mesh1D_2D,xcdata],mesh1D_1D)
 
 #intialize 1D analysis model
 square_tapered_beam = beam_model.LinearTimoshenko(mesh1D_1D,xcinfo)
+square_tapered_beam.elasticEnergy()
 
 #API for adding loads
-rho = Constant(mesh1D_1D,2.7e-3)
-g = Constant(mesh1D_1D,9.81)
+# rho = Constant(mesh1D_1D,2.7e-3)
+# g = Constant(mesh1D_1D,9.81)
+rho = 2.7e-3
+g = 9.81
 
-square_tapered_beam.addBodyForce(f=-rho*g)
-square_tapered_beam.addPointLoad()
+square_tapered_beam.addBodyForce((0,0,-rho*g))
+#TODO: add point load
+#  square_tapered_beam.addPointLoad()
+#  square_tapered_beam.addPointMoment()
+#  square_tapered_beam.addDistributedLoad((0,0,-rho*g),'where')
 
 #API for adding loads
-square_tapered_beam.addClampedPoint()
-square_tapered_beam.addPinnedPoint()
-square_tapered_beam.restrictTranslation()
-square_tapered_beam.restrictRotation()
+square_tapered_beam.addClampedPoint(p1)
+# TODO: add pinned,rotation and trans restrictions
+# square_tapered_beam.addPinnedPoint()
+# square_tapered_beam.restrictTranslation()
+# square_tapered_beam.restrictRotation()
 
 #find displacement solution for beam axis
 square_tapered_beam.solve()
 
-#get displacement field for full 3D beam structure
-square_tapered_beam.getFull3DDisp()
+v = square_tapered_beam.uh.sub(0)
+v.name= "Displacement"
+# File('beam-disp.pvd') << v
+#save rotations
+theta = square_tapered_beam.uh.sub(1)
+theta.name ="Rotation"
 
-#get stress field for full 3D beam structure
-square_tapered_beam.getFull3DStress()
+with XDMFFile(MPI.COMM_WORLD, "output/output.xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh1D_1D)
+    xdmf.write_function(v)
+    xdmf.write_function(theta)
+
+# #TODO: get displacement field for full 3D beam structure
+# square_tapered_beam.get3DDisp()
+
+# #TODO: get stress field for full 3D beam structure
+# square_tapered_beam.get3DStress()
 

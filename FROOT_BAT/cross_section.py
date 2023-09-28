@@ -2,6 +2,7 @@ from ufl import (grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as
 from dolfinx.fem import (TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
+from petsc4py import PETSc
 
 from FROOT_BAT.material import *
 from FROOT_BAT.utils import *
@@ -31,20 +32,25 @@ def defineXCsFor1D(info2D,info1D):
 
         #output stiffess matrix
         K_list.append(squareXC.K)
-    
-    K1 = TensorFunctionSpace(mesh1D_2D,('CG',1),shape=(6,6),symmetry=True)
+
+    num_xc = len(K_list)
+    sym_cond = False
+    K1 = TensorFunctionSpace(mesh1D_2D,('CG',1),shape=(6,6),symmetry=sym_cond)
 
     k1 = Function(K1)
 
     def get_flat_sym_stiff(K_mat):
         K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
         return K_flat
-
-    K_entries = np.concatenate([get_flat_sym_stiff(K_list[i]) for i in range(2)])
-
+    
+    if sym_cond==True:
+        K_entries = np.concatenate([get_flat_sym_stiff(K_list[i]) for i in range(num_xc)])
+    elif sym_cond == False:
+        K_entries = np.concatenate([K_list[i].flatten() for i in range(num_xc)])
+    
     k1.vector.array = K_entries
 
-    K2 = TensorFunctionSpace(mesh1D_1D,('CG',1),shape=(6,6),symmetry=True)
+    K2 = TensorFunctionSpace(mesh1D_1D,('CG',1),shape=(6,6),symmetry=sym_cond)
 
     k2 = Function(K2)
 
@@ -113,6 +119,7 @@ class CrossSection:
         self.getModes()
         self.decoupleModes()
         self.computeXCStiffnessMat()
+        # PETSc.garbage_cleanup()
    
     def applyRotation(self,C,alpha,beta,gamma):
         #indices
