@@ -93,7 +93,6 @@ square_tapered_beam.addClampedPoint(p1)
 
 #find displacement solution for beam axis
 print('hello darkness my old friend')
-print('ive come to speak with you again')
 square_tapered_beam.solve2()
 
 print('gently sleeping')

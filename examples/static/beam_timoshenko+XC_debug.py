@@ -135,3 +135,29 @@ u = Function(W)
 # solve variational problem
 problem = LinearProblem(k_form, l_form, u=u, bcs=[bcs])
 u = problem.solve()
+
+#visualize with pyvista:
+if True:
+    # topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
+    # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+    # plotter = pyvista.Plotter()
+    # plotter.add_mesh(grid)
+
+    topology, cell_types, geom = plot.create_vtk_mesh(mesh1D_1D,tdim)
+    grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+    plotter = pyvista.Plotter()
+
+    # v_topology, v_cell_types, v_geometry = plot.create_vtk_mesh(W.sub(0))
+    # u_grid = pyvista.UnstructuredGrid(v_topology, v_cell_types, v_geometry)
+    grid.point_data["u"] = u.sub(0).collapse().x.array.reshape((geom.shape[0],3))
+    actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
+    warped = grid.warp_by_vector("u", factor=1.5)
+    actor_1 = plotter.add_mesh(warped, show_edges=True)
+    plotter.show_axes()
+
+    if not pyvista.OFF_SCREEN:
+        plotter.show()
+    else:
+        pyvista.start_xvfb()
+        figure = plot.screenshot("beam_mesh.png")
+

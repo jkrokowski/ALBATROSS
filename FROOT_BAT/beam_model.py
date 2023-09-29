@@ -15,7 +15,7 @@ from dolfinx.fem import Function,Constant, locate_dofs_geometrical,dirichletbc,f
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
-                inner,dot,grad,split,cross,dx,Measure)
+                inner,dot,grad,split,cross,Measure)
 from FROOT_BAT.elements import *
 from petsc4py.PETSc import ScalarType
 import numpy as np
@@ -101,6 +101,7 @@ class LinearTimoshenko(object):
         f_vec = Constant(self.domain,ScalarType(f))
         if self.L_form ==None:
             self.L_form = -dot(f_vec,self.u_)*self.dx
+            form(self.L_form)
         else:
             self.L_form += -dot(f_vec,self.u_)*self.dx
 
@@ -109,7 +110,7 @@ class LinearTimoshenko(object):
         if self.L_form == None:
             f = Constant(self.domain,ScalarType((0,0,0)))
             # self.L_form = -dot(f,self.u_)*self.dx
-            self.L_form = -10*self.u_[2]*self.dx    
+            self.L_form = -Constant(self.domain,10)*self.u_[2]*self.dx    
         
         self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
         self.uh = self.problem.solve()
@@ -118,12 +119,19 @@ class LinearTimoshenko(object):
         self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
         self.A_mat.assemble()
 
-        print('VVVV The error is between here VVVV')
+        if self.L_form == None:
+            f = Constant(self.domain,ScalarType((0,0,0)))
+            # self.L_form = -dot(f,self.u_)*self.dx
+            print("I'm here!")
+            self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx
+        
+        print('VVVV The error is below here VVVV')
+        form(self.L_form)
+        print('^^^^ and above here ^^^^^')
         self.b=create_vector(form(self.L_form))
         with self.b.localForm() as b_loc:
                     b_loc.set(0)
         assemble_vector(self.b,form(self.L_form))
-        print('^^^^ The error is between here ^^^^^')
 
         # APPLY dirchelet bc: these steps are directly pulled from the 
         # petsc.py LinearProblem().solve() method
