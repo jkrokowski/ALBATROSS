@@ -4,4 +4,7 @@
 
 #another common issue is with gmsh installation. while not recommended, I 
 #ended up mixing gmsh being installed with pip and the rest of the packages 
-installed with conda
+# installed with conda
+
+#if you are getting either a PETSc segmentation violation or a length compile error,
+# I suggest pip installing pyqt5

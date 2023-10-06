@@ -2,7 +2,7 @@ import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
 
-def beamIntervalMesh3D(pts,ne,meshname):
+def beam_interval_mesh_3D(pts,ne,meshname):
     '''
     pts = list of nx (x,y,z) locations of a beam nodes (np)
     ne = list of number of elements for each segment between nodes (np-1)

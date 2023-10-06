@@ -10,7 +10,7 @@ Dynamic analysis is to be completed, a 4x4damping matrix(C)
 and 4x4mass (M) matrix
 '''
 
-from dolfinx.fem import Function,Constant, locate_dofs_geometrical,dirichletbc,form
+from dolfinx.fem import Function,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
 # from dolfinx.fem.petsc import LinearProblem
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
@@ -58,7 +58,7 @@ class LinearTimoshenko(object):
 
         self.compute_local_axes()
        
-    def elasticEnergy(self):
+    def elastic_energy(self):
         self.Sig = self.generalized_stresses(self.dw)
         self.Eps = self.generalized_strains(self.w)
 
@@ -94,63 +94,25 @@ class LinearTimoshenko(object):
         return dot(self.xcinfo, self.generalized_strains(w))
 
     #constructing RHS:
-    def addBodyForce(self,f):
+    def add_body_force(self,f):
         '''
         f = tuple for (x,y,z) components of body force
         '''
         f_vec = Constant(self.domain,ScalarType(f))
         if self.L_form ==None:
-            self.L_form = -dot(f_vec,self.u_)*self.dx
-            form(self.L_form)
+            self.L_form = dot(f_vec,self.u_)*self.dx
         else:
-            self.L_form += -dot(f_vec,self.u_)*self.dx
+            self.L_form += dot(f_vec,self.u_)*self.dx
 
     def solve(self):
         self.uh = Function(self.beam_element.W)
         if self.L_form == None:
             f = Constant(self.domain,ScalarType((0,0,0)))
-            # self.L_form = -dot(f,self.u_)*self.dx
-            self.L_form = -Constant(self.domain,10)*self.u_[2]*self.dx    
+            self.L_form = -dot(f,self.u_)*self.dx
         
         self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
         self.uh = self.problem.solve()
-
-    def solve2(self):
-        self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
-        self.A_mat.assemble()
-
-        if self.L_form == None:
-            f = Constant(self.domain,ScalarType((0,0,0)))
-            # self.L_form = -dot(f,self.u_)*self.dx
-            print("I'm here!")
-            self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx
-        
-        print('VVVV The error is below here VVVV')
-        form(self.L_form)
-        print('^^^^ and above here ^^^^^')
-        self.b=create_vector(form(self.L_form))
-        with self.b.localForm() as b_loc:
-                    b_loc.set(0)
-        assemble_vector(self.b,form(self.L_form))
-
-        # APPLY dirchelet bc: these steps are directly pulled from the 
-        # petsc.py LinearProblem().solve() method
-        self.a_form = form(self.a_form)
-        apply_lifting(self.b,[self.a_form],bcs=self.bcs)
-        self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-        set_bc(self.b,self.bcs)
-
-        uh_ptld = Function(self.beam_element.W)
-        uvec = uh_ptld.vector
-        uvec.setUp()
-        ksp = PETSc.KSP().create()
-        ksp.setType(PETSc.KSP.Type.CG)
-        ksp.setTolerances(rtol=1e-15)
-        ksp.setOperators(self.A_mat)
-        ksp.setFromOptions()
-        ksp.solve(self.b,uvec)
-
-    def addClampedPoint(self,pt):
+    def add_clamped_point(self,pt):
         '''
         pt = x,y,z location of clamped point
         '''
@@ -160,30 +122,102 @@ class LinearTimoshenko(object):
             y_check = np.isclose(x[1],pt[1])
             z_check = np.isclose(x[2],pt[2])
             return np.logical_and.reduce([x_check,y_check,z_check])
-        
-        #displacement DOFs fixed
+        #function for bc application
+        ubc = Function(self.beam_element.W)
+        with ubc.vector.localForm() as uloc:
+            uloc.set(0.)
+        #find displacement DOFs
         W0, disp_dofs = self.beam_element.W.sub(0).collapse()
-        udispbc = Function(W0)
-        with udispbc.vector.localForm() as uloc:
-            uloc.set(0.)
-        clamped_disp_dofs = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),clamped_point)
-        disp_bc = dirichletbc(udispbc,clamped_disp_dofs)
-        self.bcs.append(disp_bc)
+        clamped_disp_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),clamped_point)
 
-        #rotation DOFs fixed
+        #find rotation DOFs
         W1, rot_dofs = self.beam_element.W.sub(1).collapse()
-        urotbc = Function(W1)
-        with urotbc.vector.localForm() as uloc:
-            uloc.set(0.)
-        clamped_rot_dofs = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),clamped_point)
-        rot_bc = dirichletbc(urotbc,clamped_rot_dofs)
-        self.bcs.append(rot_bc)
+        clamped_rot_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),clamped_point)
+        
+        clamped_dofs= np.concatenate([clamped_disp_dofs,clamped_rot_dofs])
+        clamped_bc = dirichletbc(ubc,clamped_dofs)
+        self.bcs.append(clamped_bc)
 
         # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        udispbc.vector.destroy()    #need to add to prevent PETSc memory leak 
-        urotbc.vector.destroy()     #need to add to prevent PETSc memory leak 
+        ubc.vector.destroy()    #need to add to prevent PETSc memory leak 
 
+    def add_clamped_point_topo(self,dof):
+        ubc = Function(self.beam_element.W)
+        with ubc.vector.localForm() as uloc:
+            uloc.set(0.)
+        locate_BC = locate_dofs_topological(self.beam_element.W,0,dof)
+        print(locate_BC)
+        self.bcs.append(dirichletbc(ubc,locate_BC))
+        ubc.vector.destroy()
 
+    def get_local_disp(self,point):
+        '''
+        returns the local displacement and rotation at a specific 
+        point on the beam axis
+
+        ARGS:
+            point = tuple of (x,y,z) locations to return displacements and rotations
+        RETURNS:
+            ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
+        '''
+        from dolfinx import geometry as df_geom
+        bb_tree = df_geom.BoundingBoxTree(self.domain,self.domain.topology.dim)
+        points = np.array([point]).T
+        print(points.shape)
+        cells = []
+        points_on_proc = []
+        # Find cells whose bounding-box collide with the the points
+        cell_candidates = df_geom.compute_collisions(bb_tree, points.T)
+        # Choose one of the cells that contains the point
+        colliding_cells = df_geom.compute_colliding_cells(self.domain, cell_candidates, points.T)
+        for i, point in enumerate(points.T):
+            if len(colliding_cells.links(i))>0:
+                points_on_proc.append(point)
+                cells.append(colliding_cells.links(i)[0])
+
+        points_on_proc = np.array(points_on_proc,dtype=np.float64)
+        disp = self.uh.sub(0).eval(points_on_proc,cells)
+        rot = self.uh.sub(1).eval(points_on_proc,cells)
+
+        return np.array([disp,rot])
+    def get_3D_disp(self):
+        '''
+        returns a fxn defined over a 3D mesh generated from the 
+        2D xc's and the 1D analysis mesh
+        '''
+        return
+
+    # def solve2(self):
+    #     self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
+    #     self.A_mat.assemble()
+
+    #     if self.L_form == None:
+    #         f = Constant(self.domain,ScalarType((0,0,0)))
+    #         # self.L_form = -dot(f,self.u_)*self.dx
+    #         self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx
+        
+    #     form(self.L_form)
+    #     self.b=create_vector(form(self.L_form))
+    #     with self.b.localForm() as b_loc:
+    #                 b_loc.set(0)
+    #     assemble_vector(self.b,form(self.L_form))
+
+    #     # APPLY dirchelet bc: these steps are directly pulled from the 
+    #     # petsc.py LinearProblem().solve() method
+    #     self.a_form = form(self.a_form)
+    #     apply_lifting(self.b,[self.a_form],bcs=self.bcs)
+    #     self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    #     set_bc(self.b,self.bcs)
+
+    #     uh_ptld = Function(self.beam_element.W)
+    #     uvec = uh_ptld.vector
+    #     uvec.setUp()
+    #     ksp = PETSc.KSP().create()
+    #     ksp.setType(PETSc.KSP.Type.CG)
+    #     ksp.setTolerances(rtol=1e-15)
+    #     ksp.setOperators(self.A_mat)
+    #     ksp.setFromOptions()
+    #     ksp.solve(self.b,uvec)
 
 
 

@@ -1,21 +1,13 @@
 #single, static 1D Beam in 3D space example based on Jeremy Bleyer's implementation here:
 # https://comet-fenics.readthedocs.io/en/latest/demo/beams_3D/beams_3D.html
 
-from dolfinx.fem import (VectorFunctionSpace,Function,FunctionSpace,
-                        dirichletbc,locate_dofs_geometrical,
-                        locate_dofs_topological,Constant)
-from dolfinx.io import XDMFFile,gmshio,VTKFile
-from dolfinx.fem.petsc import LinearProblem
-from dolfinx.mesh import locate_entities,locate_entities_boundary
-# from ufl import (Jacobian, diag, as_vector, inner, sqrt,cross,dot,
-#                 VectorElement, TestFunction, TrialFunction,split,grad,dx)
-from ufl import dx
+from dolfinx.io import XDMFFile
+
 from mpi4py import MPI
 import numpy as np
+from dolfinx import mesh,plot
 import pyvista
-from dolfinx import plot,fem,mesh
 
-# from FROOT_BAT.beam_model import BeamModelRefined
 from FROOT_BAT import geometry,cross_section,beam_model
 
 #################################################################
@@ -30,30 +22,23 @@ tdim = 1
 N = 3
 W = .1
 H = .1
-mesh2d_0 = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-mesh2d_1 = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[0.75*W, 0.5*H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
+        file.write_mesh(mesh2d_0)
+mesh2d_1 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[0.75*W, 0.5*H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 
 meshes2D = [mesh2d_0,mesh2d_1]
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':100,'nu':0.2} }
+                        'MECH_PROPS':{'E':10000,'nu':0.2} }
                         }
-
-# K_list = []
-# for mesh2d in meshes2D:
-#     #analyze cross section
-#     squareXC = cross_section.CrossSection(mesh2d,mats)
-#     squareXC.getXCStiffnessMatrix()
-
-#     #output stiffess matrix
-#     K_list.append(squareXC.K)
 
 #define spanwise locations of XCs with a 1D mesh
 p1 = (0,0,0)
 p2 = (5,0,0)
 ne_2D = len(meshes2D)-1
-ne_1D = 10
+ne_1D = 10000
 
 meshname1D_2D = 'square_tapered_beam_1D_2D'
 meshname1D_1D = 'square_tapered_beam_1D_1D'
@@ -77,8 +62,9 @@ square_tapered_beam.elasticEnergy()
 # g = Constant(mesh1D_1D,9.81)
 rho = 2.7e-3
 g = 9.81
+A = 0.01
 
-square_tapered_beam.addBodyForce((0,0,-rho*g))
+square_tapered_beam.addBodyForce((0,0,-A*rho*g))
 #TODO: add point load
 #  square_tapered_beam.addPointLoad()
 #  square_tapered_beam.addPointMoment()
@@ -86,16 +72,15 @@ square_tapered_beam.addBodyForce((0,0,-rho*g))
 
 #API for adding loads
 square_tapered_beam.addClampedPoint(p1)
+# square_tapered_beam.addClampedPointTopo(0)
 # TODO: add pinned,rotation and trans restrictions
 # square_tapered_beam.addPinnedPoint()
 # square_tapered_beam.restrictTranslation()
 # square_tapered_beam.restrictRotation()
 
 #find displacement solution for beam axis
-print('hello darkness my old friend')
-square_tapered_beam.solve2()
+square_tapered_beam.solve()
 
-print('gently sleeping')
 v = square_tapered_beam.uh.sub(0)
 v.name= "Displacement"
 # File('beam-disp.pvd') << v
@@ -109,8 +94,32 @@ with XDMFFile(MPI.COMM_WORLD, "output/output.xdmf", "w") as xdmf:
     xdmf.write_function(theta)
 
 # #TODO: get displacement field for full 3D beam structure
+# square_tapered_beam.get3DModel()
+# square_tapered_beam.plot3DModel()
+# 
+# THIS SHOULD COME FROM THE DISP SOLN IN XC ANALYSIS
+# NEED TO SAVE OUT UBAR,HAT,TILDE,BREVE FOR 3DDISP RECONSTRUCTION
 # square_tapered_beam.get3DDisp()
+# square_tapered_beam.plot3DDisp()
 
 # #TODO: get stress field for full 3D beam structure
 # square_tapered_beam.get3DStress()
+# square_tapered_beam.plot3DStress()
 
+#visualize with pyvista:
+if True:
+    topology, cell_types, geom = plot.create_vtk_mesh(mesh1D_1D,tdim)
+    grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+    plotter = pyvista.Plotter()
+
+    grid.point_data["u"] = v.collapse().x.array.reshape((geom.shape[0],3))
+    actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
+    warped = grid.warp_by_vector("u", factor=1.5)
+    actor_1 = plotter.add_mesh(warped, show_edges=True)
+    plotter.show_axes()
+
+    if not pyvista.OFF_SCREEN:
+        plotter.show()
+    else:
+        pyvista.start_xvfb()
+        figure = plot.screenshot("beam_mesh.png")

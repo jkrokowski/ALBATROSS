@@ -5,9 +5,9 @@ import numpy as np
 from petsc4py import PETSc
 
 from FROOT_BAT.material import *
-from FROOT_BAT.utils import *
+from FROOT_BAT.utils import get_vtx_to_dofs
 
-def defineXCsFor1D(info2D,info1D):
+def get_xc_info(info2D,info1D):
     '''
     CORE FUNCTION FOR PROCESSING MULTIPLE 2D XCs TO PREPARE A 1D MODEL
 
