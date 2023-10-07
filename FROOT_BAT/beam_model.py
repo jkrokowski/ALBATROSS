@@ -10,7 +10,7 @@ Dynamic analysis is to be completed, a 4x4damping matrix(C)
 and 4x4mass (M) matrix
 '''
 
-from dolfinx.fem import Function,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
+from dolfinx.fem import VectorFunctionSpace,Expression,Function,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
 # from dolfinx.fem.petsc import LinearProblem
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
@@ -150,10 +150,10 @@ class LinearTimoshenko(object):
         self.bcs.append(dirichletbc(ubc,locate_BC))
         ubc.vector.destroy()
 
-    def get_local_disp(self,point):
+    def get_global_disp(self,point):
         '''
-        returns the local displacement and rotation at a specific 
-        point on the beam axis
+        returns the displacement and rotation at a specific 
+        point on the beam axis with respect to the global coordinate system
 
         ARGS:
             point = tuple of (x,y,z) locations to return displacements and rotations
@@ -163,7 +163,7 @@ class LinearTimoshenko(object):
         from dolfinx import geometry as df_geom
         bb_tree = df_geom.BoundingBoxTree(self.domain,self.domain.topology.dim)
         points = np.array([point]).T
-        print(points.shape)
+        
         cells = []
         points_on_proc = []
         # Find cells whose bounding-box collide with the the points
@@ -180,6 +180,58 @@ class LinearTimoshenko(object):
         rot = self.uh.sub(1).eval(points_on_proc,cells)
 
         return np.array([disp,rot])
+    
+    def get_local_disp(self,point):
+        '''
+        returns the displacement and rotation at a specific 
+        point on the beam axis with respect to the axial direction and xc principle axes
+
+        ARGS:
+            point = tuple of (x,y,z) locations to return displacements and rotations
+        RETURNS:
+            ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
+        '''
+        from dolfinx import geometry as df_geom
+        bb_tree = df_geom.BoundingBoxTree(self.domain,self.domain.topology.dim)
+        points = np.array([point]).T
+
+        cells = []
+        points_on_proc = []
+        # Find cells whose bounding-box collide with the the points
+        cell_candidates = df_geom.compute_collisions(bb_tree, points.T)
+        # Choose one of the cells that contains the point
+        colliding_cells = df_geom.compute_colliding_cells(self.domain, cell_candidates, points.T)
+        for i, point in enumerate(points.T):
+            if len(colliding_cells.links(i))>0:
+                points_on_proc.append(point)
+                cells.append(colliding_cells.links(i)[0])
+
+        points_on_proc = np.array(points_on_proc,dtype=np.float64)
+        disp = self.uh.sub(0).eval(points_on_proc,cells)
+        rot = self.uh.sub(1).eval(points_on_proc,cells)
+        
+        #interpolate ufl expressions for tangent basis vectors and xc basis
+        # vectors into appropriate fxn space, then eval to get the local 
+        # orientation w.r.t a global ref frame
+        T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
+
+        t = Function(T)
+        t.interpolate(Expression(self.t,T.element.interpolation_points()))
+        tangent = t.eval(points_on_proc,cells)
+        a1 = Function(T)
+        a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
+        y = a1.eval(points_on_proc,cells)
+        a2 = Function(T)
+        a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
+        z = a2.eval(points_on_proc,cells)
+        
+        R = np.array([tangent,y,z])
+
+        disp = R@disp
+        rot = R@rot
+
+        return np.array([disp,rot])
+    
     def get_3D_disp(self):
         '''
         returns a fxn defined over a 3D mesh generated from the 

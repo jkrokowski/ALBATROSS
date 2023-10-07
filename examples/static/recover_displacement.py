@@ -39,7 +39,7 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 
 #define spanwise locations of XCs with a 1D mesh
 p1 = (0,0,0)
-p2 = (0,5,0)
+p2 = (5,0,0)
 ne_2D = len(meshes2D)-1
 ne_1D = 10
 
@@ -84,58 +84,28 @@ square_tapered_beam.add_clamped_point(p1)
 #find displacement solution for beam axis
 square_tapered_beam.solve()
 
+# [u_values,theta_values] =square_tapered_beam.get_global_disp(p2)
 [u_values,theta_values] =square_tapered_beam.get_local_disp(p2)
 
-# square_tapered_beam.get_
-
+print(u_values)
+print(theta_values)
 
 #get displacement at tip
 V = fem.VectorFunctionSpace(mesh2d_1,('CG',1),dim=3)
 xcdisp = fem.Function(V)
-# utils.plot_xdmf_mesh(mesh2d_1)
 
-# print(xcdisp.x.array)
-
-# print(len(square_tapered_beam.uh.sub(1).x.array))
-
-# from dolfinx import geometry as df_geom
-# bb_tree = df_geom.BoundingBoxTree(mesh1D_1D,mesh1D_1D.topology.dim)
-# points = np.array([p2]).T
-# print(points.shape)
-# cells = []
-# points_on_proc = []
-# # Find cells whose bounding-box collide with the the points
-# cell_candidates = df_geom.compute_collisions(bb_tree, points.T)
-# # Choose one of the cells that contains the point
-# colliding_cells = df_geom.compute_colliding_cells(mesh1D_1D, cell_candidates, points.T)
-# for i, point in enumerate(points.T):
-#     if len(colliding_cells.links(i))>0:
-#         points_on_proc.append(point)
-#         cells.append(colliding_cells.links(i)[0])
-
-# points_on_proc = np.array(points_on_proc,dtype=np.float64)
-# u_values = square_tapered_beam.uh.sub(0).eval(points_on_proc,cells)
-# theta_values = square_tapered_beam.uh.sub(1).eval(points_on_proc,cells)
-print(u_values)
-print(theta_values)
-
-# print(theta_values.shape)
-
-# print(len(xcdisp.x.array))
-
-# xcdisp.x.array = len(int(xcdisp.x.array/3))*u_values
-print(int(xcdisp.x.array.shape[0]/3))
+# print(int(xcdisp.x.array.shape[0]/3))
 numdofs = int(xcdisp.x.array.shape[0]/3)
 # numdofs = mesh2d_1.topology.index_map(mesh2d_1.topology.dim).size_local
-print(numdofs)
+# print(numdofs)
 
-print(xcdisp.x.array)
+# print(xcdisp.x.array)
 xc = W1/2 
 yc = H1/2
 def apply_rotation(x):
-    alpha = theta_values[0]
-    beta = theta_values[1]
-    gamma = theta_values[2]
+    alpha = theta_values[1]
+    beta = theta_values[2]
+    gamma = theta_values[0]
     Rx = np.array([[1,         0,         0],
                     [0,cos(alpha),-sin(alpha)],
                     [0,sin(alpha),cos(alpha)]])
@@ -151,11 +121,11 @@ def apply_rotation(x):
     # #3D rotation matrix
     R = Rz@Ry@Rx
     vec = R@np.array([x[0]-xc,x[1]-yc,x[2]])    
-    return np.array([vec[0]-x[0]+xc,vec[1]-x[1]+yc,vec[2]-x[2]])
+    return 20*np.array([vec[0]-x[0]+xc,vec[1]-x[1]+yc,vec[2]-x[2]])
 xcdisp.interpolate(apply_rotation)
 #need beam axis x and y location as output along with area and warping fxns
 
-# xcdisp.vector.array += np.tile(np.array([u_values[1],u_values[2],u_values[0]]),numdofs)
+xcdisp.vector.array += np.tile(np.array([u_values[1],u_values[2],u_values[0]]),numdofs)
 print(xcdisp.x.array)
 
 xcdisp.vector.destroy()
