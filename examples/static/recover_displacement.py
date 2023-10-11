@@ -34,12 +34,12 @@ meshes2D = [mesh2d_0,mesh2d_1]
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':10000,'nu':0.2} }
+                        'MECH_PROPS':{'E':10,'nu':0.2} }
                         }
 
 #define spanwise locations of XCs with a 1D mesh
 p1 = (0,0,0)
-p2 = (5,0,0)
+p2 = (.5,0,0)
 ne_2D = len(meshes2D)-1
 ne_1D = 10
 
@@ -85,11 +85,15 @@ square_tapered_beam.add_clamped_point(p1)
 square_tapered_beam.solve()
 
 # [u_values,theta_values] =square_tapered_beam.get_global_disp(p2)
-[u_values,theta_values] =square_tapered_beam.get_local_disp(p2)
-
+#return_rotation_mat returns the translate of 
+[[u_values,theta_values],rot_mat,rot_angle] = square_tapered_beam.get_local_disp(p2,return_rotation_mat=True)
+print('rotation matrix:')
+print(rot_mat)
+print('local values:')
 print(u_values)
 print(theta_values)
-
+print('global values:')
+print(square_tapered_beam.get_global_disp(p2))
 #get displacement at tip
 V = fem.VectorFunctionSpace(mesh2d_1,('CG',1),dim=3)
 xcdisp = fem.Function(V)
@@ -98,14 +102,26 @@ xcdisp = fem.Function(V)
 numdofs = int(xcdisp.x.array.shape[0]/3)
 # numdofs = mesh2d_1.topology.index_map(mesh2d_1.topology.dim).size_local
 # print(numdofs)
+#rotation matrix from xy xc to yz xc
+rot_mat_xc_to_axial = np.array([[ 0,  0,  -1],
+                                    [ 1,  0,  0],
+                                    [ 0,  -1, 0]])
+#rotation matrix 
+rot_mat_xc_to_axial2 = np.array([[ 0,  -1,  0],
+                                    [ 0,  0, -1],
+                                    [ 1,  0,  0]])
 
 # print(xcdisp.x.array)
 xc = W1/2 
 yc = H1/2
-def apply_rotation(x):
-    alpha = theta_values[1]
-    beta = theta_values[2]
-    gamma = theta_values[0]
+def rotation2disp(x):
+    '''
+    applies displacement of the cross section due to xc's rotation
+     to a 3D vector field  
+    '''
+        
+    [[alpha],[beta],[gamma]] = rot_mat_xc_to_axial2@theta_values.reshape((3,1))
+    
     Rx = np.array([[1,         0,         0],
                     [0,cos(alpha),-sin(alpha)],
                     [0,sin(alpha),cos(alpha)]])
@@ -120,37 +136,48 @@ def apply_rotation(x):
     
     # #3D rotation matrix
     R = Rz@Ry@Rx
-    vec = R@np.array([x[0]-xc,x[1]-yc,x[2]])    
-    return 20*np.array([vec[0]-x[0]+xc,vec[1]-x[1]+yc,vec[2]-x[2]])
-xcdisp.interpolate(apply_rotation)
+    # print(R)
+    # exit()
+    centroid = np.array([[xc,yc,0]])
+
+    vec = R@(np.array([x[0],x[1],x[2]])-centroid.T)    
+    return (np.array([vec[0]-x[0],vec[1]-x[1],vec[2]-x[2]])+centroid.T)
+rotation2disp((0,1,2))
+xcdisp.interpolate(rotation2disp)
 #need beam axis x and y location as output along with area and warping fxns
 
-xcdisp.vector.array += np.tile(np.array([u_values[1],u_values[2],u_values[0]]),numdofs)
-print(xcdisp.x.array)
+# xcdisp.vector.array += np.tile(np.array([-u_values[1],-u_values[2],u_values[0]]),numdofs)
+# print(rot_mat_xc_to_axial@u_values.reshape((3,1)))
+xcdisp.vector.array += np.tile(rot_mat_xc_to_axial2@u_values,numdofs)
+
+# print(xcdisp.x.array)
 
 xcdisp.vector.destroy()
 
-pyvista.global_theme.background = [255, 255, 255, 255]
-pyvista.global_theme.font.color = 'black'
-tdim = mesh2d_1.topology.dim
-topology, cell_types, geom = plot.create_vtk_mesh(mesh2d_1, tdim)
-grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-# grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)
-plotter = pyvista.Plotter()
-plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-# grid.rotate_z(90).rotate_y(90)
-# plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-# have to be careful about how displacement data is populated into grid before or after rotations for visualization
-grid.point_data["u"] = xcdisp.x.array.reshape((geom.shape[0],3))
+if True:
+    pyvista.global_theme.background = [255, 255, 255, 255]
+    pyvista.global_theme.font.color = 'black'
+    tdim = mesh2d_1.topology.dim
+    topology, cell_types, geom = plot.create_vtk_mesh(mesh2d_1, tdim)
+    grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+    # grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)
+    plotter = pyvista.Plotter()
 
-warped = grid.warp_by_vector("u", factor=1)
-actor_1 = plotter.add_mesh(warped, show_edges=True)
-plotter.show_axes()
-# if add_nodes==True:
-#     plotter.add_mesh(grid, style='points')
-plotter.view_isometric()
-if not pyvista.OFF_SCREEN:
-    plotter.show()
+    plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+    # grid.rotate_z(90).rotate_y(90)
+    # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+    # have to be careful about how displacement data is populated into grid before or after rotations for visualization
+    grid.point_data["u"] = xcdisp.x.array.reshape((geom.shape[0],3))
+    # new_grid = grid.transform(transform_matrix)
+
+    warped = grid.warp_by_vector("u", factor=1)
+    actor_1 = plotter.add_mesh(warped, show_edges=True)
+    plotter.show_axes()
+    # if add_nodes==True:
+    #     plotter.add_mesh(grid, style='points')
+    plotter.view_isometric()
+    if not pyvista.OFF_SCREEN:
+        plotter.show()
 
 # print(xcdisp.x.array)
 v = square_tapered_beam.uh.sub(0)
@@ -180,6 +207,8 @@ with XDMFFile(MPI.COMM_WORLD, "output/output.xdmf", "w") as xdmf:
 
 #visualize with pyvista:
 if True:
+    warp_factor = 1
+
     tdim = mesh1D_1D.topology.dim
     topology, cell_types, geom = plot.create_vtk_mesh(mesh1D_1D,tdim)
     grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
@@ -187,8 +216,46 @@ if True:
 
     grid.point_data["u"] = v.collapse().x.array.reshape((geom.shape[0],3))
     actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
-    warped = grid.warp_by_vector("u", factor=5)
+    warped = grid.warp_by_vector("u", factor=warp_factor)
     actor_1 = plotter.add_mesh(warped, show_edges=True)
+
+    #plot xc
+    # transform_matrix = np.array([[ 1,  0,  0,p2[0]-xc],
+    #                             [ 0,  0,  1,p2[1]],
+    #                             [ 0,  1, 0,p2[2]-yc],
+    #                             [0,0,0,1]])
+    # rot_mat_xc_to_axial = np.array([[ 0,  0,  -1],
+    #                                 [ 1,  0,  0],
+    #                                 [ 0,  -1, 0]])
+    # trans_mat = np.array([[ 1,  0,  0,-xc],
+    #                             [ 0,  1,  1,-yc],
+    #                             [ 0,  0, 1,0],
+    #                             [0,0,0,1]])
+    centroid = np.array([[xc,yc,0]])
+    #compute translation vector (transform centroid offset to relevant coordinates)
+    trans_vec = np.array([p2]).T-rot_mat@rot_mat_xc_to_axial@centroid.T
+    
+    transform_matrix=np.concatenate((np.concatenate([rot_mat@rot_mat_xc_to_axial,trans_vec],axis=1),np.array([[0,0,0,1]])))
+    # transform_matrix2=np.concatenate((np.concatenate([rot_mat_xc_to_axial,trans_vec.T],axis=1),np.array([[0,0,0,1]])))
+    print("transform matrix for plotting:")
+    print(transform_matrix)
+    tdim = mesh2d_1.topology.dim
+    topology2, cell_types2, geom2 = plot.create_vtk_mesh(mesh2d_1, tdim)
+    grid2 = pyvista.UnstructuredGrid(topology2, cell_types2, geom2)
+
+    grid2.point_data["u"] = (rot_mat@rot_mat_xc_to_axial@xcdisp.x.array.reshape((geom2.shape[0],3)).T).T
+    #apply translation to centroid:
+    # grid2.translate([xc,yc,0])
+    #apply translation 
+    # grid2.transform(trans_mat)
+    grid2.transform(transform_matrix)
+
+    actor_2 = plotter.add_mesh(grid2, show_edges=True,opacity=0.25)
+
+    warped = grid2.warp_by_vector("u", factor=warp_factor)
+    actor_3 = plotter.add_mesh(warped, show_edges=True)
+    # plotter.add_mesh(warped, show_edges=True)
+    plotter.view_xz()
     plotter.show_axes()
 
     if not pyvista.OFF_SCREEN:

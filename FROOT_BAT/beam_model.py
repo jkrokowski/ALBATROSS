@@ -10,7 +10,7 @@ Dynamic analysis is to be completed, a 4x4damping matrix(C)
 and 4x4mass (M) matrix
 '''
 
-from dolfinx.fem import VectorFunctionSpace,Expression,Function,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
+from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Expression,Function,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
 # from dolfinx.fem.petsc import LinearProblem
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
@@ -181,7 +181,7 @@ class LinearTimoshenko(object):
 
         return np.array([disp,rot])
     
-    def get_local_disp(self,point):
+    def get_local_disp(self,point,return_rotation_mat = False):
         '''
         returns the displacement and rotation at a specific 
         point on the beam axis with respect to the axial direction and xc principle axes
@@ -225,12 +225,30 @@ class LinearTimoshenko(object):
         a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
         z = a2.eval(points_on_proc,cells)
         
+        T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
+        grad_uh_interp = Function(T2)
+        grad_uh = grad(self.uh.sub(0))
+        print(grad(self.uh.sub(0)[0]))
+        grad_uh_0 = grad(self.uh.sub(0)[0])
+        grad_uh_0_interp= Function(T)
+        grad_uh_0_interp.interpolate(Expression(grad_uh_0,T.element.interpolation_points()))
+        grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
+        print('grad_uh:')
+        
+        grad_uh_pt = grad_uh_interp.eval(points_on_proc,cells).reshape(3,3)
+        print(grad_uh_pt)
         R = np.array([tangent,y,z])
-
-        disp = R@disp
+        print(R@grad_uh_pt)
+        rot_angle = (R@grad_uh_pt)[2,:]
+        # print(R@grad)
+        # print('rotation matrix:')
+        # print(R)
+        disp = R @disp
         rot = R@rot
-
-        return np.array([disp,rot])
+        if return_rotation_mat == True:
+            return [np.array([disp,rot]),R,rot_angle]
+        else:
+            return np.array([disp,rot])
     
     def get_3D_disp(self):
         '''
