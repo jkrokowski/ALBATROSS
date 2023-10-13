@@ -36,7 +36,7 @@ class LinearTimoshenko(object):
         Residual: assembled weak form
     '''
 
-    def __init__(self,domain,xcinfo):
+    def __init__(self,domain,xcinfo,orientation):
         #import domain, function, and beam properties
         self.domain = domain
         self.beam_element = BeamElementRefined(domain)
@@ -55,8 +55,18 @@ class LinearTimoshenko(object):
         self.bcs = []
     
         self.t = self.tangent(domain)
+        # print(type(self.t))
+        # print(type(orientation))
+        # print(cross(self.t,orientation))
+        # self.a2 = 
+        self.a1 = orientation
 
         self.compute_local_axes()
+        print("shapes:")
+        print(self.t.ufl_shape)
+        print(orientation.ufl_shape)
+        print(self.a1.ufl_shape)
+        print(self.a2.ufl_shape)
        
     def elastic_energy(self):
         self.Sig = self.generalized_stresses(self.dw)
@@ -66,13 +76,15 @@ class LinearTimoshenko(object):
 
     def tangent(self,domain):
         t = Jacobian(domain)
+        print("type of jacobian:")
+        print(type(t))
         return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))     
 
     def compute_local_axes(self):
         #compute section local axes
-        self.ez = as_vector([0, 0, 1])
-        self.a1 = cross(self.t, self.ez)
-        self.a1 /= sqrt(dot(self.a1, self.a1))
+        # self.ez = as_vector([0, 0, 1])
+        # self.a1 = cross(self.t, self.ez)
+        # self.a1 /= sqrt(dot(self.a1, self.a1))
         self.a2 = cross(self.t, self.a1)
         self.a2 /= sqrt(dot(self.a2, self.a2))
         
@@ -218,37 +230,35 @@ class LinearTimoshenko(object):
         t = Function(T)
         t.interpolate(Expression(self.t,T.element.interpolation_points()))
         tangent = t.eval(points_on_proc,cells)
-        a1 = Function(T)
-        a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
-        y = a1.eval(points_on_proc,cells)
+        # a1 = Function(T)
+        # a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
+        # y = a1.eval(points_on_proc,cells)
+        y = self.a1.eval(points_on_proc,cells)
         a2 = Function(T)
         a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
         z = a2.eval(points_on_proc,cells)
+        print("local xc bases:")
+        print(tangent)
+        print(y)
+        print(z)
+        # T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
+        # grad_uh_interp = Function(T2)
+        # grad_uh = grad(self.uh.sub(0))
+        # grad_uh_0 = grad(self.uh.sub(0)[0])
+        # grad_uh_0_interp= Function(T)
+        # grad_uh_0_interp.interpolate(Expression(grad_uh_0,T.element.interpolation_points()))
+        # grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
         
-        T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
-        grad_uh_interp = Function(T2)
-        grad_uh = grad(self.uh.sub(0))
-        print(grad(self.uh.sub(0)[0]))
-        grad_uh_0 = grad(self.uh.sub(0)[0])
-        grad_uh_0_interp= Function(T)
-        grad_uh_0_interp.interpolate(Expression(grad_uh_0,T.element.interpolation_points()))
-        grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
-        print('grad_uh:')
-        
-        grad_uh_pt = grad_uh_interp.eval(points_on_proc,cells).reshape(3,3)
-        print(grad_uh_pt)
+        # grad_uh_pt = grad_uh_interp.eval(points_on_proc,cells).reshape(3,3)
         R = np.array([tangent,y,z])
-        print(R@grad_uh_pt)
-        rot_angle = (R@grad_uh_pt)[2,:]
-        # print(R@grad)
-        # print('rotation matrix:')
-        # print(R)
+        
         disp = R @disp
         rot = R@rot
-        if return_rotation_mat == True:
-            return [np.array([disp,rot]),R,rot_angle]
-        else:
-            return np.array([disp,rot])
+        # if return_rotation_mat == True:
+        #     return [np.array([disp,rot]),R,rot_angle]
+        # else:
+        #     return np.array([disp,rot])
+        return [np.array([disp,rot]),R]
     
     def get_3D_disp(self):
         '''
