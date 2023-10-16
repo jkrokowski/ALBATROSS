@@ -8,7 +8,7 @@ import numpy as np
 from dolfinx import mesh,plot,fem
 import pyvista
 
-from FROOT_BAT import cross_section,beam_model,utils
+from FROOT_BAT import beam_model,cross_section,utils,axial
 
 from ufl import as_vector,as_matrix,sin,cos
 #################################################################
@@ -59,6 +59,7 @@ O = fem.VectorFunctionSpace(mesh1D_2D,('CG',1),dim=3)
 orient = fem.Function(O)
 y_axis = [0,1,0] #this vector needs to change if (p2-p1)'s y and z elements are nonzero or if p2-p1's first element is negative
 orient.vector.array = np.tile(y_axis,len(meshes2D))
+# orient.vector.array = np.array([0,1,0,0,0,1])
 orient.vector.destroy()
 
 #interpolate these orientations into the finer 1D analysis mesh
@@ -102,6 +103,25 @@ if True:
 #get fxn for XC properties at any point along beam axis
 mats2D = [mats for i in range(len(meshes2D))]
 xcdata=[meshes2D,mats2D]
+
+#constructs the full beam model
+    #axialinfo is the 1D mesh
+    # xc_info defines and locates the XCs
+    #   meshes2D: a series of 2D meshes
+    #   mat2D:  a series of material properties dictionaries 
+xc_info = [meshes2D,mats2D,axial_pos,xc_orientations]
+
+ExampleBeam = BeamModel(axialmesh,xc_info)
+# ExampleBeam.get_axial_props_from_xc()
+ExampleBeam.intialize_axial()
+#add loads
+ExampleBeam.add_body_force()
+#add boundary conditions
+ExampleBeam.add_clamped_point()
+ExampleBeam.solve()
+ExampleBeam.
+
+
 xcinfo = cross_section.get_xc_info([mesh1D_2D,xcdata],mesh1D_1D)
 #intialize 1D analysis model
 square_tapered_beam = beam_model.LinearTimoshenko(mesh1D_1D,xcinfo,orient2)
@@ -168,7 +188,7 @@ def rotation2disp(x):
     '''
         
     [[alpha],[beta],[gamma]] = rot_mat_xc_to_axial@theta_values.reshape((3,1))
-    
+    # rotation about X-axis
     Rx = np.array([[1,         0,         0],
                     [0,cos(alpha),-sin(alpha)],
                     [0,sin(alpha),cos(alpha)]])
@@ -183,8 +203,7 @@ def rotation2disp(x):
     
     # #3D rotation matrix
     R = Rz@Ry@Rx
-    # print(R)
-    # exit()
+
     centroid = np.array([[xc,yc,0]])
 
     vec = R@(np.array([x[0],x[1],x[2]])-centroid.T)    

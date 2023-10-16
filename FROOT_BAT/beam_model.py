@@ -17,289 +17,126 @@ from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector,
 from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
                 inner,dot,grad,split,cross,Measure)
 from FROOT_BAT.elements import *
+from FROOT_BAT.cross_section import CrossSection
+from FROOT_BAT.axial import Axial
 from petsc4py.PETSc import ScalarType
 import numpy as np
 
 from petsc4py import PETSc
 
-class LinearTimoshenko(object):
-    
+class BeamModel(Axial):
     '''
-    Timoshenko shear deformable beam formulation
-    
-    Inputs:
-
-    domain: 1D analysis mesh
-    beam_props: 2-tensor (6x6) function defining beam properties along span
-    
-    OUTPUT:
-        Residual: assembled weak form
+    Class that combines both 1D and 2D analysis
     '''
 
-    def __init__(self,domain,xcinfo,orientation):
-        #import domain, function, and beam properties
-        self.domain = domain
-        self.beam_element = BeamElementRefined(domain)
-        self.eleDOFs = 6
-        self.xcinfo = xcinfo
+    def __init__(self,axial_mesh,xc_info):
+        '''
+        axial_mesh: mesh used for 1D analysis (often this is a finer
+            discretization than the 1D mesh used for locating xcs)
 
-        self.dx = Measure('dx',self.domain)
+        info2D = (xcs,mats,axial_pos_mesh,xc_orientations)
+            xcs : list of 2D xdmf meshes for each cross-section
+            mats : list of materials used corresponding to each XC
+            axial_pos_mesh : the beam axis discretized into the number of
+                elements with nodes at the spanwise locations of the XCs
+            xc_orientations: list of vectors defining orientation of 
+                horizontal axis used in xc analysis
+        '''
+        self.axial_mesh = axial_mesh
+        [self.xcs, self.mats, self.axial_pos_mesh, self.orientations] = xc_info
+        self.numxc = len(self.xcs)
         
-        self.w = TestFunction(self.beam_element.W)
-        self.dw = TrialFunction(self.beam_element.W)
-        (self.u_, self.theta_) = split(self.w)
-        (self.du_, self.dtheta) = split(self.dw)
+        print("Orienting XCs along beam axis....")
+        self.get_xc_orientations_for_1D()
 
-        self.a_form = None
-        self.L_form = None
-        self.bcs = []
+        print("Getting XC Properties...")
+        self.get_axial_props_from_xc()
+
+        print("Initializing Axial Model (1D Analysis)")
+        super().__init__(self.axial_mesh,self.k,self.o)
+
+        print("Computing Elastic Energy...")
+        self.elastic_energy()
+
+    def get_xc_orientations_for_1D(self):
+        #define orientation of the x2 axis w.r.t. the beam axis x1 to allow for 
+        # matching the orientation of the xc with that of the axial mesh
+        # (this must be done carefully and with respect to the location of the beam axis)
+        self.O2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=3)
+        self.o2 = Function(self.O2)
+        self.o2.vector.array = np.array(self.orientations)
+        self.o2.vector.destroy() #needed for PETSc garbage collection
+
+        #interpolate these orientations into the finer 1D analysis mesh
+        self.O = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=3)
+        self.o = Function(self.O)
+        self.o.interpolate(self.o2)
+
     
-        self.t = self.tangent(domain)
-        # print(type(self.t))
-        # print(type(orientation))
-        # print(cross(self.t,orientation))
-        # self.a2 = 
-        self.a1 = orientation
-
-        self.compute_local_axes()
-        print("shapes:")
-        print(self.t.ufl_shape)
-        print(orientation.ufl_shape)
-        print(self.a1.ufl_shape)
-        print(self.a2.ufl_shape)
-       
-    def elastic_energy(self):
-        self.Sig = self.generalized_stresses(self.dw)
-        self.Eps = self.generalized_strains(self.w)
-
-        self.a_form = (inner(self.Sig,self.Eps))*self.dx
-
-    def tangent(self,domain):
-        t = Jacobian(domain)
-        print("type of jacobian:")
-        print(type(t))
-        return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))     
-
-    def compute_local_axes(self):
-        #compute section local axes
-        # self.ez = as_vector([0, 0, 1])
-        # self.a1 = cross(self.t, self.ez)
-        # self.a1 /= sqrt(dot(self.a1, self.a1))
-        self.a2 = cross(self.t, self.a1)
-        self.a2 /= sqrt(dot(self.a2, self.a2))
+    def get_axial_props_from_xc(self):
+        '''
+        CORE FUNCTION FOR PROCESSING MULTIPLE 2D XCs TO PREPARE A 1D MODEL
+        '''
+        # (mesh1D_2D,(meshes2D,mats2D)) = info2D 
+        # mesh1D_1D = info1D
+        xcs = []
+        # K_list = []
         
-    def tgrad(self,w):
-        return dot(grad(w), self.t)
-
-    def generalized_strains(self,w):
-        (u, theta) = split(w)
-        return as_vector([dot(self.tgrad(u), self.t),
-                        dot(self.tgrad(u), self.a1)-dot(theta, self.a2),
-                        dot(self.tgrad(u), self.a2)+dot(theta, self.a1),
-                        dot(self.tgrad(theta), self.t),
-                        dot(self.tgrad(theta), self.a1),
-                        dot(self.tgrad(theta), self.a2)])
-
-    def generalized_stresses(self,w):
-        # Q = diag(as_vector([1,2,3,4,5,6]))
-        # return dot(Q, self.generalized_strains(w))
-        return dot(self.xcinfo, self.generalized_strains(w))
-
-    #constructing RHS:
-    def add_body_force(self,f):
-        '''
-        f = tuple for (x,y,z) components of body force
-        '''
-        f_vec = Constant(self.domain,ScalarType(f))
-        if self.L_form ==None:
-            self.L_form = dot(f_vec,self.u_)*self.dx
-        else:
-            self.L_form += dot(f_vec,self.u_)*self.dx
-
-    def solve(self):
-        self.uh = Function(self.beam_element.W)
-        if self.L_form == None:
-            f = Constant(self.domain,ScalarType((0,0,0)))
-            self.L_form = -dot(f,self.u_)*self.dx
+        def get_flat_sym_stiff(K_mat):
+            K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
+            return K_flat
         
-        self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
-        self.uh = self.problem.solve()
-    def add_clamped_point(self,pt):
-        '''
-        pt = x,y,z location of clamped point
-        '''
-        #marker fxn
-        def clamped_point(x):
-            x_check = np.isclose(x[0],pt[0])
-            y_check = np.isclose(x[1],pt[1])
-            z_check = np.isclose(x[2],pt[2])
-            return np.logical_and.reduce([x_check,y_check,z_check])
-        #function for bc application
-        ubc = Function(self.beam_element.W)
-        with ubc.vector.localForm() as uloc:
-            uloc.set(0.)
-        #find displacement DOFs
-        W0, disp_dofs = self.beam_element.W.sub(0).collapse()
-        clamped_disp_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),clamped_point)
-
-        #find rotation DOFs
-        W1, rot_dofs = self.beam_element.W.sub(1).collapse()
-        clamped_rot_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),clamped_point)
+        sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
+        K2 = TensorFunctionSpace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+        k2 = Function(K2)
+        #TODO:same process for mass matrix
+        A2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
+        a2 = Function(A2)
+        C2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
+        c2 = Function(C2)
         
-        clamped_dofs= np.concatenate([clamped_disp_dofs,clamped_rot_dofs])
-        clamped_bc = dirichletbc(ubc,clamped_dofs)
-        self.bcs.append(clamped_bc)
+        for i,[mesh2d,mat2D] in enumerate(zip(self.xcs,self.mats)):
+            print('    computing properties for XC '+str(i+1)+'/'+str(self.numxc)+'...')
+            #instantiate class for cross-section i
+            xcs.append(CrossSection(mesh2d,mat2D))
+            #analyze cross section
+            xcs[i].getXCStiffnessMatrix()
 
+            #output stiffess matrix
+            if sym_cond==True:
+                #need to add fxn
+                print("symmetric mode not available yet")
+                exit()
+                k2.vector.array[21*i,21*(i+1)] = xcs[i].K.flatten()
+            elif sym_cond==False:
+                k2.vector.array[36*i:36*(i+1)] = xcs[i].K.flatten()
+                a2.vector.array[i] = xcs[i].A
+                c2.vector.array[2*i:2*(i+1)] = [xcs[i].yavg,xcs[i].zavg]
+        print("Done computing cross-sectional properties...")
+        # if sym_cond==True:
+        #     K_entries = np.concatenate([get_flat_sym_stiff(K_list[i]) for i in range(self.num_xc)])
+        # elif sym_cond == False:
+        #     K_entries = np.concatenate([K_list[i].flatten() for i in range(self.num_xc)])
+        
+        # k2.vector.array = K_entries
+        print("Interpolating cross-sectional properties to axial mesh...")
+        #interpolate from axial_pos_mesh to axial_mesh 
+        self.K = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+        self.k = Function(self.K)
+        self.k.interpolate(k2)
+
+        self.A = FunctionSpace(self.axial_mesh,('CG',1))
+        self.a = Function(self.A)
+        self.a.interpolate(a2)
+
+        self.V = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
+        self.c = Function(self.V)
+        self.c.interpolate(c2)
         # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        ubc.vector.destroy()    #need to add to prevent PETSc memory leak 
-
-    def add_clamped_point_topo(self,dof):
-        ubc = Function(self.beam_element.W)
-        with ubc.vector.localForm() as uloc:
-            uloc.set(0.)
-        locate_BC = locate_dofs_topological(self.beam_element.W,0,dof)
-        print(locate_BC)
-        self.bcs.append(dirichletbc(ubc,locate_BC))
-        ubc.vector.destroy()
-
-    def get_global_disp(self,point):
-        '''
-        returns the displacement and rotation at a specific 
-        point on the beam axis with respect to the global coordinate system
-
-        ARGS:
-            point = tuple of (x,y,z) locations to return displacements and rotations
-        RETURNS:
-            ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
-        '''
-        from dolfinx import geometry as df_geom
-        bb_tree = df_geom.BoundingBoxTree(self.domain,self.domain.topology.dim)
-        points = np.array([point]).T
-        
-        cells = []
-        points_on_proc = []
-        # Find cells whose bounding-box collide with the the points
-        cell_candidates = df_geom.compute_collisions(bb_tree, points.T)
-        # Choose one of the cells that contains the point
-        colliding_cells = df_geom.compute_colliding_cells(self.domain, cell_candidates, points.T)
-        for i, point in enumerate(points.T):
-            if len(colliding_cells.links(i))>0:
-                points_on_proc.append(point)
-                cells.append(colliding_cells.links(i)[0])
-
-        points_on_proc = np.array(points_on_proc,dtype=np.float64)
-        disp = self.uh.sub(0).eval(points_on_proc,cells)
-        rot = self.uh.sub(1).eval(points_on_proc,cells)
-
-        return np.array([disp,rot])
-    
-    def get_local_disp(self,point,return_rotation_mat = False):
-        '''
-        returns the displacement and rotation at a specific 
-        point on the beam axis with respect to the axial direction and xc principle axes
-
-        ARGS:
-            point = tuple of (x,y,z) locations to return displacements and rotations
-        RETURNS:
-            ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
-        '''
-        from dolfinx import geometry as df_geom
-        bb_tree = df_geom.BoundingBoxTree(self.domain,self.domain.topology.dim)
-        points = np.array([point]).T
-
-        cells = []
-        points_on_proc = []
-        # Find cells whose bounding-box collide with the the points
-        cell_candidates = df_geom.compute_collisions(bb_tree, points.T)
-        # Choose one of the cells that contains the point
-        colliding_cells = df_geom.compute_colliding_cells(self.domain, cell_candidates, points.T)
-        for i, point in enumerate(points.T):
-            if len(colliding_cells.links(i))>0:
-                points_on_proc.append(point)
-                cells.append(colliding_cells.links(i)[0])
-
-        points_on_proc = np.array(points_on_proc,dtype=np.float64)
-        disp = self.uh.sub(0).eval(points_on_proc,cells)
-        rot = self.uh.sub(1).eval(points_on_proc,cells)
-        
-        #interpolate ufl expressions for tangent basis vectors and xc basis
-        # vectors into appropriate fxn space, then eval to get the local 
-        # orientation w.r.t a global ref frame
-        T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
-
-        t = Function(T)
-        t.interpolate(Expression(self.t,T.element.interpolation_points()))
-        tangent = t.eval(points_on_proc,cells)
-        # a1 = Function(T)
-        # a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
-        # y = a1.eval(points_on_proc,cells)
-        y = self.a1.eval(points_on_proc,cells)
-        a2 = Function(T)
-        a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
-        z = a2.eval(points_on_proc,cells)
-        print("local xc bases:")
-        print(tangent)
-        print(y)
-        print(z)
-        # T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
-        # grad_uh_interp = Function(T2)
-        # grad_uh = grad(self.uh.sub(0))
-        # grad_uh_0 = grad(self.uh.sub(0)[0])
-        # grad_uh_0_interp= Function(T)
-        # grad_uh_0_interp.interpolate(Expression(grad_uh_0,T.element.interpolation_points()))
-        # grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
-        
-        # grad_uh_pt = grad_uh_interp.eval(points_on_proc,cells).reshape(3,3)
-        R = np.array([tangent,y,z])
-        
-        disp = R @disp
-        rot = R@rot
-        # if return_rotation_mat == True:
-        #     return [np.array([disp,rot]),R,rot_angle]
-        # else:
-        #     return np.array([disp,rot])
-        return [np.array([disp,rot]),R]
-    
-    def get_3D_disp(self):
-        '''
-        returns a fxn defined over a 3D mesh generated from the 
-        2D xc's and the 1D analysis mesh
-        '''
-        return
-
-    # def solve2(self):
-    #     self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
-    #     self.A_mat.assemble()
-
-    #     if self.L_form == None:
-    #         f = Constant(self.domain,ScalarType((0,0,0)))
-    #         # self.L_form = -dot(f,self.u_)*self.dx
-    #         self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx
-        
-    #     form(self.L_form)
-    #     self.b=create_vector(form(self.L_form))
-    #     with self.b.localForm() as b_loc:
-    #                 b_loc.set(0)
-    #     assemble_vector(self.b,form(self.L_form))
-
-    #     # APPLY dirchelet bc: these steps are directly pulled from the 
-    #     # petsc.py LinearProblem().solve() method
-    #     self.a_form = form(self.a_form)
-    #     apply_lifting(self.b,[self.a_form],bcs=self.bcs)
-    #     self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-    #     set_bc(self.b,self.bcs)
-
-    #     uh_ptld = Function(self.beam_element.W)
-    #     uvec = uh_ptld.vector
-    #     uvec.setUp()
-    #     ksp = PETSc.KSP().create()
-    #     ksp.setType(PETSc.KSP.Type.CG)
-    #     ksp.setTolerances(rtol=1e-15)
-    #     ksp.setOperators(self.A_mat)
-    #     ksp.setFromOptions()
-    #     ksp.solve(self.b,uvec)
-
-
+        k2.vector.destroy()     #need to add to prevent PETSc memory leak 
+        a2.vector.destroy()
+        c2.vector.destroy()
+        print("Done interpolating cross-sectional properties to axial mesh...")
 
 
 
