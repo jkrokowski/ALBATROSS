@@ -19,6 +19,7 @@ from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt,
 from FROOT_BAT.elements import *
 from FROOT_BAT.cross_section import CrossSection
 from FROOT_BAT.axial import Axial
+from FROOT_BAT.utils import get_pts_and_cells
 from petsc4py.PETSc import ScalarType
 import numpy as np
 
@@ -43,14 +44,14 @@ class BeamModel(Axial):
                 horizontal axis used in xc analysis
         '''
         self.axial_mesh = axial_mesh
-        [self.xcs, self.mats, self.axial_pos_mesh, self.orientations] = xc_info
-        self.numxc = len(self.xcs)
+        [self.xc_meshes, self.mats, self.axial_pos_mesh, self.orientations] = xc_info
+        self.numxc = len(self.xc_meshes)
         
         print("Orienting XCs along beam axis....")
         self.get_xc_orientations_for_1D()
 
         print("Getting XC Properties...")
-        self.get_axial_props_from_xc()
+        self.get_axial_props_from_xcs()
 
         print("Initializing Axial Model (1D Analysis)")
         super().__init__(self.axial_mesh,self.k,self.o)
@@ -73,13 +74,13 @@ class BeamModel(Axial):
         self.o.interpolate(self.o2)
 
     
-    def get_axial_props_from_xc(self):
+    def get_axial_props_from_xcs(self):
         '''
         CORE FUNCTION FOR PROCESSING MULTIPLE 2D XCs TO PREPARE A 1D MODEL
         '''
         # (mesh1D_2D,(meshes2D,mats2D)) = info2D 
         # mesh1D_1D = info1D
-        xcs = []
+        self.xcs = []
         # K_list = []
         
         def get_flat_sym_stiff(K_mat):
@@ -95,23 +96,23 @@ class BeamModel(Axial):
         C2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
         c2 = Function(C2)
         
-        for i,[mesh2d,mat2D] in enumerate(zip(self.xcs,self.mats)):
+        for i,[mesh2d,mat2D] in enumerate(zip(self.xc_meshes,self.mats)):
             print('    computing properties for XC '+str(i+1)+'/'+str(self.numxc)+'...')
             #instantiate class for cross-section i
-            xcs.append(CrossSection(mesh2d,mat2D))
+            self.xcs.append(CrossSection(mesh2d,mat2D))
             #analyze cross section
-            xcs[i].getXCStiffnessMatrix()
+            self.xcs[i].getXCStiffnessMatrix()
 
             #output stiffess matrix
             if sym_cond==True:
                 #need to add fxn
                 print("symmetric mode not available yet")
                 exit()
-                k2.vector.array[21*i,21*(i+1)] = xcs[i].K.flatten()
+                k2.vector.array[21*i,21*(i+1)] = self.xcs[i].K.flatten()
             elif sym_cond==False:
-                k2.vector.array[36*i:36*(i+1)] = xcs[i].K.flatten()
-                a2.vector.array[i] = xcs[i].A
-                c2.vector.array[2*i:2*(i+1)] = [xcs[i].yavg,xcs[i].zavg]
+                k2.vector.array[36*i:36*(i+1)] = self.xcs[i].K.flatten()
+                a2.vector.array[i] = self.xcs[i].A
+                c2.vector.array[2*i:2*(i+1)] = [self.xcs[i].yavg,self.xcs[i].zavg]
         print("Done computing cross-sectional properties...")
         # if sym_cond==True:
         #     K_entries = np.concatenate([get_flat_sym_stiff(K_list[i]) for i in range(self.num_xc)])
@@ -137,6 +138,38 @@ class BeamModel(Axial):
         a2.vector.destroy()
         c2.vector.destroy()
         print("Done interpolating cross-sectional properties to axial mesh...")
+    
+    # def get_3D_disp(self):
+    #     '''
+    #     returns a fxn defined over a 3D mesh generated from the 
+    #     2D xc's and the 1D analysis mesh
+    #     '''
+    #     return
 
+    def recover_displacement(self):
+        #get location of centroid (xc,yc)
+        print("Cross-Section centroidal locations (y,z)")
+        for xc in self.xcs:
+            print('    '+str(xc.yavg)+','+str(xc.zavg))
+        #transform xc coordinates to the global coordinates
+        
+        #get mesh node coordinates
+        print('Axial Mesh Nodes (x,y,z):')
+        print(self.axial_pos_mesh.geometry.x)
+        
+        # for xc_pt in self.axial_pos_mesh.geometry.x:
+        #     #get points and cells:
+        #     # points_on_proc,cells=get_pts_and_cells(self.axial_pos_mesh,np.array([xc_pt]))
+            
+        #     print(self.get_global_disp([xc_pt]))
+        #     print(self.get_local_basis([xc_pt]))
 
+        # print("Global displacements:")
+        # print(self.get_global_disp(self.axial_pos_mesh.geometry.x))
+        # print("Rotation Matrix:")
+        # print(self.get_local_basis(self.axial_mesh.geometry.x))
+        print("Local Displacements:")
+        self.get_local_disp(self.axial_pos_mesh.geometry.x)
 
+        # print(self.get_global_disp(self.axial_pos_mesh.geometry.x)[:,0,:])
+        # print(self.get_global_disp(self.axial_pos_mesh.geometry.x)[:,1,:])

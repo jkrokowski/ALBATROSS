@@ -6,6 +6,8 @@ import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
 
+from dolfinx.geometry import BoundingBoxTree,compute_collisions,compute_colliding_cells
+
 def get_vtx_to_dofs(domain,V):
      '''
      solution from https://fenicsproject.discourse.group/t/application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs/9646
@@ -107,4 +109,31 @@ def beam_interval_mesh_3D(pts,ne,meshname):
 
     #return mesh
     with XDMFFile(MPI.COMM_WORLD, filename, "r") as xdmf:
-        return xdmf.read_mesh(name=meshname) 
+        return xdmf.read_mesh(name=meshname)
+    
+
+def get_pts_and_cells(domain,points):
+     '''
+     ARGS:
+          point = tuple of (x,y,z) locations to return displacements and rotations
+     '''
+     bb_tree = BoundingBoxTree(domain,domain.topology.dim)
+     points = np.array(points)
+
+     cells = []
+     points_on_proc = []
+     # Find cells whose bounding-box collide with the the points
+     cell_candidates = compute_collisions(bb_tree, points)
+     # Choose one of the cells that contains the point
+     colliding_cells = compute_colliding_cells(domain, cell_candidates, points)
+     for i, point in enumerate(points):
+          if len(colliding_cells.links(i))>0:
+               points_on_proc.append(point)
+               cells.append(colliding_cells.links(i)[0])
+
+     points_on_proc = np.array(points_on_proc,dtype=np.float64)
+     # points_on_proc = np.array(points_on_proc,dtype=np.float64)
+
+     return points_on_proc,cells
+     # disp = self.uh.sub(0).eval(points_on_proc,cells)
+     # rot = self.uh.sub(1).eval(points_on_proc,cells)

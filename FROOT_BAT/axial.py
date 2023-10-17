@@ -19,6 +19,11 @@ from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt,
 from FROOT_BAT.elements import *
 from petsc4py.PETSc import ScalarType
 import numpy as np
+from dolfinx import plot
+import pyvista
+
+from FROOT_BAT.utils import get_pts_and_cells
+
 
 from petsc4py import PETSc
 
@@ -154,69 +159,29 @@ class Axial:
         self.bcs.append(dirichletbc(ubc,locate_BC))
         ubc.vector.destroy()
 
-    def get_global_disp(self,point):
+    def get_global_disp(self,points):
         '''
         returns the displacement and rotation at a specific 
         point on the beam axis with respect to the global coordinate system
 
         ARGS:
-            point = tuple of (x,y,z) locations to return displacements and rotations
+            points = list of (x,y,z) locations to return displacements and rotations
         RETURNS:
-            ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
+            list of [disp,rotations], where disp and rot are both shape (numpts,3) 
         '''
-        from dolfinx import geometry as df_geom
-        bb_tree = df_geom.BoundingBoxTree(self.domain,self.domain.topology.dim)
-        points = np.array([point]).T
-        
-        cells = []
-        points_on_proc = []
-        # Find cells whose bounding-box collide with the the points
-        cell_candidates = df_geom.compute_collisions(bb_tree, points.T)
-        # Choose one of the cells that contains the point
-        colliding_cells = df_geom.compute_colliding_cells(self.domain, cell_candidates, points.T)
-        for i, point in enumerate(points.T):
-            if len(colliding_cells.links(i))>0:
-                points_on_proc.append(point)
-                cells.append(colliding_cells.links(i)[0])
+        points_on_proc,cells=get_pts_and_cells(self.domain,points)
 
-        points_on_proc = np.array(points_on_proc,dtype=np.float64)
         disp = self.uh.sub(0).eval(points_on_proc,cells)
         rot = self.uh.sub(1).eval(points_on_proc,cells)
-
-        return np.array([disp,rot])
+        
+        return disp,rot
     
-    def get_local_disp(self,point,return_rotation_mat = False):
+    def get_local_basis(self,points):
         '''
-        returns the displacement and rotation at a specific 
-        point on the beam axis with respect to the axial direction and xc principle axes
-
-        ARGS:
-            point = tuple of (x,y,z) locations to return displacements and rotations
-        RETURNS:
-            ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
+        returns the basis vectors for a set of points given as a (numpts,3,3) ndarray
         '''
-        from dolfinx import geometry as df_geom
-        bb_tree = df_geom.BoundingBoxTree(self.domain,self.domain.topology.dim)
-        points = np.array([point]).T
-
-        cells = []
-        points_on_proc = []
-        # Find cells whose bounding-box collide with the the points
-        cell_candidates = df_geom.compute_collisions(bb_tree, points.T)
-        # Choose one of the cells that contains the point
-        colliding_cells = df_geom.compute_colliding_cells(self.domain, cell_candidates, points.T)
-        for i, point in enumerate(points.T):
-            if len(colliding_cells.links(i))>0:
-                points_on_proc.append(point)
-                cells.append(colliding_cells.links(i)[0])
-
-        points_on_proc = np.array(points_on_proc,dtype=np.float64)
-        disp = self.uh.sub(0).eval(points_on_proc,cells)
-        rot = self.uh.sub(1).eval(points_on_proc,cells)
-        
-        #interpolate ufl expressions for tangent basis vectors and xc basis
-        # vectors into appropriate fxn space, then eval to get the local 
-        # orientation w.r.t a global ref frame
+        points_on_proc,cells=get_pts_and_cells(self.domain,points)
+        #get coordinate system at each mesh node
         T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
 
         t = Function(T)
@@ -229,10 +194,46 @@ class Axial:
         a2 = Function(T)
         a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
         z = a2.eval(points_on_proc,cells)
-        print("local xc bases:")
-        print(tangent)
-        print(y)
-        print(z)
+        # print('before:')
+        # print(np.array([tangent,y,z]))
+        # print('after:')
+        # print(np.moveaxis(np.array([tangent,y,z]),0,1))
+        # print('------')
+        return np.moveaxis(np.array([tangent,y,z]),0,1)
+    
+    def get_local_disp(self,points):
+        '''
+        returns the displacement and rotation at a specific 
+        point on the beam axis with respect to the axial direction and xc principle axes
+
+        ARGS:
+            point = tuple of (x,y,z) locations to return displacements and rotations
+        RETURNS:
+            ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
+        '''
+        points_on_proc,cells=get_pts_and_cells(self.domain,points)
+
+        [disp,rot] = self.get_global_disp(points)
+        
+        #interpolate ufl expressions for tangent basis vectors and xc basis
+        # vectors into appropriate fxn space, then eval to get the local 
+        # orientation w.r.t a global ref frame
+        # T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
+
+        # t = Function(T)
+        # t.interpolate(Expression(self.t,T.element.interpolation_points()))
+        # tangent = t.eval(points_on_proc,cells)
+        # # a1 = Function(T)
+        # # a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
+        # # y = a1.eval(points_on_proc,cells)
+        # y = self.a1.eval(points_on_proc,cells)
+        # a2 = Function(T)
+        # a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
+        # z = a2.eval(points_on_proc,cells)
+        # print("local xc bases:")
+        # print(tangent)
+        # print(y)
+        # print(z)
         # T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
         # grad_uh_interp = Function(T2)
         # grad_uh = grad(self.uh.sub(0))
@@ -242,22 +243,52 @@ class Axial:
         # grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
         
         # grad_uh_pt = grad_uh_interp.eval(points_on_proc,cells).reshape(3,3)
-        R = np.array([tangent,y,z])
-        
-        disp = R @disp
-        rot = R@rot
-        # if return_rotation_mat == True:
-        #     return [np.array([disp,rot]),R,rot_angle]
-        # else:
-        #     return np.array([disp,rot])
-        return [np.array([disp,rot]),R]
+        R = self.get_local_basis(points)
+        print(disp)
+        # print('----')
+        # print(disp.shape)
+        # print(R.shape)
+        # print('----')
+        # print(rot)
+        # print('=======')
+        # # print(disp.T@R)
+        # print('=======')
+        print(R)
+        # disp = np.tensordot(R,disp,((1,0),(0,1)))
+        # rot = (R.T@rot.T)
+        #TODO: vectorize this for loop, is tensordot the right approach?
+        for i in range(len(disp)):
+            disp[i,:] = R[i,:,:]@disp[i,:]
+        print('new disp:')
+        print(disp)
+        print('rots:')
+        print(rot)
+        return [disp,rot]
     
-    def get_3D_disp(self):
+    def plot_axial_displacement(self,warp_factor=1):
         '''
         returns a fxn defined over a 3D mesh generated from the 
         2D xc's and the 1D analysis mesh
         '''
-        return
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
+
+        tdim = self.domain.topology.dim
+        topology, cell_types, geom = plot.create_vtk_mesh(self.domain,tdim)
+        grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+        plotter = pyvista.Plotter()
+
+        grid.point_data["u"] = self.uh.sub(0).collapse().x.array.reshape((geom.shape[0],3))
+        actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
+        warped = grid.warp_by_vector("u", factor=warp_factor)
+        actor_1 = plotter.add_mesh(warped, show_edges=True)
+        plotter.view_xz()
+        plotter.show_axes()
+
+        if not pyvista.OFF_SCREEN:
+            plotter.show()
+        else:
+            figure = plot.screenshot("beam_mesh.png")
 
     # def solve2(self):
     #     self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
