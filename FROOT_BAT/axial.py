@@ -211,29 +211,8 @@ class Axial:
         RETURNS:
             ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
         '''
-        points_on_proc,cells=get_pts_and_cells(self.domain,points)
-
         [disp,rot] = self.get_global_disp(points)
         
-        #interpolate ufl expressions for tangent basis vectors and xc basis
-        # vectors into appropriate fxn space, then eval to get the local 
-        # orientation w.r.t a global ref frame
-        # T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
-
-        # t = Function(T)
-        # t.interpolate(Expression(self.t,T.element.interpolation_points()))
-        # tangent = t.eval(points_on_proc,cells)
-        # # a1 = Function(T)
-        # # a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
-        # # y = a1.eval(points_on_proc,cells)
-        # y = self.a1.eval(points_on_proc,cells)
-        # a2 = Function(T)
-        # a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
-        # z = a2.eval(points_on_proc,cells)
-        # print("local xc bases:")
-        # print(tangent)
-        # print(y)
-        # print(z)
         # T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
         # grad_uh_interp = Function(T2)
         # grad_uh = grad(self.uh.sub(0))
@@ -243,26 +222,14 @@ class Axial:
         # grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
         
         # grad_uh_pt = grad_uh_interp.eval(points_on_proc,cells).reshape(3,3)
-        R = self.get_local_basis(points)
-        print(disp)
-        # print('----')
-        # print(disp.shape)
-        # print(R.shape)
-        # print('----')
-        # print(rot)
-        # print('=======')
-        # # print(disp.T@R)
-        # print('=======')
-        print(R)
-        # disp = np.tensordot(R,disp,((1,0),(0,1)))
-        # rot = (R.T@rot.T)
+        # get local basis (rotation matrix)
+        RbA = self.get_local_basis(points)
+                
         #TODO: vectorize this for loop, is tensordot the right approach?
         for i in range(len(disp)):
-            disp[i,:] = R[i,:,:]@disp[i,:]
-        print('new disp:')
-        print(disp)
-        print('rots:')
-        print(rot)
+            disp[i,:] = RbA[i,:,:]@disp[i,:]
+            rot[i,:] = RbA[i,:,:]@rot[i,:]
+        
         return [disp,rot]
     
     def plot_axial_displacement(self,warp_factor=1):

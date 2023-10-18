@@ -37,7 +37,7 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 
 #define spanwise locations of XCs with a 1D mesh
 p1 = (0,0,0)
-p2 = (0,5,0)
+p2 = (5,5,0)
 ne_2D = len(meshes2D)-1
 ne_1D = 10
 
@@ -50,26 +50,33 @@ axial_pos_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
 #mesh used for 1D analysis
 axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 
-orientations = np.tile([-1,0,0],len(meshes2D))
+orientations = np.tile([-np.sqrt(2),np.sqrt(2),0],len(meshes2D))
+# orientations = np.array([0,1,0,0,1,0])
 mats2D = [mats for i in range(len(meshes2D))]
 
 xc_info = [meshes2D,mats2D,axial_pos_mesh,orientations]
 
 ExampleBeam = BeamModel(axial_mesh,xc_info)
 
+# ExampleBeam.plot_xc_orientations()
 rho = 2.7e-3
 g = 9.81
 A = 0.01
 
 #add loads
-ExampleBeam.add_body_force((-A*rho*g,0,-A*rho*g))
-# #add boundary conditions
+ExampleBeam.add_body_force((0,0,-A*rho*g))
+
+#add boundary conditions
 ExampleBeam.add_clamped_point(p1)
+
+#solve 
 ExampleBeam.solve()
 
-ExampleBeam.plot_axial_displacement(warp_factor=5)
+# ExampleBeam.plot_axial_displacement(warp_factor=5)
 
-ExampleBeam.recover_displacement()
+ExampleBeam.recover_displacement(plot_xcs=True)
+
+ExampleBeam.plot_xc_disp_3D()
 
 # ExampleBeam.recover_stress()
 
