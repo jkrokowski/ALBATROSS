@@ -37,9 +37,9 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 
 #define spanwise locations of XCs with a 1D mesh
 p1 = (0,0,0)
-p2 = (5,5,0)
+p2 = (0,5,0)
 ne_2D = len(meshes2D)-1
-ne_1D = 10
+ne_1D = 1000
 
 meshname_axial_pos = 'axial_postion_mesh'
 meshname_axial = 'axial_mesh'
@@ -50,7 +50,11 @@ axial_pos_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
 #mesh used for 1D analysis
 axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 
-orientations = np.tile([-np.sqrt(2),np.sqrt(2),0],len(meshes2D))
+#note orientation vector does not have to be a unit fector
+# orientations = np.tile([-np.sqrt(2),np.sqrt(2),0],len(meshes2D))
+# orientations = np.tile([np.sqrt(2),-np.sqrt(2),0],len(meshes2D))
+# orientations = np.tile([0,1,0],len(meshes2D))
+orientations = np.tile([-1,0,0],len(meshes2D))
 # orientations = np.array([0,1,0,0,1,0])
 mats2D = [mats for i in range(len(meshes2D))]
 
@@ -64,7 +68,7 @@ g = 9.81
 A = 0.01
 
 #add loads
-ExampleBeam.add_body_force((0,0,-A*rho*g))
+ExampleBeam.add_body_force((-A*rho*g,-A*rho*g,-A*rho*g))
 
 #add boundary conditions
 ExampleBeam.add_clamped_point(p1)
@@ -77,6 +81,8 @@ ExampleBeam.solve()
 ExampleBeam.recover_displacement(plot_xcs=True)
 
 ExampleBeam.plot_xc_disp_3D()
+
+ExampleBeam.get_deformed_basis([p1,p2])
 
 # ExampleBeam.recover_stress()
 

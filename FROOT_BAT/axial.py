@@ -59,6 +59,7 @@ class Axial:
         self.t = self.tangent(domain)
         
         self.a1 = orientation
+        self.a1 /= sqrt(dot(self.a1, self.a1))
 
         self.compute_local_axes()
        
@@ -104,6 +105,7 @@ class Axial:
         '''
         f = tuple for (x,y,z) components of body force
         '''
+        #TODO: utilize beam xc properties self.A and self.rho for true self weight with varying xc
         print("Adding body force....")
         f_vec = Constant(self.domain,ScalarType(f))
         if self.L_form ==None:
@@ -187,10 +189,10 @@ class Axial:
         t = Function(T)
         t.interpolate(Expression(self.t,T.element.interpolation_points()))
         tangent = t.eval(points_on_proc,cells)
-        # a1 = Function(T)
-        # a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
-        # y = a1.eval(points_on_proc,cells)
-        y = self.a1.eval(points_on_proc,cells)
+        a1 = Function(T)
+        a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
+        y = a1.eval(points_on_proc,cells)
+        # y = self.a1.eval(points_on_proc,cells)
         a2 = Function(T)
         a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
         z = a2.eval(points_on_proc,cells)
@@ -213,17 +215,10 @@ class Axial:
         '''
         [disp,rot] = self.get_global_disp(points)
         
-        # T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
-        # grad_uh_interp = Function(T2)
-        # grad_uh = grad(self.uh.sub(0))
-        # grad_uh_0 = grad(self.uh.sub(0)[0])
-        # grad_uh_0_interp= Function(T)
-        # grad_uh_0_interp.interpolate(Expression(grad_uh_0,T.element.interpolation_points()))
-        # grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
-        
-        # grad_uh_pt = grad_uh_interp.eval(points_on_proc,cells).reshape(3,3)
         # get local basis (rotation matrix)
         RbA = self.get_local_basis(points)
+
+        print(RbA)
                 
         #TODO: vectorize this for loop, is tensordot the right approach?
         for i in range(len(disp)):
@@ -232,6 +227,67 @@ class Axial:
         
         return [disp,rot]
     
+    def get_deformed_basis(self,points):
+        '''
+        get the transformation matrix from the reference beam frame (b) to the
+          deformed beam frame (B)
+
+        This only works under the assumption of small displacments (e.g. linear beam theory)
+        '''
+        # self.RTb = 
+        T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
+        T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
+        grad_uh_interp = Function(T2)
+        grad_uh = grad(self.uh.sub(0))
+        grad_uh_0 = grad(self.uh.sub(0)[0])
+        grad_uh_0_interp= Function(T)
+        grad_uh_0_interp.interpolate(Expression(grad_uh_0,T.element.interpolation_points()))
+        grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
+        
+        points_on_proc,cells=get_pts_and_cells(self.domain,points)
+        print("strains:")
+        print(grad_uh_interp.eval(points_on_proc,cells))
+        strains = grad_uh_interp.eval(points_on_proc,cells).reshape((len(points),3,3))
+        first_comp = grad_uh_0_interp.eval(points_on_proc,cells)
+        #TODO: ensure this works for multiple points at once
+        RbA = self.get_local_basis(points)
+
+        print("RbA:")
+        print(RbA)
+        # print(strains.shape)
+        # print(first_comp)
+
+        local_strains= np.zeros_like(RbA)
+        RTb = np.zeros_like(RbA)
+
+        for i in range(RbA.shape[0]):
+            local_strains[i,:,:] = RbA[i,:,:]@strains[i,:,:]@RbA[i,:,:].T
+            print("local strain:")
+            print(local_strains[i,:,:])
+            # print(strains)
+            # print(local_strains)
+            alpha = 0
+            beta = local_strains[i,1,0]
+            gamma = local_strains[i,2,0]
+            Rx = np.array([[1,         0,         0],
+                            [0,np.cos(alpha),-np.sin(alpha)],
+                            [0,np.sin(alpha),np.cos(alpha)]])
+            # rotation about Y-axis
+            Ry = np.array([[np.cos(beta), 0,np.sin(beta)],
+                            [0,         1,        0],
+                            [-np.sin(beta),0,np.cos(beta)]])
+            #rotation about Z-axis
+            Rz = np.array([[np.cos(gamma),-np.sin(gamma),0],
+                            [np.sin(gamma),np.cos(gamma), 0],
+                            [0,         0,          1]])
+
+            RTb[i,:,:] = Rz@Ry@Rx
+
+        print("Deformed basis:")
+        print(RTb)
+
+        return RTb
+
     def plot_axial_displacement(self,warp_factor=1):
         '''
         returns a fxn defined over a 3D mesh generated from the 

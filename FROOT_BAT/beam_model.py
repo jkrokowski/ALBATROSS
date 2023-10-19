@@ -52,13 +52,12 @@ class BeamModel(Axial):
         #note: 
         #   RGB=Rgb and RBG=Rbg
         #   "mixed case" frame transformations are not equivalent as RBb != identity(3x3)
-
         self.RBG = np.array([[ 0,  0,  1],
                              [ 1,  0,  0],
                              [ 0,  1, 0]])
-        self.RGB = np.array([[ 0,  -1,  0],
+        self.RGB = np.array([[ 0,  1,  0],
                              [ 0,  0, 1],
-                             [ -1,  0,  0]])
+                             [ 1,  0,  0]])
        
         print("Orienting XCs along beam axis....")
         self.get_xc_orientations_for_1D()
@@ -221,12 +220,12 @@ class BeamModel(Axial):
 
                 #TODO: think about how this rotation matrix could be stored?
                 # 3D rotation matrix for applying twist and transverse disp
-                RBb = Rz@Ry@Rx
+                RGg = Rz@Ry@Rx
 
                 #centroid location in g frame (same as RgB@np.array([0,yavg,zavg]))
                 centroid = np.array([[xc.yavg,xc.zavg,0]]).T
 
-                return ((RBb@(x-centroid)-x)+centroid)
+                return ((RGg@(x-centroid)-x)+centroid)
 
             xc.xcdisp.interpolate(rotation_to_disp)
 
@@ -264,8 +263,6 @@ class BeamModel(Axial):
                 if not pyvista.OFF_SCREEN:
                     plotter.show()
 
-            # def compute_
-
     def plot_xc_disp_3D(self):
         warp_factor = 1
 
@@ -282,33 +279,43 @@ class BeamModel(Axial):
         self.uh.vector.destroy()
         # self.plot_axial_displacement()
         
-        #plot xc meshes:
-        print(self.axial_pos_mesh.geometry.x)
         grids = []
+        grids2 = []
+        #get rotation matrices from global frame to reference beam frame
         RbA = self.get_local_basis(self.axial_pos_mesh.geometry.x)
+        RTb = self.get_deformed_basis(self.axial_pos_mesh.geometry.x)
+        #plot xc meshes:
         for i,xc in enumerate(self.xcs):
-            # print(self.axial_pos_mesh.geometry.x[i])
-            # #compute translation vector (transform centroid offset to relevant coordinates)
-            RbA = self.get_local_basis(self.axial_pos_mesh.geometry.x)
-
+            #compute translation vector (transform centroid offset to relevant coordinates)
             trans_vec = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@(np.array([[0,xc.yavg,xc.zavg]]).T)
             
             transform_matrix=np.concatenate((np.concatenate([RbA[i,:,:].T@self.RBG,trans_vec],axis=1),np.array([[0,0,0,1]])))
-            # # transform_matrix2=np.concatenate((np.concatenate([rot_mat_xc_to_axial,trans_vec.T],axis=1),np.array([[0,0,0,1]])))
-            # print("transform matrix for plotting:")
-            # print(transform_matrix)
+
+            #compute translation vector (transform centroid offset to relevant coordinates)
+            print(self.axial_pos_mesh.geometry.x[i])
+            local_disp,_ = self.get_local_disp([self.axial_pos_mesh.geometry.x[i]])
+            trans_vec2 = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@(np.array([[0,xc.yavg,xc.zavg]]).T + local_disp)
+            
+            transform_matrix2=np.concatenate((np.concatenate([RbA[i,:,:].T@self.RBG,trans_vec2],axis=1),np.array([[0,0,0,1]])))
+
             tdim = xc.msh.topology.dim
             topology2, cell_types2, geom2 = create_vtk_mesh(xc.msh, tdim)
             grids.append(pyvista.UnstructuredGrid(topology2, cell_types2, geom2))
+            grids2.append(pyvista.UnstructuredGrid(topology2, cell_types2, geom2))
 
             grids[i].transform(transform_matrix)
+            grids2[i].transform(transform_matrix2)
+            #only need to transform the displacement into the deformed frame
+            #RTb[i,:,:]@
             grids[i].point_data["u"] = (RbA[i,:,:].T@self.RBG@xc.xcdisp.x.array.reshape((geom2.shape[0],3)).T).T
-
             actor2=plotter.add_mesh(grids[i], show_edges=True,opacity=0.25)
+            actor4 = plotter.add_mesh(grids2[i], show_edges=True,opacity=0.25)
+            # #add mesh for Tangential frame:
+            # copied_mesh = actor2.copy(deep=True)
+            # copied_mesh.transform(transform_matrix)
 
             warped = grids[i].warp_by_vector("u", factor=warp_factor)
             actor_3 = plotter.add_mesh(warped, show_edges=True)
-            # print(xc.xcdisp.x.array)
             
         plotter.view_xz()
         plotter.show_axes()
