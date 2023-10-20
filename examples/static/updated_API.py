@@ -37,7 +37,7 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 
 #define spanwise locations of XCs with a 1D mesh
 p1 = (0,0,0)
-p2 = (0,5,0)
+p2 = (0,1,0)
 ne_2D = len(meshes2D)-1
 ne_1D = 1000
 
@@ -65,10 +65,10 @@ ExampleBeam = BeamModel(axial_mesh,xc_info)
 # ExampleBeam.plot_xc_orientations()
 rho = 2.7e-3
 g = 9.81
-A = 0.01
+A = 0.01*500
 
 #add loads
-ExampleBeam.add_body_force((-A*rho*g,-A*rho*g,-A*rho*g))
+ExampleBeam.add_body_force((-A*rho*g,0,-A*rho*g))
 
 #add boundary conditions
 ExampleBeam.add_clamped_point(p1)

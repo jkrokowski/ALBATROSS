@@ -218,12 +218,15 @@ class Axial:
         # get local basis (rotation matrix)
         RbA = self.get_local_basis(points)
 
-        print(RbA)
-                
         #TODO: vectorize this for loop, is tensordot the right approach?
-        for i in range(len(disp)):
-            disp[i,:] = RbA[i,:,:]@disp[i,:]
-            rot[i,:] = RbA[i,:,:]@rot[i,:]
+
+        if len(RbA.shape) == 2:
+            disp = RbA@disp
+            rot = RbA@rot
+        else:
+            for i in range(len(disp)):
+                disp[i,:] = RbA[i,:,:]@disp[i,:]
+                rot[i,:] = RbA[i,:,:]@rot[i,:]
         
         return [disp,rot]
     
@@ -267,8 +270,8 @@ class Axial:
             # print(strains)
             # print(local_strains)
             alpha = 0
-            beta = local_strains[i,1,0]
-            gamma = local_strains[i,2,0]
+            beta = local_strains[i,2,0]
+            gamma = local_strains[i,1,0]
             Rx = np.array([[1,         0,         0],
                             [0,np.cos(alpha),-np.sin(alpha)],
                             [0,np.sin(alpha),np.cos(alpha)]])

@@ -225,7 +225,8 @@ class BeamModel(Axial):
                 #centroid location in g frame (same as RgB@np.array([0,yavg,zavg]))
                 centroid = np.array([[xc.yavg,xc.zavg,0]]).T
 
-                return ((RGg@(x-centroid)-x)+centroid)
+                return ((RGg@(centroid-x)+x)-centroid)
+                # return ((RGg@(x-centroid)-x)+centroid)
 
             xc.xcdisp.interpolate(rotation_to_disp)
 
@@ -293,10 +294,14 @@ class BeamModel(Axial):
 
             #compute translation vector (transform centroid offset to relevant coordinates)
             print(self.axial_pos_mesh.geometry.x[i])
-            local_disp,_ = self.get_local_disp([self.axial_pos_mesh.geometry.x[i]])
-            trans_vec2 = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@(np.array([[0,xc.yavg,xc.zavg]]).T + local_disp)
+            global_disp,_ = self.get_global_disp([self.axial_pos_mesh.geometry.x[i]])
+            trans_vec2 = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@RTb[i,:,:].T@(np.array([[0,xc.yavg,xc.zavg]]).T) + np.array([global_disp]).T
             
-            transform_matrix2=np.concatenate((np.concatenate([RbA[i,:,:].T@self.RBG,trans_vec2],axis=1),np.array([[0,0,0,1]])))
+            print("RTb:")
+            print(RTb[i,:,:])
+            print("RbA:")
+            print(RbA[i,:,:])
+            transform_matrix2=np.concatenate((np.concatenate([RbA[i,:,:].T@RTb[i,:,:].T@self.RBG,trans_vec2],axis=1),np.array([[0,0,0,1]])))
 
             tdim = xc.msh.topology.dim
             topology2, cell_types2, geom2 = create_vtk_mesh(xc.msh, tdim)
@@ -317,7 +322,7 @@ class BeamModel(Axial):
             warped = grids[i].warp_by_vector("u", factor=warp_factor)
             actor_3 = plotter.add_mesh(warped, show_edges=True)
             
-        plotter.view_xz()
+        plotter.view_yz()
         plotter.show_axes()
 
         # if not pyvista.OFF_SCREEN:
