@@ -248,15 +248,15 @@ class Axial:
         grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
         
         points_on_proc,cells=get_pts_and_cells(self.domain,points)
-        print("strains:")
-        print(grad_uh_interp.eval(points_on_proc,cells))
+        # print("strains:")
+        # print(grad_uh_interp.eval(points_on_proc,cells))
         strains = grad_uh_interp.eval(points_on_proc,cells).reshape((len(points),3,3))
         first_comp = grad_uh_0_interp.eval(points_on_proc,cells)
         #TODO: ensure this works for multiple points at once
         RbA = self.get_local_basis(points)
 
-        print("RbA:")
-        print(RbA)
+        # print("RbA:")
+        # print(RbA)
         # print(strains.shape)
         # print(first_comp)
 
@@ -265,8 +265,8 @@ class Axial:
 
         for i in range(RbA.shape[0]):
             local_strains[i,:,:] = RbA[i,:,:]@strains[i,:,:]@RbA[i,:,:].T
-            print("local strain:")
-            print(local_strains[i,:,:])
+            # print("local strain:")
+            # print(local_strains[i,:,:])
             # print(strains)
             # print(local_strains)
             alpha = 0
@@ -286,8 +286,8 @@ class Axial:
 
             RTb[i,:,:] = Rz@Ry@Rx
 
-        print("Deformed basis:")
-        print(RTb)
+        # print("Deformed basis:")
+        # print(RTb)
 
         return RTb
 

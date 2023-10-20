@@ -293,14 +293,14 @@ class BeamModel(Axial):
             transform_matrix=np.concatenate((np.concatenate([RbA[i,:,:].T@self.RBG,trans_vec],axis=1),np.array([[0,0,0,1]])))
 
             #compute translation vector (transform centroid offset to relevant coordinates)
-            print(self.axial_pos_mesh.geometry.x[i])
+            # print(self.axial_pos_mesh.geometry.x[i])
             global_disp,_ = self.get_global_disp([self.axial_pos_mesh.geometry.x[i]])
             trans_vec2 = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@RTb[i,:,:].T@(np.array([[0,xc.yavg,xc.zavg]]).T) + np.array([global_disp]).T
             
-            print("RTb:")
-            print(RTb[i,:,:])
-            print("RbA:")
-            print(RbA[i,:,:])
+            # print("RTb:")
+            # print(RTb[i,:,:])
+            # print("RbA:")
+            # print(RbA[i,:,:])
             transform_matrix2=np.concatenate((np.concatenate([RbA[i,:,:].T@RTb[i,:,:].T@self.RBG,trans_vec2],axis=1),np.array([[0,0,0,1]])))
 
             tdim = xc.msh.topology.dim
@@ -330,3 +330,20 @@ class BeamModel(Axial):
         # else:
         #     pyvista.start_xvfb()
         #     figure = plot.screenshot("beam_mesh.png")
+
+    def recover_stress(self):
+        self.generalized_stresses(self.uh)
+        
+        points_on_proc,cells=get_pts_and_cells(self.axial_pos_mesh,self.axial_pos_mesh.geometry.x)
+        
+        S = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=6)
+        s = Function(S)
+        
+        s.interpolate(Expression(self.generalized_stresses(self.uh),S.element.interpolation_points()))
+        Sig = s.eval(points_on_proc,cells)
+        print(Sig)
+        for i,xc in enumerate(self.xcs):
+            print("xc area = " + str(xc.A))
+            print("xc averaged stresses: ")
+            print(Sig[i]/xc.A)
+

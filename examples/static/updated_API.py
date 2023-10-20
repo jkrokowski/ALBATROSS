@@ -18,11 +18,15 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 3
+N = 5
 W = .1
 H = .1
-W1 = 0.75*W
-H1 = 0.5*H
+# W1 = 0.75*W
+# H1 = 0.5*H
+W1= W
+H1= H
+
+L = 5
 mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 # with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
 #         file.write_mesh(mesh2d_0)
@@ -37,9 +41,9 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 
 #define spanwise locations of XCs with a 1D mesh
 p1 = (0,0,0)
-p2 = (0,1,0)
+p2 = (0,L,0)
 ne_2D = len(meshes2D)-1
-ne_1D = 1000
+ne_1D = 100
 
 meshname_axial_pos = 'axial_postion_mesh'
 meshname_axial = 'axial_mesh'
@@ -65,25 +69,28 @@ ExampleBeam = BeamModel(axial_mesh,xc_info)
 # ExampleBeam.plot_xc_orientations()
 rho = 2.7e-3
 g = 9.81
-A = 0.01*500
-
+A = 0.01
+print('total force:')
+print(rho*g*A*L)
 #add loads
-ExampleBeam.add_body_force((-A*rho*g,0,-A*rho*g))
+ExampleBeam.add_body_force((0,0,-A*rho*g))
+#TODO: ExampleBeam.add_point_load()
 
 #add boundary conditions
 ExampleBeam.add_clamped_point(p1)
+# ExampleBeam.add_clamped_point(p2)
 
 #solve 
 ExampleBeam.solve()
 
 # ExampleBeam.plot_axial_displacement(warp_factor=5)
 
-ExampleBeam.recover_displacement(plot_xcs=True)
+ExampleBeam.recover_displacement(plot_xcs=False)
 
 ExampleBeam.plot_xc_disp_3D()
 
-ExampleBeam.get_deformed_basis([p1,p2])
+ExampleBeam.recover_stress()
 
-# ExampleBeam.recover_stress()
-
-# ExampleBeam.plot_recovered_displacement()
+#TODO:
+# ExampleBeam.get_max_stress()
+# ExampleBeam.plot_stress_over_xc()
