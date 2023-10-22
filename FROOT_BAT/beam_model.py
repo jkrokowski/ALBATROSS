@@ -100,13 +100,15 @@ class BeamModel(Axial):
             return K_flat
         
         sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
-        K2 = TensorFunctionSpace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        k2 = Function(K2)
+        T2_66 = TensorFunctionSpace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+        k2 = Function(T2_66)
         #TODO:same process for mass matrix
-        A2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
-        a2 = Function(A2)
-        C2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
-        c2 = Function(C2)
+        S2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
+        a2 = Function(S2)
+        rho2 = Function(S2)
+        # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
+        V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
+        c2 = Function(V2_2)
         
         for i,[mesh2d,mat2D] in enumerate(zip(self.xc_meshes,self.mats)):
             print('    computing properties for XC '+str(i+1)+'/'+str(self.numxc)+'...')
@@ -118,37 +120,47 @@ class BeamModel(Axial):
             #output stiffess matrix
             if sym_cond==True:
                 #need to add fxn
-                print("symmetric mode not available yet")
+                print("symmetric mode not available yet,try again soon")
                 exit()
                 k2.vector.array[21*i,21*(i+1)] = self.xcs[i].K.flatten()
             elif sym_cond==False:
                 k2.vector.array[36*i:36*(i+1)] = self.xcs[i].K.flatten()
                 a2.vector.array[i] = self.xcs[i].A
+                rho2.vector.array[i] = self.xcs[i].rho
                 c2.vector.array[2*i:2*(i+1)] = [self.xcs[i].yavg,self.xcs[i].zavg]
+
         print("Done computing cross-sectional properties...")
-        # if sym_cond==True:
-        #     K_entries = np.concatenate([get_flat_sym_stiff(K_list[i]) for i in range(self.num_xc)])
-        # elif sym_cond == False:
-        #     K_entries = np.concatenate([K_list[i].flatten() for i in range(self.num_xc)])
-        
-        # k2.vector.array = K_entries
+
         print("Interpolating cross-sectional properties to axial mesh...")
         #interpolate from axial_pos_mesh to axial_mesh 
-        self.K = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        self.k = Function(self.K)
+
+        #initialize fxn spaces
+        self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+        self.V_2 = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
+        self.S = FunctionSpace(self.axial_mesh,('CG',1))
+        
+        #interpolate beam constitutive matrix
+        self.k = Function(self.T_66)
         self.k.interpolate(k2)
 
-        self.A = FunctionSpace(self.axial_mesh,('CG',1))
-        self.a = Function(self.A)
+        #interpolate xc area
+        self.a = Function(self.S)
         self.a.interpolate(a2)
 
-        self.V = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
-        self.c = Function(self.V)
+        #interpolate xc density
+        self.rho = Function(self.S)
+        self.rho.interpolate(rho2)
+
+        #interpolate centroidal location in g frame
+        self.c = Function(self.V_2)
         self.c.interpolate(c2)
+
         # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        k2.vector.destroy()     #need to add to prevent PETSc memory leak 
+        k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
         a2.vector.destroy()
         c2.vector.destroy()
+        rho2.vector.destroy()
+
         print("Done interpolating cross-sectional properties to axial mesh...")
     
     # def get_3D_disp(self):

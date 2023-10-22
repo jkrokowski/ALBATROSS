@@ -107,7 +107,8 @@ class Axial:
         '''
         #TODO: utilize beam xc properties self.A and self.rho for true self weight with varying xc
         print("Adding body force....")
-        f_vec = Constant(self.domain,ScalarType(f))
+        f_vec = self.a*self.rho*Constant(self.domain,ScalarType(f))
+
         if self.L_form ==None:
             self.L_form = dot(f_vec,self.u_)*self.dx
         else:

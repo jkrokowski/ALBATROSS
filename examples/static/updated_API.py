@@ -36,7 +36,8 @@ meshes2D = [mesh2d_0,mesh2d_1]
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':10000,'nu':0.2} }
+                        'MECH_PROPS':{'E':10000,'nu':0.2} ,
+                        'DENSITY':2.7e-3}
                         }
 
 #define spanwise locations of XCs with a 1D mesh
@@ -73,7 +74,7 @@ A = 0.01
 print('total force:')
 print(rho*g*A*L)
 #add loads
-ExampleBeam.add_body_force((0,0,-A*rho*g))
+ExampleBeam.add_body_force((0,0,-g))
 #TODO: ExampleBeam.add_point_load()
 
 #add boundary conditions

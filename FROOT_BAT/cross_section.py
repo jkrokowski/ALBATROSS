@@ -19,7 +19,7 @@ class CrossSection:
         {MATERIAL:{
             TYPE: 'ISOTROPIC', 'ORTHOTROPIC', etc
             MECH_PROPS: {}
-            DENS: float } }
+            DENSITY: float } }
         ....
         '''
         
@@ -33,6 +33,11 @@ class CrossSection:
         self.i,self.j,self.k,self.l=indices(4)
         self.p,self.q,self.r,self.s=indices(4)
         self.a,self.B = indices(2)
+        
+        #need to think a bit furth about mutlimaterial xc's here
+        #TODO: rn, hard coded to just use the first material density
+        self.rho = self.material[self.mat_ids[0][0]]['DENSITY']
+        print("density = "+str(self.rho))
 
         #integration measures (subdomain data accounts for different materials)
         if celltags==None:
