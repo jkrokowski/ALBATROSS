@@ -26,7 +26,7 @@ H = .1
 W1= W
 H1= H
 
-L = 5
+L = 20
 mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 # with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
 #         file.write_mesh(mesh2d_0)
@@ -36,7 +36,7 @@ meshes2D = [mesh2d_0,mesh2d_1]
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':10000,'nu':0.2} ,
+                        'MECH_PROPS':{'E':10e6,'nu':0.2} ,
                         'DENSITY':2.7e-3}
                         }
 
@@ -44,7 +44,7 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 p1 = (0,0,0)
 p2 = (0,L,0)
 ne_2D = len(meshes2D)-1
-ne_1D = 100
+ne_1D = 20
 
 meshname_axial_pos = 'axial_postion_mesh'
 meshname_axial = 'axial_mesh'
@@ -74,8 +74,8 @@ A = 0.01
 print('total force:')
 print(rho*g*A*L)
 #add loads
-ExampleBeam.add_body_force((0,0,-g))
-#TODO: ExampleBeam.add_point_load()
+# ExampleBeam.add_body_force((0,0,-g))
+ExampleBeam.add_point_load()
 
 #add boundary conditions
 ExampleBeam.add_clamped_point(p1)
@@ -84,13 +84,23 @@ ExampleBeam.add_clamped_point(p1)
 #solve 
 ExampleBeam.solve()
 
-# ExampleBeam.plot_axial_displacement(warp_factor=5)
+ExampleBeam.plot_axial_displacement(warp_factor=5)
 
 ExampleBeam.recover_displacement(plot_xcs=False)
 
 ExampleBeam.plot_xc_disp_3D()
 
 ExampleBeam.recover_stress()
+print("xc centroid local displacments and rotations")
+print(ExampleBeam.get_local_disp([p1,p2]))
+# print("xc centroid global displacments and rotations")
+# print(ExampleBeam.get_global_disp([p1,p2]))
+
+print('Max Deflection (EB analytical)')
+E = mats['Unobtainium']['MECH_PROPS']['E']
+rho = mats['Unobtainium']['DENSITY']
+I = H**4/12
+print( (-rho*A*g*L**4)/(8*E*I) )
 
 #TODO:
 # ExampleBeam.get_max_stress()

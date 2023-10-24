@@ -46,7 +46,8 @@ class Axial:
         self.xcinfo = xcinfo
 
         self.dx = Measure('dx',self.domain)
-        
+        self.dx_shear = Measure('dx',self.domain,metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
+
         self.w = TestFunction(self.beam_element.W)
         self.dw = TrialFunction(self.beam_element.W)
         (self.u_, self.theta_) = split(self.w)
@@ -66,8 +67,14 @@ class Axial:
     def elastic_energy(self):
         self.Sig = self.generalized_stresses(self.dw)
         self.Eps = self.generalized_strains(self.w)
+        # print(self.Sig.ufl_shape)
+        # print(self.Eps.ufl_shape)
+        # print((inner(self.Sig,self.Eps)).ufl_shape)
 
-        self.a_form = (inner(self.Sig,self.Eps))*self.dx
+        #assemble variational form separately for shear terms (using reduced integration)
+        self.a_form = (sum([self.Sig[i]*self.Eps[i]*self.dx for i in [0, 3, 4, 5]]) 
+                        + sum([self.Sig[i]*self.Eps[i]*self.dx_shear for i in [1,2]])) 
+        # self.a_form = (inner(self.Sig,self.Eps))
 
     def tangent(self,domain):
         t = Jacobian(domain)

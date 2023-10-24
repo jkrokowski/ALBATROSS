@@ -358,4 +358,9 @@ class BeamModel(Axial):
             print("xc area = " + str(xc.A))
             print("xc averaged stresses: ")
             print(Sig[i]/xc.A)
+            # print('stiffness matrix:')
+            # print(xc.K)
+            # print('displacements and rotations:')
+            # print(self.uh.sub(0).x.array)
+
 
