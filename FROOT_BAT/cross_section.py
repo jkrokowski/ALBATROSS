@@ -1,11 +1,11 @@
 from ufl import (grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
-from dolfinx.fem import (TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
+from dolfinx.fem import (Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
 from petsc4py import PETSc
 
 from FROOT_BAT.material import *
-from FROOT_BAT.utils import get_vtx_to_dofs
+from FROOT_BAT.utils import get_vtx_to_dofs,get_pts_and_cells
 
 class CrossSection:
     def __init__(self, msh, material ,celltags=None):
@@ -37,7 +37,6 @@ class CrossSection:
         #need to think a bit furth about mutlimaterial xc's here
         #TODO: rn, hard coded to just use the first material density
         self.rho = self.material[self.mat_ids[0][0]]['DENSITY']
-        print("density = "+str(self.rho))
 
         #integration measures (subdomain data accounts for different materials)
         if celltags==None:
@@ -327,22 +326,29 @@ class CrossSection:
             c = np.reshape(c,(-1,1))
             u_coeff=self.sols_decoup@c
 
-            #use previous dof maps to populate arrays of the individual dofs that depend on the solution coefficients
-            ubar_coeff = u_coeff.flatten()[ubar_vtx_to_dof]
-            uhat_coeff = u_coeff.flatten()[uhat_vtx_to_dof]
+            #populate displacement coeff fxns based on coeffcient values
+            self.coeff_to_field(ubar_field,u_coeff,self.ubar_vtx_to_dof)
+            self.coeff_to_field(uhat_field,u_coeff,self.uhat_vtx_to_dof)
 
-            #populate functions with coefficient function values
-            ubar_field.vector.array = ubar_coeff.flatten()
-            uhat_field.vector.array = uhat_coeff.flatten()
+            # #use previous dof maps to populate arrays of the individual dofs that depend on the solution coefficients
+            # ubar_coeff = u_coeff.flatten()[ubar_vtx_to_dof]
+            # uhat_coeff = u_coeff.flatten()[uhat_vtx_to_dof]
 
-            #compute strains at x1=0
-            gradubar=grad(ubar_field)
-            eps = as_tensor([[uhat_field[0],uhat_field[1],uhat_field[2]],
-                            [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-                            [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+            # #populate functions with coefficient function values
+            # ubar_field.vector.array = ubar_coeff.flatten()
+            # uhat_field.vector.array = uhat_coeff.flatten()
+
+            #map displacement to stress
+            sigma = self.map_disp_to_stress(ubar_field,uhat_field)
             
-            # construct strain and stress tensors based on u_sol
-            sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
+            # #compute strains at x1=0
+            # gradubar=grad(ubar_field)
+            # eps = as_tensor([[uhat_field[0],uhat_field[1],uhat_field[2]],
+            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+            
+            # # construct strain and stress tensors based on u_sol
+            # sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
 
             #relevant components of stress tensor
             sigma11 = sigma[0,0]
@@ -359,6 +365,8 @@ class CrossSection:
 
             #assemble loads into load vector
             P = np.array([P1,V2,V3,T1,M2,M3])
+
+            eps = self.get_eps_from_disp_fxns(ubar_field,uhat_field)
 
             #compute complementary energy given coefficient vector
             Uc = assemble_scalar(form(sigma[i,j]*eps[i,j]*dx))
@@ -378,10 +386,64 @@ class CrossSection:
         uhat_field.vector.destroy()     #need to add to prevent PETSc memory leak 
 
         #compute Flexibility matrix
-        K1_inv = np.linalg.inv(K1)
+        self.K1_inv = np.linalg.inv(K1)
 
-        S = K1_inv.T@K2@K1_inv
+        S = self.K1_inv.T@K2@self.K1_inv
         self.K = np.linalg.inv(S)
-        
+    
     def getXCMassMatrix(self):
         return
+    
+    def coeff_to_field(self,fxn,coeff,vtx_to_dof):
+        #uses vtx_to_dof map to populate field with correct solution coefficients
+        fxn.vector.array = coeff.flatten()[vtx_to_dof].flatten()
+
+    def map_disp_to_stress(self,ubar,uhat):
+        i,j,k,l=self.i,self.j,self.k,self.l
+
+        #compute strains at x1=0
+        eps = self.get_eps_from_disp_fxns(ubar,uhat)        
+        
+        # construct strain and stress tensors based on u_sol
+        sigma = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
+        return sigma
+    
+    def get_eps_from_disp_fxns(self,ubar,uhat):
+        gradubar=grad(ubar)
+        return as_tensor([[uhat[0],uhat[1],uhat[2]],
+                        [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+                        [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+    
+    def recover_stress_xc(self,loads):
+        '''
+        loads: 6x1 vector of the loads over the xc
+        '''
+        # print('loads:')
+        # print(loads)
+        # print('K1 inverse:')
+        # print(self.K1_inv)
+        # print('sols_decoup:')
+        # print(self.sols_decoup)
+        disp_coeff = self.sols_decoup[:,6:]@self.K1_inv@loads
+        # print(disp_coeff)
+
+        U2d = FunctionSpace(self.msh,self.Ve)
+        ubar = Function(U2d)
+        uhat = Function(U2d)
+
+        #populate displacement coeff fxns based on coeffcient values
+        self.coeff_to_field(ubar,disp_coeff,self.ubar_vtx_to_dof)
+        self.coeff_to_field(uhat,disp_coeff,self.uhat_vtx_to_dof)
+
+        sigma = self.map_disp_to_stress(ubar,uhat)
+
+        S = TensorFunctionSpace(self.msh,('CG',1),shape=(3,3))
+        sigma_sol = Function(S)
+        sigma_sol.interpolate(Expression(sigma,S.element.interpolation_points()))
+        points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
+
+        sigma_sol_eval = sigma_sol.eval(points_on_proc,cells)
+        print("Sigma Sol:")
+        print(sigma_sol_eval)
+
+        #TODO: now plot over xc

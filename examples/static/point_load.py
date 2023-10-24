@@ -18,7 +18,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 5
+N = 2
 W = .1
 H = .1
 # W1 = 0.75*W
@@ -44,7 +44,7 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 p1 = (0,0,0)
 p2 = (0,L,0)
 ne_2D = len(meshes2D)-1
-ne_1D = 20
+ne_1D = 10
 
 meshname_axial_pos = 'axial_postion_mesh'
 meshname_axial = 'axial_mesh'
@@ -71,11 +71,19 @@ ExampleBeam = BeamModel(axial_mesh,xc_info)
 rho = 2.7e-3
 g = 9.81
 A = 0.01
-print('total force:')
-print(rho*g*A*L)
+
 #add loads
-# ExampleBeam.add_body_force((0,0,-g))
-ExampleBeam.add_point_load()
+# ExampleBeam.add_dist_load((0,0,-g))
+#SUBLTY here:
+'''
+the entire system must be assembled so that the rhs can be modfied
+
+likely what this will do under the hood is cache the loads and 
+the points to be applied at the time of the solve as the assembly 
+of the system should not happen prior to the solution of the system
+for most users.'''
+F = .025
+ExampleBeam.add_point_load([(0,F,-F)],[p2])
 
 #add boundary conditions
 ExampleBeam.add_clamped_point(p1)
@@ -84,23 +92,23 @@ ExampleBeam.add_clamped_point(p1)
 #solve 
 ExampleBeam.solve()
 
-ExampleBeam.plot_axial_displacement(warp_factor=5)
+# ExampleBeam.plot_axial_displacement(warp_factor=5)
 
 ExampleBeam.recover_displacement(plot_xcs=False)
 
 ExampleBeam.plot_xc_disp_3D()
 
 ExampleBeam.recover_stress()
-print("xc centroid local displacments and rotations")
+print("xc centroid local displacements and rotations")
 print(ExampleBeam.get_local_disp([p1,p2]))
 # print("xc centroid global displacments and rotations")
 # print(ExampleBeam.get_global_disp([p1,p2]))
 
-print('Max Deflection (EB analytical)')
+print('Max Deflection for point load (EB analytical)')
 E = mats['Unobtainium']['MECH_PROPS']['E']
 rho = mats['Unobtainium']['DENSITY']
 I = H**4/12
-print( (-rho*A*g*L**4)/(8*E*I) )
+print( (-F*L**3)/(3*E*I) )
 
 #TODO:
 # ExampleBeam.get_max_stress()

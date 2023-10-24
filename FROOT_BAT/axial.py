@@ -56,6 +56,9 @@ class Axial:
         self.a_form = None
         self.L_form = None
         self.bcs = []
+
+        self.f_pt = []
+        self.m_pt = []
     
         self.t = self.tangent(domain)
         
@@ -67,9 +70,6 @@ class Axial:
     def elastic_energy(self):
         self.Sig = self.generalized_stresses(self.dw)
         self.Eps = self.generalized_strains(self.w)
-        # print(self.Sig.ufl_shape)
-        # print(self.Eps.ufl_shape)
-        # print((inner(self.Sig,self.Eps)).ufl_shape)
 
         #assemble variational form separately for shear terms (using reduced integration)
         self.a_form = (sum([self.Sig[i]*self.Eps[i]*self.dx for i in [0, 3, 4, 5]]) 
@@ -103,17 +103,15 @@ class Axial:
                         dot(self.tgrad(theta), self.a2)])
 
     def generalized_stresses(self,w):
-        # Q = diag(as_vector([1,2,3,4,5,6]))
-        # return dot(Q, self.generalized_strains(w))
         return dot(self.xcinfo, self.generalized_strains(w))
 
     #constructing RHS:
-    def add_body_force(self,f):
+    def add_dist_load(self,f):
         '''
-        f = tuple for (x,y,z) components of body force
+        f = tuple for (x,y,z) components of distributed load
         '''
-        #TODO: utilize beam xc properties self.A and self.rho for true self weight with varying xc
-        print("Adding body force....")
+        
+        print("Adding distributed load....")
         f_vec = self.a*self.rho*Constant(self.domain,ScalarType(f))
 
         if self.L_form ==None:
@@ -121,15 +119,95 @@ class Axial:
         else:
             self.L_form += dot(f_vec,self.u_)*self.dx
 
+    def add_point_load(self,f_list,pts):
+        '''
+        f = list of tuples for (x,y,z) components of point force force
+        pts : list of (x,y,z) location along beam axis to apply point force
+        '''
+        
+        print("Adding point loads....")
+        #TODO: add data format checks here
+        for f,pt in zip(f_list,pts):
+            self.f_pt.append((f,pt))
+
+    def add_point_moment(self,m_list,pts):
+        '''
+        f = list of tuples for (x,y,z) components of point force force
+        pts : list of (x,y,z) location along beam axis to apply point force
+        '''
+        
+        print("Adding point loads....")
+        #TODO: add data format checks here
+        for m,pt in zip(m_list,pts):
+            self.m_pt.append((m,pt))
+        
+    def xyz_to_span(self,pt):
+        #TODO: method to convert an xyz coordinate to the length along the beam
+        return
+    def span_to_xyz(self,l):
+        #TODO: method to convert spanwise coordinate l to an xyz location
+        return
+        
     def solve(self):
         print("Solving for beam axis displacement...")
+        #initialize function for displacement and rotation solution
         self.uh = Function(self.beam_element.W)
-        if self.L_form == None:
-            f = Constant(self.domain,ScalarType((0,0,0)))
-            self.L_form = -dot(f,self.u_)*self.dx
+
+
+        # --------
+        # if self.L_form == None:
+        #     f = Constant(self.domain,ScalarType((0,0,0)))
+        #     self.L_form = -dot(f,self.u_)*self.dx
         
-        self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
-        self.uh = self.problem.solve()
+        # self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
+        # self.uh = self.problem.solve()
+        # --------
+
+
+        self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
+        self.A_mat.assemble()
+
+        if self.L_form == None:
+            f0 = Constant(self.domain,ScalarType((0,0,0)))
+            self.L_form = -dot(f0,self.u_)*self.dx
+            # self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx
+        
+        # form(self.L_form)
+        self.b=create_vector(form(self.L_form))
+        with self.b.localForm() as b_loc:
+                    b_loc.set(0)
+        assemble_vector(self.b,form(self.L_form))
+
+        # APPLY dirchelet bc: these steps are directly pulled from the 
+        # petsc.py LinearProblem().solve() method
+        self.a_form = form(self.a_form)
+        apply_lifting(self.b,[self.a_form],bcs=[self.bcs])
+        self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+        set_bc(self.b,self.bcs)
+        
+        #if there are any point forces, apply them to the assembled rhs vector
+        if bool(self.f_pt) == True:
+            W0, disp_dofs = self.beam_element.W.sub(0).collapse()
+            for f_pt in self.f_pt:
+                f = f_pt[0]
+                pt = f_pt[1]
+                def locate_dofs(x):
+                    return np.logical_and.reduce((np.isclose(x[0],pt[0]),
+                                                  np.isclose(x[1],pt[1]),
+                                                  np.isclose(x[2],pt[2])))
+                f_dofs = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),locate_dofs)
+                self.b.array[f_dofs[0]] = f
+
+        self.uh = Function(self.beam_element.W)
+        uvec = self.uh.vector
+        uvec.setUp()
+        ksp = PETSc.KSP().create()
+        ksp.setType(PETSc.KSP.Type.CG)
+        ksp.setTolerances(rtol=1e-15)
+        ksp.setOperators(self.A_mat)
+        # ksp.setFromOptions()
+        ksp.solve(self.b,uvec)
+
     def add_clamped_point(self,pt):
         '''
         pt = x,y,z location of clamped point

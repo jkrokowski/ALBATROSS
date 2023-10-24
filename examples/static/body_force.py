@@ -74,7 +74,7 @@ A = 0.01
 print('total force:')
 print(rho*g*A*L)
 #add loads
-ExampleBeam.add_body_force((0,0,-g))
+ExampleBeam.add_dist_load((0,0,-g))
 #TODO: ExampleBeam.add_point_load()
 
 #add boundary conditions

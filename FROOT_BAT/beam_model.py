@@ -353,14 +353,20 @@ class BeamModel(Axial):
         
         s.interpolate(Expression(self.generalized_stresses(self.uh),S.element.interpolation_points()))
         Sig = s.eval(points_on_proc,cells)
-        print(Sig)
+
+        #SIG are the reaction forces in the xc. These do not 
+        # print(Sig)
         for i,xc in enumerate(self.xcs):
             print("xc area = " + str(xc.A))
             print("xc averaged stresses: ")
-            print(Sig[i]/xc.A)
+            print(Sig[i])
+
+            xc.recover_stress_xc(Sig[i])
+
             # print('stiffness matrix:')
             # print(xc.K)
             # print('displacements and rotations:')
             # print(self.uh.sub(0).x.array)
 
 
+#TODO: need to add joints to allow for the assembly of models with connections (e.g. branching, loops, frames, etc)
