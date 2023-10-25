@@ -344,18 +344,21 @@ class BeamModel(Axial):
         #     figure = plot.screenshot("beam_mesh.png")
 
     def recover_stress(self):
-        self.generalized_stresses(self.uh)
+        # self.generalized_stresses(self.uh)
         
-        points_on_proc,cells=get_pts_and_cells(self.axial_pos_mesh,self.axial_pos_mesh.geometry.x)
+        #need to interpolate evaluate at axial_pos_mesh nodes, but 
+        #   keep stress/reactions defined in the axial mesh or stress recovery will be wildly off.
+        points_on_proc,cells=get_pts_and_cells(self.axial_mesh,self.axial_pos_mesh.geometry.x)
         
-        S = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=6)
+        S = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=6)
         s = Function(S)
         
         s.interpolate(Expression(self.generalized_stresses(self.uh),S.element.interpolation_points()))
         Sig = s.eval(points_on_proc,cells)
 
-        #SIG are the reaction forces in the xc. These do not 
-        # print(Sig)
+        #SIG are the reaction forces in the xc. These are can then be fed back to the xc to recover the stresses
+        print("reaction forces along beam:")
+        print(Sig)
         for i,xc in enumerate(self.xcs):
             print("xc area = " + str(xc.A))
             print("xc averaged stresses: ")

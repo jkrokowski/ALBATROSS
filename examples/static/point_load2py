@@ -31,8 +31,11 @@ mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], 
 # with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
 #         file.write_mesh(mesh2d_0)
 mesh2d_1 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-
-meshes2D = [mesh2d_0,mesh2d_1]
+mesh2d_2 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+mesh2d_3 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+mesh2d_4 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+ 
+meshes2D = [mesh2d_0,mesh2d_1,mesh2d_2,mesh2d_3,mesh2d_4]
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
@@ -82,7 +85,7 @@ likely what this will do under the hood is cache the loads and
 the points to be applied at the time of the solve as the assembly 
 of the system should not happen prior to the solution of the system
 for most users.'''
-F = .01
+F = .001
 ExampleBeam.add_point_load([(0,-F,-F)],[p2])
 
 #add boundary conditions
@@ -96,7 +99,7 @@ ExampleBeam.plot_axial_displacement(warp_factor=5)
 
 ExampleBeam.recover_displacement(plot_xcs=True)
 
-# ExampleBeam.plot_xc_disp_3D()
+ExampleBeam.plot_xc_disp_3D()
 
 ExampleBeam.recover_stress()
 print("xc centroid local displacements and rotations")

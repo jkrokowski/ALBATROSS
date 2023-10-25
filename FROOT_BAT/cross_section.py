@@ -4,6 +4,9 @@ from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
 from petsc4py import PETSc
 
+from dolfinx.plot import create_vtk_mesh
+import pyvista
+
 from FROOT_BAT.material import *
 from FROOT_BAT.utils import get_vtx_to_dofs,get_pts_and_cells
 
@@ -199,8 +202,8 @@ class CrossSection:
         #get maps of vertices to displacemnnt coefficients DOFs 
         self.ubar_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(0))
         self.uhat_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(1))
-        # utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
-        # ubreve_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(3))
+        self.utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
+        self.ubreve_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(3))
         
         ubar_vtx_to_dof = self.ubar_vtx_to_dof
         uhat_vtx_to_dof = self.uhat_vtx_to_dof
@@ -430,11 +433,18 @@ class CrossSection:
         U2d = FunctionSpace(self.msh,self.Ve)
         ubar = Function(U2d)
         uhat = Function(U2d)
+        utilde = Function(U2d)
+        ubreve = Function(U2d)
 
         #populate displacement coeff fxns based on coeffcient values
         self.coeff_to_field(ubar,disp_coeff,self.ubar_vtx_to_dof)
         self.coeff_to_field(uhat,disp_coeff,self.uhat_vtx_to_dof)
+        self.coeff_to_field(utilde,disp_coeff,self.utilde_vtx_to_dof)
+        self.coeff_to_field(ubreve,disp_coeff,self.ubreve_vtx_to_dof)
 
+        # u_total = ubar
+
+    
         sigma = self.map_disp_to_stress(ubar,uhat)
 
         S = TensorFunctionSpace(self.msh,('CG',1),shape=(3,3))
@@ -445,5 +455,41 @@ class CrossSection:
         sigma_sol_eval = sigma_sol.eval(points_on_proc,cells)
         print("Sigma Sol:")
         print(sigma_sol_eval)
+        L = 0
+        utotal_exp = ubar+uhat*L+utilde*(L**2)+ubreve*(L**3)
+        utotal = Function(U2d)
+        utotal.interpolate(Expression(utotal_exp,U2d.element.interpolation_points()))
+        # points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
 
+        # sigma_sol_eval = utotal.eval(points_on_proc,cells)        
         #TODO: now plot over xc
+        warp_factor = 1
+
+        #plot Axial mesh
+        tdim = self.msh.topology.dim
+        topology, cell_types, geom = create_vtk_mesh(self.msh,tdim)
+        grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+        plotter = pyvista.Plotter()
+        actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
+        RBG = np.array([[ 0,  0,  1],
+                             [ 1,  0,  0],
+                             [ 0,  1, 0]])
+        print(geom.shape[0])
+        # grid.point_data['u'] = (utotal.x.array.reshape((geom.shape[0],3)).T).T
+        # warped = grid.warp_by_vector("u",factor=warp_factor)
+        # actor_1 = plotter.add_mesh(warped, show_edges=True)
+        grid.point_data['sigma11'] = sigma_sol_eval[:,0]
+        warped = grid.warp_by_scalar("sigma11",factor=0.0001)
+        actor_2 = plotter.add_mesh(warped,show_edges=True)
+
+        # actor_1 = plotter.add_mesh(grid, style='points',color='k',point_size=12)
+        # grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
+        # glyphs = grid.glyph(orient="u",factor=.25)
+        # actor_2 = plotter.add_mesh(glyphs,color='b')
+
+
+        plotter.view_xy()
+        plotter.show_axes()
+
+        # if not pyvista.OFF_SCREEN:
+        plotter.show()
