@@ -259,7 +259,7 @@ class CrossSection:
         # print(A_mat_csr[1].shape)
         # print(A_mat_csr[2].shape)
 
-        self.sols = q1csr.toarray[:,-12:]
+        self.sols = q1csr.toarray()[:,-12:]
 
         #======slepc iterative approach (conv issues)=======#
         # import slepc4py,sys
