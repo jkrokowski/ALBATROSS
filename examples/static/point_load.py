@@ -44,7 +44,7 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 p1 = (0,0,0)
 p2 = (L,0,0)
 ne_2D = len(meshes2D)-1
-ne_1D = 1000
+ne_1D = 100
 
 meshname_axial_pos = 'axial_postion_mesh'
 meshname_axial = 'axial_mesh'

@@ -184,12 +184,98 @@ class CrossSection:
     def getModes(self):   
         self.A_mat = assemble_matrix(form(self.Residual))
         self.A_mat.assemble()
-        
-        m1,n1=self.A_mat.getSize()
-        Anp = self.A_mat.getValues(range(m1),range(n1))
 
-        Usvd,sv,Vsvd = np.linalg.svd(Anp)
-        self.sols = Vsvd[-12:,:].T
+        import time
+        #====numpy svd approach=====#
+        t0 = time.time()
+        # m1,n1=self.A_mat.getSize()
+        # Anp = self.A_mat.getValues(range(m1),range(n1))
+
+        # Usvd,sv,Vsvd = np.linalg.svd(Anp)
+        # self.sols = Vsvd[-12:,:].T
+        t1= time.time()
+        #===========
+
+        #========numpy qr approach ======#
+        # m,n1=self.A_mat.getSize()
+        # Anp = self.A_mat.getValues(range(m),range(n1))
+        # q,r = np.linalg.qr(Anp,mode='complete')
+        # # q1,r1 = np.linalg.qr(Anp.T,mode='complete')
+        t2 = time.time()
+        #=============
+
+        #========numpy qr approach ======#
+        # m,n1=self.A_mat.getSize()
+        # Anp = self.A_mat.getValues(range(m),range(n1))
+        # q1,r1 = np.linalg.qr(Anp.T,mode='complete')
+        t3 = time.time()
+        #=============
+
+        #========sparseqr approach ======#
+        import sparseqr
+        from scipy.sparse import csr_matrix
+        # m,n1=self.A_mat.getSize()
+        # Anp = self.A_mat.getValues(range(m),range(n1))
+        print(self.A_mat.size)
+        Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        q1csr,r1csr,E,rank = sparseqr.qr(Acsr.transpose())
+        t4 = time.time()
+        #=============
+
+        #==========
+        # # SCIPY PROPACK
+        # import os
+        # # print(os.environ)
+        # os.environ['SCIPY_USE_PROPACK'] = "1"
+        # from scipy.sparse.linalg import svds
+        # from scipy.sparse import csr_matrix
+        # # m,n1=A.getSize()
+        # # Anp = A.getValues(range(m),range(n1))
+        # # Amat =as_backend_type(A.mat()
+        # # assert isinstance(A, PETSc.Mat)
+        # # ai,aj,av =self.A_mat.getValuesCSR()
+        # # Acsr = csr_matrix((av,ai,aj),A.size)
+        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+
+        # # sols_sps= svds(Acsr,k=12,which='SM',maxiter=100,solver='lobpcg')
+        # sols_sps= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
+        t5 = time.time()
+
+        #==========
+
+        print('numpy svd time:')
+        print(t1-t0)
+        print('numpy qr time:')
+        print(t2-t1)
+        print('numpy qr time:')
+        print(t3-t2)
+        print('numpy qr time:')
+        print(t4-t3)
+        print('scipy svds time:')
+        print(t5-t4)
+
+        # A_mat_csr = self.A_mat.getValuesCSR()
+        # print(A_mat_csr[0].shape)
+        # print(A_mat_csr[1].shape)
+        # print(A_mat_csr[2].shape)
+
+        self.sols = q1csr.toarray[:,-12:]
+
+        #======slepc iterative approach (conv issues)=======#
+        # import slepc4py,sys
+        # slepc4py.init(sys.argv)
+        # Prob = slepc4py.SLEPc.SVD().create()
+        # Prob.setOperators(self.A_mat)
+        # Prob.setType("trlanczos")
+        # Prob.setDimensions(12,PETSc.DECIDE,PETSc.DECIDE)
+        # Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)
+        # Prob.setTolerances(1e-8, 1000)
+        # Prob.setImplicitTranspose(True)
+        # Prob.solve()
+        #===========
+
+        # A_mat_csr = self.A_mat.getValuesCSR()
+        print()
         
     def decoupleModes(self):
         x = self.x
