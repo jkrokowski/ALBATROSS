@@ -2,9 +2,9 @@ from dolfinx.fem import Constant
 from ufl import Identity,as_tensor,indices,diag,as_vector,as_matrix
 
 
-def getMatConstitutive(mat_data):
+def getMatConstitutive(mesh,mat_data):
     if mat_data['TYPE'] == 'ISOTROPIC':
-        return getMatConstitutiveIsotropic(mat_data['MECH_PROPS']['E'],mat_data['MECH_PROPS']['nu'])
+        return getMatConstitutiveIsotropic(mesh,mat_data['MECH_PROPS']['E'],mat_data['MECH_PROPS']['nu'])
     elif mat_data['TYPE'] == 'ORTHOTROPIC':
         mat_consts = [mat_data['E1'],
                       mat_data['E2'],
@@ -15,14 +15,14 @@ def getMatConstitutive(mat_data):
                       mat_data['nu12'],
                       mat_data['nu13'],
                       mat_data['nu23']]
-        return getMatConstitutiveIsotropic(mat_consts)
+        return getMatConstitutiveOrthotropic(mesh,mat_consts)
     else:
         return 'ERROR: please use existing material model'
     
-def getMatConstitutiveIsotropic(E,nu):
+def getMatConstitutiveIsotropic(mesh,E,nu):
     #lame parameters from Young's Modulus and Poisson Ratio
-    _lam = (E*nu)/((1+nu)*(1-2*nu))
-    mu = E/(2*(1+nu))
+    _lam = Constant(mesh,((E*nu)/((1+nu)*(1-2*nu))))
+    mu = Constant(mesh,(E/(2*(1+nu))))
 
     #elasticity tensor construction
     delta = Identity(3)

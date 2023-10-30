@@ -4,6 +4,13 @@ from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
 from petsc4py import PETSc
 
+import os
+# # print(os.environ)
+os.environ['SCIPY_USE_PROPACK'] = "1"
+from scipy.sparse.linalg import svds
+import sparseqr
+from scipy.sparse import csr_matrix
+
 from dolfinx.plot import create_vtk_mesh
 import pyvista
 
@@ -127,7 +134,7 @@ class CrossSection:
         # dx = self.dx(mat_id[1])
         dx = self.dx      
         
-        C_mat = getMatConstitutive(self.material[mat_id[0]])
+        C_mat = getMatConstitutive(self.msh,self.material[mat_id[0]])
 
         #if an orthotropic material is used, the constructMatOrientation method
         #must be called prior to applying rotations
@@ -212,54 +219,58 @@ class CrossSection:
         #=============
 
         #========sparseqr approach ======#
-        import sparseqr
-        from scipy.sparse import csr_matrix
         # m,n1=self.A_mat.getSize()
         # Anp = self.A_mat.getValues(range(m),range(n1))
         print(self.A_mat.size)
         Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-        q1csr,r1csr,E,rank = sparseqr.qr(Acsr.transpose())
+        q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
+
         t4 = time.time()
         #=============
 
         #==========
         # # SCIPY PROPACK
         # import os
-        # # print(os.environ)
+        # # # print(os.environ)
         # os.environ['SCIPY_USE_PROPACK'] = "1"
         # from scipy.sparse.linalg import svds
         # from scipy.sparse import csr_matrix
-        # # m,n1=A.getSize()
-        # # Anp = A.getValues(range(m),range(n1))
-        # # Amat =as_backend_type(A.mat()
-        # # assert isinstance(A, PETSc.Mat)
-        # # ai,aj,av =self.A_mat.getValuesCSR()
-        # # Acsr = csr_matrix((av,ai,aj),A.size)
-        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        # m,n1=A.getSize()
+        # Anp = A.getValues(range(m),range(n1))
+        # Amat =as_backend_type(A.mat()
+        # assert isinstance(A, PETSc.Mat)
+        # ai,aj,av =self.A_mat.getValuesCSR()
+        # Acsr = csr_matrix((av,ai,aj),A.size)
+        Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
 
-        # # sols_sps= svds(Acsr,k=12,which='SM',maxiter=100,solver='lobpcg')
-        # sols_sps= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
+        # sols_sps= svds(Acsr,k=12,which='SM',maxiter=100,solver='lobpcg')
+        sols_sps= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
         t5 = time.time()
 
-        #==========
+        # self.A_mat.
 
-        print('numpy svd time:')
-        print(t1-t0)
-        print('numpy qr time:')
-        print(t2-t1)
-        print('numpy qr time:')
-        print(t3-t2)
-        print('numpy qr time:')
-        print(t4-t3)
-        print('scipy svds time:')
-        print(t5-t4)
+        #==========
+        if True:
+            print('numpy svd time:')
+            print(t1-t0)
+            print('numpy qr time:')
+            print(t2-t1)
+            print('numpy qr time:')
+            print(t3-t2)
+            print('sparse qr time:')
+            print(t4-t3)
+            print('scipy svds time:')
+            print(t5-t4)
 
         # A_mat_csr = self.A_mat.getValuesCSR()
         # print(A_mat_csr[0].shape)
         # print(A_mat_csr[1].shape)
         # print(A_mat_csr[2].shape)
 
-        self.sols = q1csr.toarray()[:,-12:]
+        #convert to dense (want to avoid)
+        self.sols = q1coo.toarray()[:,-12:]
+        print(q1coo.shape)
+        self.sols_sparse = q1coo.tocsc()[:,-12:]
 
         #======slepc iterative approach (conv issues)=======#
         # import slepc4py,sys

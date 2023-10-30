@@ -18,7 +18,7 @@ from FROOT_BAT import cross_section
 import tracemalloc
 tracemalloc.start()
 # Create 2d mesh and define function space
-N = 10
+N = 20
 W = .1
 H = .1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
@@ -42,8 +42,12 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
                         }
 
 square_xc = cross_section.CrossSection(domain,mats)
+import time
+t0=time.time()
 square_xc.getXCStiffnessMatrix()
-
+t1=time.time()
+print('XC stiffness matrix computation time:')
+print(t1-t0)
 snapshot = tracemalloc.take_snapshot()
 import os
 import linecache
