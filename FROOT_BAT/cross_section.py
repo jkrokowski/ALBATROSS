@@ -9,7 +9,7 @@ import os
 os.environ['SCIPY_USE_PROPACK'] = "1"
 from scipy.sparse.linalg import svds
 import sparseqr
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix,hstack
 
 from dolfinx.plot import create_vtk_mesh
 import pyvista
@@ -81,12 +81,16 @@ class CrossSection:
         self.vbar,self.vhat,self.vtilde,self.vbreve=split(self.v)
         
         #construct residual by looping through materials
+        print('Constructing Residual...')
         self.Residual = 0
         for mat_id in self.mat_ids:
             self.Residual += self.constructMatResidual(mat_id)
 
+        print('extracting nullspace....')
         self.getModes()
+        print('decoupling modes...')
         self.decoupleModes()
+        print('computing stiffness matrix')
         self.computeXCStiffnessMat()
         # PETSc.garbage_cleanup()
    
@@ -188,7 +192,8 @@ class CrossSection:
         
         return L1+L2+L3+L4
 
-    def getModes(self):   
+    def getModes(self):
+        print('assembling stiffesss matrix....')   
         self.A_mat = assemble_matrix(form(self.Residual))
         self.A_mat.assemble()
 
@@ -221,6 +226,7 @@ class CrossSection:
         #========sparseqr approach ======#
         # m,n1=self.A_mat.getSize()
         # Anp = self.A_mat.getValues(range(m),range(n1))
+        print('computing QR factorization')
         print(self.A_mat.size)
         Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
         q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
@@ -229,9 +235,10 @@ class CrossSection:
         #=============
 
         #==========
-        # # SCIPY PROPACK
+        #old code here vvv
+        # SCIPY PROPACK
         # import os
-        # # # print(os.environ)
+        # # print(os.environ)
         # os.environ['SCIPY_USE_PROPACK'] = "1"
         # from scipy.sparse.linalg import svds
         # from scipy.sparse import csr_matrix
@@ -241,14 +248,30 @@ class CrossSection:
         # assert isinstance(A, PETSc.Mat)
         # ai,aj,av =self.A_mat.getValuesCSR()
         # Acsr = csr_matrix((av,ai,aj),A.size)
-        Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-
         # sols_sps= svds(Acsr,k=12,which='SM',maxiter=100,solver='lobpcg')
-        sols_sps= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
+        # to here ^^^^^^
+
+        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        # sols_sps= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
         t5 = time.time()
 
         # self.A_mat.
 
+        # #========LU+ suitesparse qr approach ======#
+        # # m,n1=self.A_mat.getSize()
+        # # Anp = self.A_mat.getValues(range(m),range(n1))
+        # # q1,r1 = np.linalg.qr(Anp.T,mode='complete')
+        # print(self.A_mat.size)
+        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        # from scipy.sparse.linalg import splu
+        # from scipy.sparse import csc_matrix
+        # B = splu(Acsr.transpose())
+        # U = B.U
+        # Pc = csc_matrix((np.ones(B.perm_c.shape[0]), (np.arange(B.perm_c.shape[0]), B.perm_c)))
+        # q_lu_coo,r_lu_coo,E,rank = sparseqr.qr(U.transpose(),economy=True)
+        # nullspace = Pc.dot(q_lu_coo.transpose().tocsc()[:,-12:])
+        t6 = time.time()
+        #=============
         #==========
         if True:
             print('numpy svd time:')
@@ -261,6 +284,8 @@ class CrossSection:
             print(t4-t3)
             print('scipy svds time:')
             print(t5-t4)
+            print('lu + sparse qr time:')
+            print(t6-t5)
 
         # A_mat_csr = self.A_mat.getValuesCSR()
         # print(A_mat_csr[0].shape)
@@ -268,9 +293,15 @@ class CrossSection:
         # print(A_mat_csr[2].shape)
 
         #convert to dense (want to avoid)
-        self.sols = q1coo.toarray()[:,-12:]
-        print(q1coo.shape)
-        self.sols_sparse = q1coo.tocsc()[:,-12:]
+        print('making nullspace from null column vectors....')
+        self.sparse_sols = hstack([q1coo.getcol(i) for i in range(-12,0)])
+        self.sols = self.sparse_sols.toarray()
+        # self.sols = q1coo[:,-12:]
+
+        # self.sols = nullspace.toarray()
+        # self.sols = q_lu_coo.toarray()[:,-12:]
+        # print(q1coo.shape)
+        # self.sols_sparse = q1coo.tocsc()[:,-12:]
 
         #======slepc iterative approach (conv issues)=======#
         # import slepc4py,sys
@@ -296,7 +327,7 @@ class CrossSection:
         i,j,k,l=self.i,self.j,self.k,self.l
         a,B = self.a,self.B
 
-        #get maps of vertices to displacemnnt coefficients DOFs 
+        #get maps of vertices to displacement coefficients DOFs 
         self.ubar_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(0))
         self.uhat_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(1))
         self.utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
@@ -377,7 +408,9 @@ class CrossSection:
         ubar_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
         uhat_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
 
-        self.sols_decoup = self.sols@np.linalg.inv(mat)
+        self.sols_decoup = (self.sparse_sols.dot(csr_matrix(mat))).toarray()
+        # self.sols_decoup = self.sols@np.linalg.inv(mat)
+        print()
 
     def computeXCStiffnessMat(self):
         x = self.x
@@ -497,6 +530,7 @@ class CrossSection:
     def coeff_to_field(self,fxn,coeff,vtx_to_dof):
         #uses vtx_to_dof map to populate field with correct solution coefficients
         fxn.vector.array = coeff.flatten()[vtx_to_dof].flatten()
+        fxn.vector.destroy
 
     def map_disp_to_stress(self,ubar,uhat):
         i,j,k,l=self.i,self.j,self.k,self.l
