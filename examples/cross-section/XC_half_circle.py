@@ -2,7 +2,6 @@
 # ================
 
 from mpi4py import MPI
-import dolfinx.cpp.mesh
 from dolfinx import mesh,plot
 from dolfinx.fem import locate_dofs_topological,Constant,FunctionSpace,Function,form,assemble_scalar,VectorFunctionSpace,Expression,TensorFunctionSpace,locate_dofs_geometrical
 from dolfinx.fem.petsc import create_vector,assemble_matrix,assemble_vector
@@ -10,6 +9,7 @@ from ufl import (sym,FiniteElement,split,MixedElement,dot,lhs,rhs,Identity,inner
 from petsc4py import PETSc
 import pyvista
 import numpy as np
+from dolfinx.io import XDMFFile
 
 from dolfinx import geometry
 
@@ -18,11 +18,20 @@ from FROOT_BAT import cross_section
 import tracemalloc
 tracemalloc.start()
 # Create 2d mesh and define function space
-N = 20
+N = 5
 W = .1
 H = .1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+xcName = "half_cylinder"
+fileName = "output/"+ xcName + ".xdmf"
+with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
+    #mesh generation with meshio seems to have difficulty renaming the mesh name
+    # (but not the file, hence the "Grid" name property)
+    domain = xdmf.read_mesh(name="half_cylinder")
+    # ct = xdmf.read_meshtags(domain, name="Grid")   
+domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
+
 
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
@@ -37,7 +46,7 @@ if True:
           plotter.show()
 
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':10e6,'nu':0.2} ,
+                        'MECH_PROPS':{'E':100,'nu':0.2} ,
                         'DENSITY':2.7e-3}
                         }
 
@@ -77,5 +86,6 @@ if True:
         total = sum(stat.size for stat in top_stats)
         print("Total allocated size: %.1f KiB" % (total / 1024))
     display_top(snapshot)
-
+float_formatter= '{:.4e}'.format
+np.set_printoptions(formatter={'float_kind':float_formatter})
 print(square_xc.K)

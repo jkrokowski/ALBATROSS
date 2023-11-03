@@ -3,7 +3,7 @@ import scipy.io
 import os
 path = os.getcwd()
 print(path)
-mat = scipy.io.loadmat(path+'/PAV_xcs/PavCs1.mat')
+mat = scipy.io.loadmat(path+'/PAV_xcs/PavCs11.mat')
 
 elems = mat['vabs_2d_mesh_elements']
 nodes = mat['vabs_2d_mesh_nodes']
@@ -43,8 +43,8 @@ plotter.show()
 
 from FROOT_BAT.cross_section import CrossSection
 mats = {'Aluminum':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':7e10,'nu':0.33} ,
-                        'DENSITY':2.7e3}
+                        'MECH_PROPS':{'E':7.31e10,'nu':0.33} ,
+                        'DENSITY':2768}
                         }
 
 XC = CrossSection(domain,mats)
@@ -54,11 +54,33 @@ XC.getXCStiffnessMatrix()
 t1=time.time()
 #get vabs data:
 K_vabs = mat['cs_K']
+S_vabs = mat['cs_F']
 print("time to compute stiffness of xc:")
 print(t1-t0)
+float_formatter= '{:.4e}'.format
+np.set_printoptions(formatter={'float_kind':float_formatter})
 print("stiffness matrix from FROOTBAT:")
 print(XC.K)
 print("stiffness matrix from VABS:")
 print(K_vabs)
-print("difference between VABS and FROOTBAT")
+print("abs difference between VABS and FROOTBAT")
 print(XC.K-K_vabs)
+print('percentage difference between VABS and FROOT_BAT')
+float_formatter= '{:.1f}'.format
+np.set_printoptions(formatter={'float_kind':float_formatter})
+print(100*((XC.K-K_vabs)/K_vabs))
+
+print('------')
+
+float_formatter= '{:.4e}'.format
+np.set_printoptions(formatter={'float_kind':float_formatter})
+print("flexibility matrix from FROOTBAT:")
+print(XC.S)
+print("Flexibility matrix from VABS:")
+print(S_vabs)
+print("abs difference between VABS and FROOTBAT")
+print(XC.S-S_vabs)
+print('percentage difference between VABS and FROOT_BAT')
+float_formatter= '{:.1f}'.format
+np.set_printoptions(formatter={'float_kind':float_formatter})
+print(100*((XC.S-S_vabs)/S_vabs))

@@ -17,6 +17,10 @@ import pyvista
 from FROOT_BAT.material import *
 from FROOT_BAT.utils import get_vtx_to_dofs,get_pts_and_cells
 
+#TODO: find cross-sectional properties about the zero point
+#TODO: allow user to specify a point to find xc props about
+#TODO: provide a method to translate between different xc values
+
 class CrossSection:
     def __init__(self, msh, material ,celltags=None):
         #analysis domain
@@ -293,9 +297,18 @@ class CrossSection:
         # print(A_mat_csr[2].shape)
 
         #convert to dense (want to avoid)
-        print('making nullspace from null column vectors....')
-        self.sparse_sols = hstack([q1coo.getcol(i) for i in range(-12,0)])
+        # print('making nullspace from null column vectors....')
+        t7=time.time()
+        # self.sparse_sols = hstack([q1coo.getcol(i) for i in range(-12,0)])
+        cols = np.arange(-12,0)
+        self.sparse_sols = q1coo.tocsc()[:,cols]
+        t8=time.time()
         self.sols = self.sparse_sols.toarray()
+        t9=time.time()
+        print("extraction of sparse cols:")
+        print(t8-t7)
+        print("saving as dense:")
+        print(t9-t8)
         # self.sols = q1coo[:,-12:]
 
         # self.sols = nullspace.toarray()
@@ -366,10 +379,13 @@ class CrossSection:
             mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))/A
             
             #SECOND THREE ROWS : AVERAGE ROTATION (COMPUTED USING UBAR x Xi, WHERE X1=0, X2,XY=Y,Z)
-            mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0]-yavg)-ubar_mode[1]*(x[1]-zavg))*dx)))
-            mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]-zavg))*dx)))
-            mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]-yavg))*dx)))
+            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0]-yavg)-ubar_mode[1]*(x[1]-zavg))*dx)))
+            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]-zavg))*dx)))
+            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]-yavg))*dx)))
 
+            mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
+            mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))
+            mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))
             # CONSTRUCT STRESSES FOR LAST SIX ROWS
 
             #compute strains at x1=0
@@ -390,10 +406,12 @@ class CrossSection:
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
-            T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
-            M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
-            M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
-
+            # T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
+            # M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
+            # M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
+            T1 = assemble_scalar(form(((x[0])*sigma13 - (x[1])*sigma12)*dx))
+            M2 = assemble_scalar(form((x[1])*sigma11*dx))
+            M3 = assemble_scalar(form(-(x[0])*sigma11*dx))
             #THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
             mat[6,mode]=P1
             mat[7,mode]=V2
@@ -408,7 +426,7 @@ class CrossSection:
         ubar_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
         uhat_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
 
-        self.sols_decoup = (self.sparse_sols.dot(csr_matrix(mat))).toarray()
+        self.sols_decoup = (self.sparse_sols.dot(csr_matrix(np.linalg.inv(mat)))).toarray()
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
         print()
 
@@ -492,9 +510,13 @@ class CrossSection:
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
-            T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
-            M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
-            M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
+            # T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
+            # M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
+            # M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
+            T1 = assemble_scalar(form(((x[0])*sigma13 - (x[1])*sigma12)*dx))
+            M2 = assemble_scalar(form((x[1])*sigma11*dx))
+            M3 = assemble_scalar(form(-(x[0])*sigma11*dx))
+
 
             #assemble loads into load vector
             P = np.array([P1,V2,V3,T1,M2,M3])
@@ -514,6 +536,8 @@ class CrossSection:
                 K2[idx1,idx2] = Kxx
                 K2[idx2,idx1] = Kxx
 
+
+
         #see https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
         ubar_field.vector.destroy()     #need to add to prevent PETSc memory leak   
         uhat_field.vector.destroy()     #need to add to prevent PETSc memory leak 
@@ -521,8 +545,8 @@ class CrossSection:
         #compute Flexibility matrix
         self.K1_inv = np.linalg.inv(K1)
 
-        S = self.K1_inv.T@K2@self.K1_inv
-        self.K = np.linalg.inv(S)
+        self.S = self.K1_inv.T@K2@self.K1_inv
+        self.K = np.linalg.inv(self.S)
     
     def getXCMassMatrix(self):
         return

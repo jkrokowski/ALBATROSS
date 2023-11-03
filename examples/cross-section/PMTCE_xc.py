@@ -74,7 +74,7 @@ x = SpatialCoordinate(domain)
 n = FacetNormal(domain)
 
 #material parameters
-E = 100 #70e9
+E = 10e6 #70e9
 nu = 0.2
 _lam = (E*nu)/((1+nu)*(1-2*nu))
 mu = E/(2*(1+nu))
@@ -520,7 +520,10 @@ for idx,c in enumerate(Ctotal.T):
 K1_inv = np.linalg.inv(K1)
 
 S = K1_inv.T@K2@K1_inv
-print(S)
+# print(S)
+float_formatter= '{:.4e}'.format
+np.set_printoptions(formatter={'float_kind':float_formatter})
+print('stiffnes matrix:')
 print(np.linalg.inv(S))
 t1 = time.time()
 print(t1-t0)
