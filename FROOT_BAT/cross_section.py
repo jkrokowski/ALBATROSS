@@ -7,7 +7,7 @@ from petsc4py import PETSc
 import os
 # # print(os.environ)
 os.environ['SCIPY_USE_PROPACK'] = "1"
-from scipy.sparse.linalg import svds
+from scipy.sparse.linalg import svds,inv
 import sparseqr
 from scipy.sparse import csr_matrix,hstack
 
@@ -223,7 +223,7 @@ class CrossSection:
         #========numpy qr approach ======#
         # m,n1=self.A_mat.getSize()
         # Anp = self.A_mat.getValues(range(m),range(n1))
-        # q1,r1 = np.linalg.qr(Anp.T,mode='complete')
+        # q1,r1 = qr_gs_modsr(Anp.T)
         t3 = time.time()
         #=============
 
@@ -276,20 +276,29 @@ class CrossSection:
         # nullspace = Pc.dot(q_lu_coo.transpose().tocsc()[:,-12:])
         t6 = time.time()
         #=============
-        #==========
+        #========LU+ suitesparse qr approach ======#
+
+        from scipy import linalg
+        q,r = linalg.qr(Acsr.toarray())
+        t7=time.time()
+
+
+        
         if True:
             print('numpy svd time:')
             print(t1-t0)
             print('numpy qr time:')
             print(t2-t1)
-            print('numpy qr time:')
+            print('numpy gs_modsr qr time:')
             print(t3-t2)
             print('sparse qr time:')
             print(t4-t3)
             print('scipy svds time:')
             print(t5-t4)
-            print('lu + sparse qr time:')
             print(t6-t5)
+            print('scipy qr time:')
+            print(t7-t6)
+
 
         # A_mat_csr = self.A_mat.getValuesCSR()
         # print(A_mat_csr[0].shape)
@@ -426,7 +435,7 @@ class CrossSection:
         ubar_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
         uhat_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
 
-        self.sols_decoup = (self.sparse_sols.dot(csr_matrix(np.linalg.inv(mat)))).toarray()
+        self.sols_decoup = (self.sparse_sols.dot(inv(csr_matrix(mat)))).toarray()
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
         print()
 
@@ -648,3 +657,44 @@ class CrossSection:
 
         # if not pyvista.OFF_SCREEN:
         plotter.show()
+
+#from https://colab.research.google.com/github/QuantEcon/lecture-python.notebooks/blob/master/qr_decomp.ipynb
+# import numpy.linalg as lin
+# def qr_gs_modsr(A, type=complex):
+    
+#     A = np.array(A, dtype=type)
+    
+#     (m,n) = np.shape(A) # Get matrix A's shape m - # of rows, m - # of columns
+   
+#     # Q - an orthogonal matrix of m-column vectors
+#     # R - an upper triangular matrix (the Gaussian elimination of A to the row-echelon form)
+    
+#     # Initialization: [ Q - multivector Q = A of shape (m x n) ]
+#     #                 [ R - multivector of shape (n x n)       ]
+
+#     Q = np.array(A, dtype=type)      # Q - matrix A
+#     R = np.zeros((n, n), dtype=type) # R - matrix of 0's    
+
+#     # **** Objective: ****
+
+#     # For each column vector r[k] in R:
+#        # Compute r[k,i] element in R, k-th column q[k] in Q;
+
+#     for k in range(n):
+#         # For a span of the previous column vectors q[0..k] in Q, 
+#         # compute the R[i,k] element in R as the inner product of vectors q[i] and q[k],
+#         # compute k-th column vector q[k] as the product of scalar R[i,k] and i-th vector q[i],
+#         # subtracting it from the k-th column vector q[k] in Q
+#         for i in range(k):
+
+#             # **** Compute k-th column q[k] of Q and k-th row r[k] of R **** 
+#             R[i,k] = np.transpose(Q[:,i]).dot(Q[:,k])
+#             Q[:,k] = Q[:,k] - R[i,k] * Q[:,i]
+            
+#         # Compute the r[k,k] pseudo-diagonal element in R 
+#         # as the Euclidean norm of the k-th vector q[k] in Q,
+
+#         # Normalize the k-th vector q[k] in Q, dividing it by the norm r[k,k]
+#         R[k,k] = lin.norm(Q[:,k]); Q[:,k] = Q[:,k] / R[k,k]
+    
+#     return -Q, -R  # Return the resultant negative matrices Q and R

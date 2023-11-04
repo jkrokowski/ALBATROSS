@@ -12,11 +12,12 @@ import pyvista
 import numpy as np
 import matplotlib.pylab as plt
 import time
+from slepc4py import SLEPc
 
 from dolfinx import geometry
 t0 = time.time()
 # Create 2d mesh and define function space
-N = 5
+N = 23
 W = 1
 H = 1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
@@ -182,25 +183,42 @@ t1 = time.time()
 # # Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)
 # Prob.solve()
 # #========
-# Prob = slepc4py.SLEPc.SVD().create()
-# Prob.setOperators(A)
-# # Prob.setProblemType(slepc4py.SLEPc.SVD.ProblemType.STANDARD)
-# # Prob.setType(slepc4py.SLEPc.SVD.ProblemType.LAPACK)
-# Prob.setType("trlanczos")
-# Prob.setDimensions(3,PETSc.DECIDE,PETSc.DECIDE)
-# Prob.setWhichSingularTriplets(Prob.Which.LARGEST)
-# Prob.setTolerances(1e-8, 10000)
+Prob = SLEPc.SVD().create()
+Prob.setOperators(A)
+# Prob.setProblemType(slepc4py.SLEPc.SVD.ProblemType.STANDARD)
+# Prob.setType(slepc4py.SLEPc.SVD.ProblemType.LAPACK)
+Prob.setType("trlanczos")
+Prob.setDimensions(12,200,PETSc.DECIDE)
+Prob.setTRLanczosExplicitMatrix(False)
+Prob.setTRLanczosOneSide(True)
+Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)
+Prob.setTolerances(1e-8, 1000)
+Prob.setTRLanczosLocking(False)
 # Prob.setImplicitTranspose(True)
-# Prob.solve()
+Prob.setFromOptions()
+Prob.solve()     
 
-# print(Prob.getConverged())
+uvec = PETSc.Vec()
+uvec.create(comm=PETSc.COMM_WORLD)
+uvec.setSizes(12*(N+1)**2)
+uvec.setUp()
+# vvec = PETSc.Vec()
+# vvec.create(comm=PETSc.COMM_WORLD)
+
+# vvec = PETSc.Vec.create()
+print("square of %ix%i" % (N,N))
+print(Prob.getConverged())
+print(Prob.getIterationNumber())
+Prob.getSingularTriplet(0,uvec)
 # nconv = Prob.getConverged()
 # niters = Prob.getIterationNumber()
 # print("Number of eigenvalues successfully computed: ", nconv)
 # print("Iterations used", niters)
 # #========
 t2 = time.time()
-
+print("SLEPc time:")
+print(t2-t1)
+print()
 # nullspace = null_space(Anp)
 # print(nullspace.shape)
 # print("stiffness matrix:")
