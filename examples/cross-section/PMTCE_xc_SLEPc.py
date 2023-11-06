@@ -10,14 +10,14 @@ from ufl import (sym,FiniteElement,split,MixedElement,dot,lhs,rhs,Identity,inner
 from petsc4py import PETSc
 import pyvista
 import numpy as np
-import matplotlib.pylab as plt
+# import matplotlib.pylab as plt
 import time
 from slepc4py import SLEPc
 
 from dolfinx import geometry
 t0 = time.time()
 # Create 2d mesh and define function space
-N = 23
+N = 2
 W = 1
 H = 1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
@@ -188,7 +188,7 @@ Prob.setOperators(A)
 # Prob.setProblemType(slepc4py.SLEPc.SVD.ProblemType.STANDARD)
 # Prob.setType(slepc4py.SLEPc.SVD.ProblemType.LAPACK)
 Prob.setType("trlanczos")
-Prob.setDimensions(12,200,PETSc.DECIDE)
+Prob.setDimensions(12,500,PETSc.DECIDE)
 Prob.setTRLanczosExplicitMatrix(False)
 Prob.setTRLanczosOneSide(True)
 Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)

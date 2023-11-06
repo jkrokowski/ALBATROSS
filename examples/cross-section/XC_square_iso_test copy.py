@@ -14,10 +14,10 @@ from dolfinx import geometry
 
 from FROOT_BAT import cross_section
 
-import tracemalloc
-tracemalloc.start()
+# import tracemalloc
+# tracemalloc.start()
 # Create 2d mesh and define function space
-N = 10
+N = 2
 W = .1
 H = .1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)

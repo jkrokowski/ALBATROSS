@@ -203,6 +203,7 @@ class CrossSection:
 
         import time
         #====numpy svd approach=====#
+        #this is clearly one of the worst options at large scales
         t0 = time.time()
         # m1,n1=self.A_mat.getSize()
         # Anp = self.A_mat.getValues(range(m1),range(n1))
@@ -213,6 +214,7 @@ class CrossSection:
         #===========
 
         #========numpy qr approach ======#
+        #faster, but still bad
         # m,n1=self.A_mat.getSize()
         # Anp = self.A_mat.getValues(range(m),range(n1))
         # q,r = np.linalg.qr(Anp,mode='complete')
@@ -221,6 +223,7 @@ class CrossSection:
         #=============
 
         #========numpy qr approach ======#
+        #gram schmidt variant, still dense and slow and bad
         # m,n1=self.A_mat.getSize()
         # Anp = self.A_mat.getValues(range(m),range(n1))
         # q1,r1 = qr_gs_modsr(Anp.T)
@@ -228,6 +231,7 @@ class CrossSection:
         #=============
 
         #========sparseqr approach ======#
+        #very very fast, but memory intensive
         # m,n1=self.A_mat.getSize()
         # Anp = self.A_mat.getValues(range(m),range(n1))
         print('computing QR factorization')
@@ -239,21 +243,8 @@ class CrossSection:
         #=============
 
         #==========
-        #old code here vvv
-        # SCIPY PROPACK
-        # import os
-        # # print(os.environ)
-        # os.environ['SCIPY_USE_PROPACK'] = "1"
-        # from scipy.sparse.linalg import svds
-        # from scipy.sparse import csr_matrix
-        # m,n1=A.getSize()
-        # Anp = A.getValues(range(m),range(n1))
-        # Amat =as_backend_type(A.mat()
-        # assert isinstance(A, PETSc.Mat)
-        # ai,aj,av =self.A_mat.getValuesCSR()
-        # Acsr = csr_matrix((av,ai,aj),A.size)
-        # sols_sps= svds(Acsr,k=12,which='SM',maxiter=100,solver='lobpcg')
-        # to here ^^^^^^
+        #scipy sparse svd, slow, but seems to work okay
+        #still
 
         # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
         # sols_sps= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
@@ -276,10 +267,9 @@ class CrossSection:
         # nullspace = Pc.dot(q_lu_coo.transpose().tocsc()[:,-12:])
         t6 = time.time()
         #=============
-        #========LU+ suitesparse qr approach ======#
-
-        from scipy import linalg
-        q,r = linalg.qr(Acsr.toarray())
+        #========SLEPc approach ======#
+        #not super fast, but seems to work as long as the subspace utilized is large enough
+        
         t7=time.time()
 
 
