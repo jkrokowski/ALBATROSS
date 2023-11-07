@@ -62,9 +62,9 @@ class LocalAssembler():
                ffi_fb(facet_index), ffi_fb(facet_perm))
         return lil_matrix(A_local)
 
-def get_nullspace(domain,form):
+def get_nullspace(domain,ufl_form):
     #build list of element matrices using custom local assembler
-    A_list = get_element_matrices(domain,form)
+    A_list = get_element_matrices(domain,ufl_form)
 
     #extract element connectivity from dolfin mesh object
     G = get_rigidity_graph(domain)
@@ -73,8 +73,10 @@ def get_nullspace(domain,form):
     # T = compute_spanning_tree(G)
     V = get_node_to_el_map(domain)
 
+    A = assemble_stiffness_matrix(ufl_form)
+
     #compute the fretsaw extension (returns a sparse matrix)
-    F = compute_fretsaw_extension(A_list,G,V)
+    F = compute_fretsaw_extension(A,G,V)
 
     #compute the LU factorization of the fretsaw extension
 
@@ -86,15 +88,26 @@ def compute_fretsaw_extension(A,G,V):
     '''
     method developed from psuedocode of Shklarski and toledo (2008) Rigidity in FE matrices, Algoithm 1
     
-    A: collection of local stiffness matrices of (n x n) shape in scipy sparse matrix format ordered 
+    A: assembled global stiffness matrix of shape (n x n)
+    
+    collection of local stiffness matrices of (n x n) shape in scipy sparse matrix format ordered 
         by the cell number with total number of cells k
         ^this is actually not true, A can simply be the assembled global stiffness matrix and we can
         compute the fretsaw extension by F(A) = Q@A@Q^T
-    G: rigidity graph for the mesh connecting elements
+
+        it would be much more practical to pass the full stiffness matrix and along with a key to 
+        the ordering of the dofs, then build the extension matrix
+
+    G: rigidity graph for the mesh which connects elements to element
+    
+    V: the node to element connectivity
+
+    ???: need a data structure that maps the mesh rigidity graph to the stiffness matrix entries
+         this is done with get_vtx_to_dofs, maybe?
     '''
     
     T = compute_spanning_tree(G)
-    (n,_) = A[0].get_shape()
+    (n,_) = A.get_shape()
     k = len(A)
     r = n
 
@@ -220,3 +233,9 @@ def get_node_to_el_map(domain):
     for i in range(nod_to_el.num_nodes):
         V[i]=nod_to_el.links(i)
     return V 
+
+def assemble_stiffness_matrix(ufl_form):
+    #returns a scipy csr_matrix
+    A_mat = fem.assemble_matrix(fem.form(ufl_form))
+    A_mat.assemble()
+    return csr_matrix(A_mat.getValuesCSR()[::-1], shape=A_mat.size)
