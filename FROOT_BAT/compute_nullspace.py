@@ -2,7 +2,7 @@ import cffi
 from petsc4py.PETSc import ScalarType
 from dolfinx import fem
 import numpy as np
-from scipy.sparse import lil_matrix
+from scipy.sparse import lil_matrix,csgraph,csr_matrix
 
 
 class LocalAssembler():
@@ -69,8 +69,12 @@ def get_nullspace(domain,form):
     #extract element connectivity from dolfin mesh object
     G = get_rigidity_graph(domain)
 
+    # #get a minimum spanning tree from the graph representation
+    # T = compute_spanning_tree(G)
+    V = get_node_to_el_map(domain)
+
     #compute the fretsaw extension (returns a sparse matrix)
-    F = compute_fretsaw_extension(A_list,G)
+    F = compute_fretsaw_extension(A_list,G,V)
 
     #compute the LU factorization of the fretsaw extension
 
@@ -78,21 +82,70 @@ def get_nullspace(domain,form):
 
     #restrict to first n factors and orthogonalize
 
-def compute_fretsaw_extension(A,G):
+def compute_fretsaw_extension(A,G,V):
     '''
     method developed from psuedocode of Shklarski and toledo (2008) Rigidity in FE matrices, Algoithm 1
-    A: collection of local stiffness matrices
-    G: rigidity graph for the mesh
+    
+    A: collection of local stiffness matrices of (n x n) shape in scipy sparse matrix format ordered 
+        by the cell number with total number of cells k
+        ^this is actually not true, A can simply be the assembled global stiffness matrix and we can
+        compute the fretsaw extension by F(A) = Q@A@Q^T
+    G: rigidity graph for the mesh connecting elements
     '''
     
+    T = compute_spanning_tree(G)
+    (n,_) = A[0].get_shape()
+    k = len(A)
+    r = n
 
-    #compute fretsaw-forest factorization
+    #initialize empty Q(i) matrices (k total matrices)
+    #these will be trimmed later
+    Q_list = [lil_matrix((n*k,n)) for i in range(k)]
 
-    #compute LU factorization with partial pivoting
 
-    #compute nullspace using subspace inverse iteration
+    for j in range(n):
+        #initialize to the identity matrix
+        # for Q in Q_list:
+        #     Q[0,j] = 1  
+        Q_list[0][j,j]=1
+        #find all elements connected to node j and build "connectivity components"
+        #connectivity components are all the portions of the spanning tree T that 
+        # have elements connected to node j 
+        
+        #indices of the elements that are connected to the j-th node:
+        idx = V[j]
+        
+        #get the subgraph induced by the elements incident on the j-th node
+        Gj=T[idx,:].tocsc()[:,idx]
 
-    #restrict nullspace to first n coordinates and orthogonalize
+        #get the number of connected components and their labels:
+        n_comp,labels = csgraph.connected_components(Gj)
+
+        #get the connectivity components of the subgraph Gj
+        Gcj = []
+
+        #====
+        #populate connectivity components
+        #=====
+
+        # for each connectivity component, modify the entries of the 
+        # appropriate extension matrices:
+        for p in range(n_comp):
+            if p==0:
+                #set j-th col of Qp to ej
+                print()
+            else:
+                r += 1
+                # for all element matrices in V
+                    # set the j-th column of Qp to e_r (e.g. a 1 in the r-th )
+
+        #for each extension matrix:
+        for Q in Q_list:
+            if Q[:,j]
+        
+
+                
+
 
     return
 
@@ -103,9 +156,9 @@ def compute_nullspace(F):
     returns:
     basis for nullspace of the matrix A and F(A)
     '''
+    
 
-
-def get_rigidity_graph(domain):
+def get_rigidity_graph(domain,direction='directed'):
     ''''
     returns the ridigity graph structure for a 2d mesh
     needs the mesh from which the edge to cell connectivity can be created
@@ -115,17 +168,18 @@ def get_rigidity_graph(domain):
     #create connectivity (edge=1,cell=2)
     domain.topology.create_connectivity(1,2)
     #create dolfinx adjacency list
-    e_to_f = domain.topology.connectivity(1,2)
+    ed_to_el = domain.topology.connectivity(1,2)
 
     #initialize a sparse adjacency matrix
     num_el = len(domain.geometry.dofmap)
+
+    #initialize sparse matrix
     G = lil_matrix((num_el,num_el),dtype=np.int8)
-    # G = np.zeros((e_to_f.num_nodes,e_to_f.num_nodes))
-    for i in range(e_to_f.num_nodes):
-        link = e_to_f.links(i)
-        if len(e_to_f.links(i)) == 2: 
+    for i in range(ed_to_el.num_nodes):
+        link = ed_to_el.links(i)
+        if len(ed_to_el.links(i)) == 2: 
             #add edge to graph (symmetric b/c undirected)
-            G[link[0],link[1]] = 1
+            G[link[0],link[1]] = 1 
         else:
             continue    
 
@@ -133,20 +187,36 @@ def get_rigidity_graph(domain):
     # lower triangular entries with G += G.T, but it is more memory efficient
     # to only store the entries above the diagonal
 
+    # to return the bidirectional (symmetric) graph, uncomment the line below:
+    # G += G.T
+
     return G
 
 def compute_spanning_tree(G):
     '''
     return a spanning tree T from a rigidity graph
     '''
+    T = csgraph.minimum_spanning_tree(G)
 
-    return
+    return T
 
 def get_element_matrices(domain,form):
+    ''' returns a list of scipy sparse matrices
+    However, should this be a dictionary with the key being the cell number?
+    This would allow for subdomain analysis'''
     assembler = LocalAssembler(form)
-    A_list = []
+    A_list = {}
     for i in range(domain.topology.index_map(domain.topology.dim).size_local):
-        A_list.append(assembler.assemble_matrix(i))
+        A_list[i]= assembler.assemble_matrix(i)
     
     return A_list
-    
+
+def get_node_to_el_map(domain):
+    #create connectivity (edge=1,cell=2)
+    domain.topology.create_connectivity(0,2)
+    #create dolfinx adjacency list
+    nod_to_el = domain.topology.connectivity(0,2)
+    V = {}
+    for i in range(nod_to_el.num_nodes):
+        V[i]=nod_to_el.links(i)
+    return V 

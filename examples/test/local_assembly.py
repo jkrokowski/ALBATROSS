@@ -87,3 +87,18 @@ A_full = fem.petsc.assemble_matrix(fem.form(inner(grad(u), grad(v)) *dx))
 A_full.assemble()
 # A_full = A.getValues()
 print()
+
+def get_element_matrices(domain,form):
+    ''' returns a list of scipy sparse matrices
+    However, should this be a dictionary with the key being the cell number?
+    This would allow for subdomain analysis'''
+    assembler = LocalAssembler(form)
+    A_list = {}
+    for i in range(domain.topology.index_map(domain.topology.dim).size_local):
+        A_list[i]= assembler.assemble_matrix(i)
+    
+    return A_list
+
+A_list = get_element_matrices(msh,fem.form(inner(grad(u), grad(v)) *dx))
+
+print()
