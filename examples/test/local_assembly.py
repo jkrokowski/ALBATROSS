@@ -6,6 +6,8 @@ from ufl import ds, dx, grad, inner
 from dolfinx import fem, io, mesh, plot
 import cffi
 
+from FROOT_BAT.utils import get_vtx_to_dofs
+
 class LocalAssembler():
     def __init__(self, form):
         self.form = fem.form(form)
@@ -63,16 +65,39 @@ class LocalAssembler():
                ffi_fb(facet_index), ffi_fb(facet_perm))
         return A_local
 
-msh = mesh.create_box(MPI.COMM_WORLD, [np.array([0.0, 0.0, 0.0]),
-                                  np.array([2.0, 1.0, 1.0])], [3, 3, 3],
-                 mesh.CellType.tetrahedron)
-
-V = fem.FunctionSpace(msh, ("Lagrange", 1))
+# msh = mesh.create_box(MPI.COMM_WORLD, [np.array([0.0, 0.0, 0.0]),
+#                                   np.array([2.0, 1.0, 1.0])], [3, 3, 3],
+#                  mesh.CellType.tetrahedron)
+N = 2
+W = .1
+H = .5
+msh = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+# V = fem.FunctionSpace(msh, ("Lagrange", 1))
+# V = fem.VectorFunctionSpace(msh, ("Lagrange", 1),dim=2)
+Ve = ufl.VectorElement("CG",msh.ufl_cell(),1,dim=3)
+V = fem.FunctionSpace(msh, ufl.MixedElement(4*[Ve]))
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
+def get_node_to_G_map(domain,fxn_space):
+    #gets the stiffness matrix indices for each node corresponding
+    #to each function in a vector element/mixed space
 
+    #this map assists with constructing a consistent extension
+    subspace_dof_maps = []
+    for space in range(fxn_space.num_sub_spaces):
+        subspace_dof_maps.append(get_vtx_to_dofs(domain,fxn_space.sub(space)))
+    #assemble into a matrix where columns correspond to each fxn component and
+    # rows correspond to nodes
+    dof_to_G = np.hstack(subspace_dof_maps)
+        # to get out set of indices used to restrict the global indices of the 
+        # stiffness matrix to the relevant indices for fxn select a column of 
+        # dof_to_G  (e.g. G[i,:] will be a (num_nodes,) 1d np array)
+    return dof_to_G
+
+dof_to_G = get_node_to_G_map(msh,V)
 assembler = LocalAssembler(inner(grad(u), grad(v)) *dx)
+# assembler = LocalAssembler(inner(grad(u[0]), grad(v[0])) *dx +inner(20*grad(u[1]), grad(v[1])) *dx)
 
 for cell in range(msh.topology.index_map(msh.topology.dim).size_local):
     # if cell == 2:

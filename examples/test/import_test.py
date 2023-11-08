@@ -108,6 +108,18 @@ def get_nod_to_el_map(domain):
     return V 
 
 V = get_nod_to_el_map(domain)
+for i in range(len(V)):
+    ele = V[i]
+    print(0 in ele)
+    Gj=T[ele,:].tocsc()[:,ele]
+
+    #get the number of connected components and their labels:
+    n_comp,labels = csgraph.connected_components(Gj)
+    #get list of indices for selecting elements in each connectivity component
+    idx=[np.where(labels==i) for i in range(n_comp)]
+    Gcj = [ele[idx[i]] for i in range(n_comp)]
+    print()
+
 
 
 print()

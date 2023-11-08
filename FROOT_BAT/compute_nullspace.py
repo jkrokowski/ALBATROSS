@@ -3,7 +3,7 @@ from petsc4py.PETSc import ScalarType
 from dolfinx import fem
 import numpy as np
 from scipy.sparse import lil_matrix,csgraph,csr_matrix
-
+from FROOT_BAT.utils import get_vtx_to_dofs
 
 class LocalAssembler():
     def __init__(self, form):
@@ -64,19 +64,30 @@ class LocalAssembler():
 
 def get_nullspace(domain,ufl_form):
     #build list of element matrices using custom local assembler
-    A_list = get_element_matrices(domain,ufl_form)
+    Ae = get_element_matrices(domain,ufl_form)
+
+    # get local to global index map
+    Ie = get_local_to_global()
+
+    # # constructs global stiffness matrix
+    # A = assemble_stiffness_matrix(ufl_form)
 
     #extract element connectivity from dolfin mesh object
     G = get_rigidity_graph(domain)
 
-    # #get a minimum spanning tree from the graph representation
-    # T = compute_spanning_tree(G)
+    #get which elements are connected to each node
     V = get_node_to_el_map(domain)
-
-    A = assemble_stiffness_matrix(ufl_form)
+    
+    # for formulations involving natural groupings of indices, get the
+    # relationship between the mesh rigidity and the dof grouping
+    #   -allows for a "consistent" extension in the fretsaw construction
+    #   -this involves making 'cuts' between the same elements for 
+    #    different vector/function directions e.g for 2D linear elasticity,
+    #    severing the same connections between x- and y-directions 
+    get_node_to_G_map(domain,fxn_space)
 
     #compute the fretsaw extension (returns a sparse matrix)
-    F = compute_fretsaw_extension(A,G,V)
+    F = compute_fretsaw_extension(Ae,Ie,G,V)
 
     #compute the LU factorization of the fretsaw extension
 
@@ -84,81 +95,91 @@ def get_nullspace(domain,ufl_form):
 
     #restrict to first n factors and orthogonalize
 
-def compute_fretsaw_extension(A,G,V):
+def compute_fretsaw_extension(Ae,Ie,G,V):
     '''
-    method developed from psuedocode of Shklarski and toledo (2008) Rigidity in FE matrices, Algoithm 1
+    method developed from psuedocode of Shklarski and toledo (2008) Rigidity in FE matrices, Algorithm 1
     
-    A: assembled global stiffness matrix of shape (n x n)
+    Ae: list of length (num_elements) of assembled local stiffness matrices of shape (n x n)
     
-    collection of local stiffness matrices of (n x n) shape in scipy sparse matrix format ordered 
-        by the cell number with total number of cells k
-        ^this is actually not true, A can simply be the assembled global stiffness matrix and we can
-        compute the fretsaw extension by F(A) = Q@A@Q^T
+    Ie: list of length (num_elements) of vectors of (num_element_indices) linking global indices to 
+        local stiffness matrix element indices
 
-        it would be much more practical to pass the full stiffness matrix and along with a key to 
-        the ordering of the dofs, then build the extension matrix
+        Question: is it possible that A can simply be the assembled global stiffness matrix and we can
+        compute the fretsaw extension by F(A) = Q@A@Q^T . It may be easier to pass the full stiffness 
+        matrix and along with a key to the ordering of the dofs, then build the extension matrix
 
-    G: rigidity graph for the mesh which connects elements to element
+    G: rigidity graph for the mesh detailing element to element connections
     
-    V: the node to element connectivity
-
-    ???: need a data structure that maps the mesh rigidity graph to the stiffness matrix entries
-         this is done with get_vtx_to_dofs, maybe?
+    V: node to element connectivity (provided for easy subgraph detection)
     '''
     
-    T = compute_spanning_tree(G)
-    (n,_) = A.get_shape()
-    k = len(A)
+    #TODO: need to modify this algorithm to handle the 12dim vector construction
+
+    #get number of indices for each local stiffness matrix
+    (ne,_) = Ae[0].get_shape()
+    #get number of elements
+    n = G.shape
+    #get number of local stiffness matrices
+    k = len(Ae)
+    #initialize last non-zero row of the extension matrices
     r = n
 
-    #initialize empty Q(i) matrices (k total matrices)
-    #these will be trimmed later
-    Q_list = [lil_matrix((n*k,n)) for i in range(k)]
-
+    T = compute_spanning_tree(G)
+    
+    #initialize extension matrices (k total matrices)
+    #these will be trimmed later using the final resultant r value
+    Qe = [lil_matrix((n*k,n)) for i in range(k)]
 
     for j in range(n):
         #initialize to the identity matrix
-        # for Q in Q_list:
-        #     Q[0,j] = 1  
-        Q_list[0][j,j]=1
+        #note that setting the j-th column of Qp to ej is equivalent to Qp[j,j]=1
+        Qe[0][j,j]=1
+
         #find all elements connected to node j and build "connectivity components"
         #connectivity components are all the portions of the spanning tree T that 
         # have elements connected to node j 
         
         #indices of the elements that are connected to the j-th node:
-        idx = V[j]
+        ele = V[j]
         
         #get the subgraph induced by the elements incident on the j-th node
-        Gj=T[idx,:].tocsc()[:,idx]
+        Gj=T[ele,:].tocsc()[:,ele]
 
         #get the number of connected components and their labels:
         n_comp,labels = csgraph.connected_components(Gj)
 
+        #get list of indices for selecting elements in each connectivity component
+        idx=[np.where(labels==i) for i in range(n_comp)]
+
         #get the connectivity components of the subgraph Gj
-        Gcj = []
+        Gcj = [ele[idx[i]] for i in range(n_comp)]
 
-        #====
-        #populate connectivity components
-        #=====
+        if 0 in ele:
+            #TODO: reorder Gcj to have Ae[0] in Gcj[0]
+            print("need to make sure Ae[0] is here")
+            
+        #reorder to make sure "master element" is always in the first connectivity component
+        #set the j-th column of Qp to ej for all elements in G0j
+        for p in Gcj[0]:
+            #zero out the j-th column and eliminate zeros
+            nonzeros = Qe[p][:,j].nonzero()[0]
+            Qe[p][nonzeros,j] = np.zeros_like(nonzeros)
+            #assign ej to column j
+            Qe[p][j,j] = 1
 
-        # for each connectivity component, modify the entries of the 
-        # appropriate extension matrices:
-        for p in range(n_comp):
-            if p==0:
-                #set j-th col of Qp to ej
-                print()
-            else:
-                r += 1
-                # for all element matrices in V
-                    # set the j-th column of Qp to e_r (e.g. a 1 in the r-th )
-
-        #for each extension matrix:
-        for Q in Q_list:
-            if Q[:,j]
-        
-
-                
-
+        # for each connectivity component after the first one, modify the
+        # entries of the appropriate extension matrices:
+        for i in range(1,n_comp):
+            #increment last non-zero row tracker
+            r += 1
+            #for all the elements in Gcj[p], set the j-th column of Qp to er
+            for p in Gcj[i]:
+                # set the j-th column of Qp to e_r (e.g. a 1 in the r-th )
+                Qe[p][r,j] = 1
+        #for each extension matrix 
+        for Q in Qe:
+            #if ej is not in the nonzero colums of Ai, then set Qi to ej
+            print()
 
     return
 
@@ -239,3 +260,19 @@ def assemble_stiffness_matrix(ufl_form):
     A_mat = fem.assemble_matrix(fem.form(ufl_form))
     A_mat.assemble()
     return csr_matrix(A_mat.getValuesCSR()[::-1], shape=A_mat.size)
+
+def get_node_to_G_map(domain,fxn_space):
+    #gets the stiffness matrix indices for each node corresponding
+    #to each function in a vector element/mixed space
+
+    #this map assists with constructing a consistent extension
+    subspace_dof_maps = []
+    for space in range(fxn_space.num_sub_spaces):
+        subspace_dof_maps.append(get_vtx_to_dofs(domain,fxn_space.sub(space)))
+    #assemble into a matrix where columns correspond to each fxn component and
+    # rows correspond to nodes
+    dof_to_G = np.hstack(subspace_dof_maps)
+        # to get out set of indices used to restrict the global indices of the 
+        # stiffness matrix to the relevant indices for fxn select a column of 
+        # dof_to_G  (e.g. G[i,:] will be a (num_nodes,) 1d np array)
+    return dof_to_G
