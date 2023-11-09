@@ -63,22 +63,34 @@ class LocalAssembler():
         ffi_fb = self.ffi.from_buffer
         self.kernel(ffi_fb(A_local), ffi_fb(coeffs), ffi_fb(self.consts), ffi_fb(geometry),
                ffi_fb(facet_index), ffi_fb(facet_perm))
-        return A_local
+        return A_local,x_dofs
 
-# msh = mesh.create_box(MPI.COMM_WORLD, [np.array([0.0, 0.0, 0.0]),
-#                                   np.array([2.0, 1.0, 1.0])], [3, 3, 3],
-#                  mesh.CellType.tetrahedron)
-N = 2
-W = .1
-H = .5
-msh = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-# V = fem.FunctionSpace(msh, ("Lagrange", 1))
-# V = fem.VectorFunctionSpace(msh, ("Lagrange", 1),dim=2)
-Ve = ufl.VectorElement("CG",msh.ufl_cell(),1,dim=3)
-V = fem.FunctionSpace(msh, ufl.MixedElement(4*[Ve]))
+MESH_DIM = 2
+FXN_SPACE_DIM = 1
+
+if MESH_DIM==1:
+    msh = mesh.create_interval(MPI.COMM_WORLD,2,[0,1])
+if MESH_DIM==2:
+    N = 3
+    W = .1
+    H = .5
+    msh = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+if MESH_DIM==3:
+    msh = mesh.create_box(MPI.COMM_WORLD, [np.array([0.0, 0.0, 0.0]),
+                                      np.array([2.0, 1.0, 1.0])], [3, 3, 3],
+                                        mesh.CellType.tetrahedron)
+if FXN_SPACE_DIM==1:
+    V = fem.FunctionSpace(msh, ("Lagrange", 1))
+if FXN_SPACE_DIM==3:
+    V = fem.VectorFunctionSpace(msh, ("Lagrange", 1),dim=3)
+if FXN_SPACE_DIM==12:
+    Ve = ufl.VectorElement("CG",msh.ufl_cell(),1,dim=3)
+    V = fem.FunctionSpace(msh, ufl.MixedElement(4*[Ve]))
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
+
+ufl_form = inner(grad(u), grad(v)) *dx
 def get_node_to_G_map(domain,fxn_space):
     #gets the stiffness matrix indices for each node corresponding
     #to each function in a vector element/mixed space
@@ -95,20 +107,20 @@ def get_node_to_G_map(domain,fxn_space):
         # dof_to_G  (e.g. G[i,:] will be a (num_nodes,) 1d np array)
     return dof_to_G
 
-dof_to_G = get_node_to_G_map(msh,V)
-assembler = LocalAssembler(inner(grad(u), grad(v)) *dx)
-# assembler = LocalAssembler(inner(grad(u[0]), grad(v[0])) *dx +inner(20*grad(u[1]), grad(v[1])) *dx)
+# dof_to_G = get_node_to_G_map(msh,V)
+# assembler = LocalAssembler(inner(grad(u), grad(v)) *dx)
+# # assembler = LocalAssembler(inner(grad(u[0]), grad(v[0])) *dx +inner(20*grad(u[1]), grad(v[1])) *dx)
 
-for cell in range(msh.topology.index_map(msh.topology.dim).size_local):
-    # if cell == 2:
-    #     A = assembler.assemble_matrix(cell)
-    #     print(A)
-    A = assembler.assemble_matrix(cell)
-    print('Local Stiffness matrix #%i' % cell)
-    print(A)
+# for cell in range(msh.topology.index_map(msh.topology.dim).size_local):
+#     # if cell == 2:
+#     #     A = assembler.assemble_matrix(cell)
+#     #     print(A)
+#     A = assembler.assemble_matrix(cell)
+#     print('Local Stiffness matrix #%i' % cell)
+#     print(A)
 
 #versus the process for global assembly:
-A_full = fem.petsc.assemble_matrix(fem.form(inner(grad(u), grad(v)) *dx))
+A_full = fem.petsc.assemble_matrix(fem.form(ufl_form))
 A_full.assemble()
 # A_full = A.getValues()
 print()
@@ -119,11 +131,17 @@ def get_element_matrices(domain,form):
     This would allow for subdomain analysis'''
     assembler = LocalAssembler(form)
     A_list = {}
+    x_dofs = {}
     for i in range(domain.topology.index_map(domain.topology.dim).size_local):
-        A_list[i]= assembler.assemble_matrix(i)
+        A_list[i],x_dofs[i]= assembler.assemble_matrix(i)
     
-    return A_list
+    return A_list,x_dofs
 
-A_list = get_element_matrices(msh,fem.form(inner(grad(u), grad(v)) *dx))
+A_list,dofs = get_element_matrices(msh,fem.form(ufl_form))
 
+A_full_np =  A_full.getValues(range(A_full.getSize()[0]),range(A_full.getSize()[1]))
+
+print('number of dofs per element:')
+num_ele_dofs=V.dofmap.dof_layout.num_dofs*V.dofmap.dof_layout.block_size
+print(num_ele_dofs)
 print()

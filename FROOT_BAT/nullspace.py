@@ -1,9 +1,12 @@
 import cffi
 from petsc4py.PETSc import ScalarType
-from dolfinx import fem
+from dolfinx import fem,mesh
 import numpy as np
 from scipy.sparse import lil_matrix,csgraph,csr_matrix
 from FROOT_BAT.utils import get_vtx_to_dofs
+import ufl
+from mpi4py import MPI
+
 
 class LocalAssembler():
     def __init__(self, form):
@@ -62,12 +65,20 @@ class LocalAssembler():
                ffi_fb(facet_index), ffi_fb(facet_perm))
         return lil_matrix(A_local)
 
-def get_nullspace(domain,ufl_form):
+def get_nullspace(domain,ufl_form,fxn_space):
     #build list of element matrices using custom local assembler
     Ae = get_element_matrices(domain,ufl_form)
 
+    # for formulations involving natural groupings of indices, get the
+    # relationship between the mesh rigidity and the dof grouping
+    #   -allows for a "consistent" extension in the fretsaw construction
+    #   -this involves making 'cuts' between the same elements for 
+    #    different vector/function directions e.g for 2D linear elasticity,
+    #    severing the same connections between x- and y-directions 
+    dof_to_G = get_node_to_G_map(domain,fxn_space)
+
     # get local to global index map
-    Ie = get_local_to_global()
+    Ie = get_local_to_global(dof_to_G,fxn_space)
 
     # # constructs global stiffness matrix
     # A = assemble_stiffness_matrix(ufl_form)
@@ -78,14 +89,6 @@ def get_nullspace(domain,ufl_form):
     #get which elements are connected to each node
     V = get_node_to_el_map(domain)
     
-    # for formulations involving natural groupings of indices, get the
-    # relationship between the mesh rigidity and the dof grouping
-    #   -allows for a "consistent" extension in the fretsaw construction
-    #   -this involves making 'cuts' between the same elements for 
-    #    different vector/function directions e.g for 2D linear elasticity,
-    #    severing the same connections between x- and y-directions 
-    get_node_to_G_map(domain,fxn_space)
-
     #compute the fretsaw extension (returns a sparse matrix)
     F = compute_fretsaw_extension(Ae,Ie,G,V)
 
@@ -104,21 +107,19 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
     Ie: list of length (num_elements) of vectors of (num_element_indices) linking global indices to 
         local stiffness matrix element indices
 
-        Question: is it possible that A can simply be the assembled global stiffness matrix and we can
-        compute the fretsaw extension by F(A) = Q@A@Q^T . It may be easier to pass the full stiffness 
-        matrix and along with a key to the ordering of the dofs, then build the extension matrix
-
     G: rigidity graph for the mesh detailing element to element connections
     
     V: node to element connectivity (provided for easy subgraph detection)
+
+
     '''
     
     #TODO: need to modify this algorithm to handle the 12dim vector construction
 
     #get number of indices for each local stiffness matrix
     (ne,_) = Ae[0].get_shape()
-    #get number of elements
-    n = G.shape
+    #get number of elements from the rigidity graph
+    n = G.shape[0]
     #get number of local stiffness matrices
     k = len(Ae)
     #initialize last non-zero row of the extension matrices
@@ -128,7 +129,7 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
     
     #initialize extension matrices (k total matrices)
     #these will be trimmed later using the final resultant r value
-    Qe = [lil_matrix((n*k,n)) for i in range(k)]
+    Qe = [lil_matrix((n*k,n),dtype=np.int8) for i in range(k)]
 
     for j in range(n):
         #initialize to the identity matrix
@@ -154,12 +155,13 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
         #get the connectivity components of the subgraph Gj
         Gcj = [ele[idx[i]] for i in range(n_comp)]
 
+        #reorder to make sure "master element" is always in the first connectivity component
         if 0 in ele:
             #TODO: reorder Gcj to have Ae[0] in Gcj[0]
-            print("need to make sure Ae[0] is here")
+            ele = np.sort(ele)
             
-        #reorder to make sure "master element" is always in the first connectivity component
-        #set the j-th column of Qp to ej for all elements in G0j
+        #set column j of Qp to ej for all elements in the first connectivity 
+        # component G0j
         for p in Gcj[0]:
             #zero out the j-th column and eliminate zeros
             nonzeros = Qe[p][:,j].nonzero()[0]
@@ -172,16 +174,38 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
         for i in range(1,n_comp):
             #increment last non-zero row tracker
             r += 1
-            #for all the elements in Gcj[p], set the j-th column of Qp to er
+            #for all the elements in the given connectivity component Gcj[p],
+            #  set the j-th column of Qp to er
             for p in Gcj[i]:
-                # set the j-th column of Qp to e_r (e.g. a 1 in the r-th )
+                # set the j-th column of Qp to e_r (e.g. a 1 in the r-th column )
+                #first, zero out any nonzero entries in the column
+                nonzeros = Qe[p][:,j].nonzero()[0]
+                Qe[p][nonzeros,j] = np.zeros_like(nonzeros)
+                #set the r-th row pf the j-th column to be 1
                 Qe[p][r,j] = 1
         #for each extension matrix 
         for Q in Qe:
             #if ej is not in the nonzero colums of Ai, then set Qi to ej
-            print()
+            #check each column for a 1 in the j-th row
+            #if no 1 in any row, set j-th column to ej Qi(j,j) = 1
+            if j not in Q.nonzero()[0]:
+                #first, zero out any nonzero entries in the column
+                nonzeros = Q[:,j].nonzero()[0]
+                Qe[p][nonzeros,j] = np.zeros_like(nonzeros)
+                #set the j-th row to ej
+                Q[j,j] = 1
 
-    return
+    #assemble the fretsaw extension
+    #convert to csr for efficient matrix operations
+    for Q in Qe:
+        Q = Q.tocsr()
+    F = csr_matrix((r,n))
+
+    for A,I,Q in zip(Ae,Ie,Qe):
+        F += Q.dot(localAe_to_globalAe(A,I).dot(Q.transpose()))
+    #F = sum(Qi@Ai@Qi^T)
+
+    return #F
 
 def compute_nullspace(F):
     '''
@@ -246,7 +270,7 @@ def get_element_matrices(domain,form):
     return A_list
 
 def get_node_to_el_map(domain):
-    #create connectivity (edge=1,cell=2)
+    #create connectivity (node=0,cell=2)
     domain.topology.create_connectivity(0,2)
     #create dolfinx adjacency list
     nod_to_el = domain.topology.connectivity(0,2)
@@ -266,13 +290,88 @@ def get_node_to_G_map(domain,fxn_space):
     #to each function in a vector element/mixed space
 
     #this map assists with constructing a consistent extension
-    subspace_dof_maps = []
-    for space in range(fxn_space.num_sub_spaces):
-        subspace_dof_maps.append(get_vtx_to_dofs(domain,fxn_space.sub(space)))
+    dof_maps = []
+    #handle scalar fxn space
+    if fxn_space.num_sub_spaces != 0:
+        for space in range(fxn_space.num_sub_spaces):
+            dof_maps.append(get_vtx_to_dofs(domain,fxn_space.sub(space)))
+    #handle vector/mixed fxn spaces
+    else:
+        for i in range(domain.geometry.x.shape[0]):
+            print(i)
+            dof_maps.append(i)
+            # dof_maps.append(fxn_space.dofmap.cell_dofs(i))
+        # dof_to_G=fxn_space.dofmap
+
     #assemble into a matrix where columns correspond to each fxn component and
     # rows correspond to nodes
-    dof_to_G = np.hstack(subspace_dof_maps)
+    dof_to_G = np.hstack(dof_maps)
         # to get out set of indices used to restrict the global indices of the 
         # stiffness matrix to the relevant indices for fxn select a column of 
         # dof_to_G  (e.g. G[i,:] will be a (num_nodes,) 1d np array)
     return dof_to_G
+
+def get_local_to_global(dof_to_G,fxn_space):
+    #utilize fxn space and dof_to_G to return a list of num_elements vectors of length 
+    adj_list = fxn_space.dofmap.list
+    Ie = {}
+    for i in range(adj_list.num_nodes):
+        Ie[i]=dof_to_G[adj_list.links(i)].flatten()
+    return Ie
+
+def localAe_to_globalAe(Ae,Ie):
+    print('local A:')
+    print(Ae)
+    print('dof vector:')
+    print(Ie)
+
+def main():
+    MESH_DIM = 2
+    FXN_SPACE_DIM = 2
+
+    if MESH_DIM==1:
+        msh = mesh.create_interval(MPI.COMM_WORLD,5,[0,1])
+    if MESH_DIM==2:
+        N = 3
+        W = .1
+        H = .5
+        msh = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+        import pyvista
+        from dolfinx import plot
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
+        if False:
+            tdim = msh.topology.dim
+            topology, cell_types, geometry = plot.create_vtk_mesh(msh, tdim)
+            grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+            plotter = pyvista.Plotter()
+            plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+            plotter.view_isometric()
+            if not pyvista.OFF_SCREEN:
+                plotter.show()
+
+    if MESH_DIM==3:
+        msh = mesh.create_box(MPI.COMM_WORLD, [np.array([0.0, 0.0, 0.0]),
+                                        np.array([2.0, 1.0, 1.0])], [3, 3, 3],
+                                            mesh.CellType.tetrahedron)
+    if FXN_SPACE_DIM==1:
+        V = fem.FunctionSpace(msh, ("Lagrange", 1))
+    if FXN_SPACE_DIM==2:
+        V = fem.VectorFunctionSpace(msh, ("Lagrange", 1),dim=2)
+    if FXN_SPACE_DIM==3:
+        V = fem.VectorFunctionSpace(msh, ("Lagrange", 1),dim=3)
+    if FXN_SPACE_DIM==12:
+        Ve = ufl.VectorElement("CG",msh.ufl_cell(),1,dim=3)
+        V = fem.FunctionSpace(msh, ufl.MixedElement(4*[Ve]))
+
+    u = ufl.TrialFunction(V)
+    v = ufl.TestFunction(V)
+
+    ufl_form = ufl.inner(ufl.grad(u), ufl.grad(v)) *ufl.dx
+
+    get_nullspace(msh,ufl_form,V)
+
+    return
+
+
+main()
