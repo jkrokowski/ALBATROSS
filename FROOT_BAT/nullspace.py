@@ -63,7 +63,7 @@ class LocalAssembler():
         ffi_fb = self.ffi.from_buffer
         self.kernel(ffi_fb(A_local), ffi_fb(coeffs), ffi_fb(self.consts), ffi_fb(geometry),
                ffi_fb(facet_index), ffi_fb(facet_perm))
-        return lil_matrix(A_local)
+        return A_local
 
 def get_nullspace(domain,ufl_form,fxn_space):
     #build list of element matrices using custom local assembler
@@ -81,7 +81,7 @@ def get_nullspace(domain,ufl_form,fxn_space):
     Ie = get_local_to_global(dof_to_G,fxn_space)
 
     # # constructs global stiffness matrix
-    # A = assemble_stiffness_matrix(ufl_form)
+    A = assemble_stiffness_matrix(ufl_form)
 
     #extract element connectivity from dolfin mesh object
     G = get_rigidity_graph(domain)
@@ -98,11 +98,32 @@ def get_nullspace(domain,ufl_form,fxn_space):
 
     #restrict to first n factors and orthogonalize
 
+
+    #compare nullspace from full matrix and F(A):
+    #numpy fxns (numerical conditioning issues)
+    # u,s,v = np.linalg.svd(A.toarray())
+    # uF,sF,vHF = np.linalg.svd(F.toarray())
+    
+    #get rank and nullity (ONLY FOR TESTING, DON'T use large matrices)
+    n = np.max(Ie) + 1
+    rank = np.linalg.matrix_rank(A.toarray())
+    nullity = A.shape[0]-rank
+
+    #get nullspace from A
+    from scipy.sparse.linalg import svds
+    u,s,vh = svds(A,k=nullity,which='SM')
+    uF,sF,vhF = svds(F,k=nullity,which='SM')
+
+
+    vh_restricted=vhF[-nullity:,:n]
+
+    return
+
 def compute_fretsaw_extension(Ae,Ie,G,V):
     '''
     method developed from psuedocode of Shklarski and toledo (2008) Rigidity in FE matrices, Algorithm 1
     
-    Ae: list of length (num_elements) of assembled local stiffness matrices of shape (n x n)
+    Ae: list of length (num_elements) of assembled local stiffness matrices of shape (ne x ne)
     
     Ie: list of length (num_elements) of vectors of (num_element_indices) linking global indices to 
         local stiffness matrix element indices
@@ -110,16 +131,18 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
     G: rigidity graph for the mesh detailing element to element connections
     
     V: node to element connectivity (provided for easy subgraph detection)
-
-
     '''
     
     #TODO: need to modify this algorithm to handle the 12dim vector construction
 
     #get number of indices for each local stiffness matrix
-    (ne,_) = Ae[0].get_shape()
+    (ne,_) = Ae[0].shape
     #get number of elements from the rigidity graph
-    n = G.shape[0]
+    num_el = G.shape[0]
+    #get number of matrix indices as the max node marker + 1
+    n = np.max(Ie) + 1
+    #TODO: get number of natural groupings
+    num_groups = 1
     #get number of local stiffness matrices
     k = len(Ae)
     #initialize last non-zero row of the extension matrices
@@ -184,28 +207,29 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
                 #set the r-th row pf the j-th column to be 1
                 Qe[p][r,j] = 1
         #for each extension matrix 
-        for Q in Qe:
+        for Q,I in zip(Qe,Ie):
             #if ej is not in the nonzero colums of Ai, then set Qi to ej
-            #check each column for a 1 in the j-th row
+            #check each NONZERO column for a 1 in the j-th row
             #if no 1 in any row, set j-th column to ej Qi(j,j) = 1
-            if j not in Q.nonzero()[0]:
+            if j not in I:
                 #first, zero out any nonzero entries in the column
                 nonzeros = Q[:,j].nonzero()[0]
-                Qe[p][nonzeros,j] = np.zeros_like(nonzeros)
+                Q[nonzeros,j] = np.zeros_like(nonzeros)
                 #set the j-th row to ej
                 Q[j,j] = 1
 
     #assemble the fretsaw extension
-    #convert to csr for efficient matrix operations
-    for Q in Qe:
-        Q = Q.tocsr()
-    F = csr_matrix((r,n))
+    #trim to (r x n) and convert to csr for efficient matrix operations
+    for i,Q in enumerate(Qe):
+        Qe[i] = Q[0:r,0:n].tocsr()
+    F = csr_matrix((r,r))
 
     for A,I,Q in zip(Ae,Ie,Qe):
-        F += Q.dot(localAe_to_globalAe(A,I).dot(Q.transpose()))
+        A_global = localAe_to_globalAe(A,I,n)
+        F += Q.dot(A_global.dot(Q.transpose()))
     #F = sum(Qi@Ai@Qi^T)
 
-    return #F
+    return F
 
 def compute_nullspace(F):
     '''
@@ -263,9 +287,9 @@ def get_element_matrices(domain,form):
     However, should this be a dictionary with the key being the cell number?
     This would allow for subdomain analysis'''
     assembler = LocalAssembler(form)
-    A_list = {}
+    A_list = []
     for i in range(domain.topology.index_map(domain.topology.dim).size_local):
-        A_list[i]= assembler.assemble_matrix(i)
+        A_list.append(assembler.assemble_matrix(i))
     
     return A_list
 
@@ -281,7 +305,7 @@ def get_node_to_el_map(domain):
 
 def assemble_stiffness_matrix(ufl_form):
     #returns a scipy csr_matrix
-    A_mat = fem.assemble_matrix(fem.form(ufl_form))
+    A_mat = fem.petsc.assemble_matrix(fem.form(ufl_form))
     A_mat.assemble()
     return csr_matrix(A_mat.getValuesCSR()[::-1], shape=A_mat.size)
 
@@ -314,20 +338,26 @@ def get_node_to_G_map(domain,fxn_space):
 def get_local_to_global(dof_to_G,fxn_space):
     #utilize fxn space and dof_to_G to return a list of num_elements vectors of length 
     adj_list = fxn_space.dofmap.list
-    Ie = {}
+    Ie = []
     for i in range(adj_list.num_nodes):
-        Ie[i]=dof_to_G[adj_list.links(i)].flatten()
+        Ie.append(dof_to_G[adj_list.links(i)].flatten())
     return Ie
 
-def localAe_to_globalAe(Ae,Ie):
+def localAe_to_globalAe(Ae,Ie,n):
     print('local A:')
     print(Ae)
     print('dof vector:')
     print(Ie)
+    print()
+    data = Ae.flatten()
+    row = np.repeat(Ie,Ie.shape[0])
+    col = np.tile(Ie,Ie.shape[0])
+    Ae_global = csr_matrix((data,(row,col)),shape=(n,n))
+    return Ae_global
 
 def main():
     MESH_DIM = 2
-    FXN_SPACE_DIM = 2
+    FXN_SPACE_DIM = 1
 
     if MESH_DIM==1:
         msh = mesh.create_interval(MPI.COMM_WORLD,5,[0,1])
