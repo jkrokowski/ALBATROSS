@@ -5,6 +5,8 @@ from dolfinx import plot
 import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
+import scipy.io
+import meshio
 
 from dolfinx.geometry import BoundingBoxTree,compute_collisions,compute_colliding_cells
 
@@ -137,3 +139,39 @@ def get_pts_and_cells(domain,points):
      return points_on_proc,cells
      # disp = self.uh.sub(0).eval(points_on_proc,cells)
      # rot = self.uh.sub(1).eval(points_on_proc,cells)
+
+def mat_to_mesh(filename,aux_data=None, plot_xc = False ):
+     mat = scipy.io.loadmat(filename)
+     data = []
+     for item in aux_data:
+          data.append(mat[item])
+
+     elems = mat['vabs_2d_mesh_elements']
+     nodes = mat['vabs_2d_mesh_nodes']
+     print('Number of nodes:')
+     print(len(nodes))
+     print('Number of Elements:')
+     print(len(elems))
+     elems -=1
+
+     cells = {'triangle':elems[:,0:3]}
+     meshio.write_points_cells('file.xdmf',nodes,cells,file_format='xdmf')
+
+     with XDMFFile(MPI.COMM_WORLD, 'file.xdmf', "r") as xdmf:
+          msh = xdmf.read_mesh(name='Grid')
+
+     if plot_xc:
+
+          msh.topology.create_connectivity(msh.topology.dim-1, 0)
+
+          plotter = pyvista.Plotter()
+          num_cells_local = msh.topology.index_map(msh.topology.dim).size_local
+          topology, cell_types, x = plot.create_vtk_mesh(msh, msh.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+
+          grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+          plotter.add_mesh(grid,show_edges=True)
+          plotter.show()
+     if aux_data is not None:
+          return msh,data
+     else:
+          return msh

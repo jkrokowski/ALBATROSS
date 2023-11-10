@@ -114,7 +114,6 @@ def get_nullspace(domain,ufl_form,fxn_space):
     u,s,vh = svds(A,k=nullity,which='SM')
     uF,sF,vhF = svds(F,k=nullity,which='SM')
 
-
     vh_restricted=vhF[-nullity:,:n]
 
     return
@@ -354,10 +353,24 @@ def localAe_to_globalAe(Ae,Ie,n):
     col = np.tile(Ie,Ie.shape[0])
     Ae_global = csr_matrix((data,(row,col)),shape=(n,n))
     return Ae_global
+def sym_LU_inv_iter(A):
+    "A: a sparse matrix"
+    from scipy.sparse.linalg import splu
+    lu = splu(A,permc_spec="NATURAL")
+    U = lu.U
+    u,s,v = np.linalg.svd(A.A)
+    uU,sU,vU = np.linalg.svd(U.A)
 
+    #initialize random X matrix of size n x n_z (where nz is nullity dim)
+
+    #perform symmetric inverse iteration to solve A^T @ A @ x(i) = x(i-1)/||x(i-1)|| for x(i)
+
+    #orthogonalize X matrix
+    
+    print()
 def main():
     MESH_DIM = 2
-    FXN_SPACE_DIM = 1
+    FXN_SPACE_DIM = 2
 
     if MESH_DIM==1:
         msh = mesh.create_interval(MPI.COMM_WORLD,5,[0,1])
@@ -399,8 +412,9 @@ def main():
 
     ufl_form = ufl.inner(ufl.grad(u), ufl.grad(v)) *ufl.dx
 
-    get_nullspace(msh,ufl_form,V)
-
+    # get_nullspace(msh,ufl_form,V)
+    A = assemble_stiffness_matrix(ufl_form)
+    sym_LU_inv_iter(A)
     return
 
 

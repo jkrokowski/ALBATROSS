@@ -18,7 +18,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 10
+N = 50
 W = .1
 H = .1
 # W1 = 0.75*W
@@ -56,7 +56,7 @@ axial_pos_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
 axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 
 #note orientation vector does not have to be a unit fector
-# orientations = np.tile([-np.sqrt(2),np.sqrt(2),0],len(meshes2D))
+# orientations = np.tile([- np.sqrt(2),np.sqrt(2),0],len(meshes2D))
 # orientations = np.tile([np.sqrt(2),-np.sqrt(2),0],len(meshes2D))
 orientations = np.tile([0,1,0],len(meshes2D))
 # orientations = np.tile([-1,0,0],len(meshes2D))
