@@ -18,7 +18,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 50
+N = 10
 W = .1
 H = .1
 # W1 = 0.75*W

@@ -9,6 +9,10 @@ import scipy.io
 import meshio
 
 from dolfinx.geometry import BoundingBoxTree,compute_collisions,compute_colliding_cells
+from ufl import TestFunction,TrialFunction,inner,dx
+from dolfinx.fem.petsc import assemble_matrix,assemble_vector,apply_lifting,set_bc,create_vector
+from dolfinx.fem import form
+from petsc4py import PETSc
 
 def get_vtx_to_dofs(domain,V):
      '''
@@ -170,8 +174,43 @@ def mat_to_mesh(filename,aux_data=None, plot_xc = False ):
 
           grid = pyvista.UnstructuredGrid(topology, cell_types, x)
           plotter.add_mesh(grid,show_edges=True)
+          plotter.show_axes()
+          plotter.add_points(np.array((0,0,0)))
           plotter.show()
+          
      if aux_data is not None:
           return msh,data
      else:
           return msh
+     
+
+"""
+    Project function does not work the same between legacy FEniCS and FEniCSx,
+    so the following project function must be defined based on this forum post:
+    https://fenicsproject.discourse.group/t/problem-interpolating-mixed-function-dolfinx/4142/6
+    and inspired by Ru Xiang's Shell module project function
+    https://github.com/RuruX/shell_analysis_fenicsx/blob/b842670f4e7fbdd6528090fc6061e300a74bf892/shell_analysis_fenicsx/utils.py#L22
+    """
+
+def project(v, target_func, bcs=[]):
+    # Ensure we have a mesh and attach to measure
+    V = target_func.function_space
+
+    # Define variational problem for projection
+    w = TestFunction(V)
+    Pv = TrialFunction(V)
+    a = inner(Pv, w) * dx
+    L = inner(v, w) * dx
+
+    # Assemble linear system
+    A = assemble_matrix(form(a), bcs)
+    A.assemble()
+    b = assemble_vector(form(L))
+    apply_lifting(b, [form(a)], [bcs])
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    set_bc(b, bcs)
+
+    # Solve linear system
+    solver = PETSc.KSP().create(A.getComm())
+    solver.setOperators(A)
+    solver.solve(b, target_func.vector)

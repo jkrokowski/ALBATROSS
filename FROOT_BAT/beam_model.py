@@ -31,22 +31,26 @@ class BeamModel(Axial):
     Class that combines both 1D and 2D analysis
     '''
 
-    def __init__(self,axial_mesh,xc_info):
+    def __init__(self,axial_mesh,xc_info,xc_type='EBPE'):
         '''
         axial_mesh: mesh used for 1D analysis (often this is a finer
             discretization than the 1D mesh used for locating xcs)
 
-        info2D = (xcs,mats,axial_pos_mesh,xc_orientations)
+        xc_info = (xcs,mats,axial_pos_mesh,xc_orientations)
             xcs : list of 2D xdmf meshes for each cross-section
             mats : list of materials used corresponding to each XC
             axial_pos_mesh : the beam axis discretized into the number of
                 elements with nodes at the spanwise locations of the XCs
             xc_orientations: list of vectors defining orientation of 
                 horizontal axis used in xc analysis
+
+        xc_type: determines if xc analysis is to be run. If false, 
+            cross section stiffness matrices can be provided as a list.
+            TODO: a data structure linking axial position to the relevant 
+                stiffness matrix. This would prevent repeated xc analyses
+                if the xc is the same through some portion of the beam
         '''
         self.axial_mesh = axial_mesh
-        [self.xc_meshes, self.mats, self.axial_pos_mesh, self.orientations] = xc_info
-        self.numxc = len(self.xc_meshes)
 
         #define rotation matrices for rotating between beam reference axis and xc reference frame
         #note: 
@@ -59,17 +63,35 @@ class BeamModel(Axial):
                              [ 0,  0, 1],
                              [ 1,  0,  0]])
        
-        print("Orienting XCs along beam axis....")
-        self.get_xc_orientations_for_1D()
+        if xc_type == 'EBPE':
+            [self.xc_meshes, self.mats, self.axial_pos_mesh, self.orientations] = xc_info
+            self.numxc = len(self.xc_meshes)
+            print("Orienting XCs along beam axis....")
+            self.get_xc_orientations_for_1D()
 
-        print("Getting XC Properties...")
-        self.get_axial_props_from_xcs()
+            print("Getting XC Properties...")
+            self.get_axial_props_from_xcs()
 
-        print("Initializing Axial Model (1D Analysis)")
-        super().__init__(self.axial_mesh,self.k,self.o)
+            print("Initializing Axial Model (1D Analysis)")
+            super().__init__(self.axial_mesh,self.k,self.o)
 
-        print("Computing Elastic Energy...")
-        self.elastic_energy()
+            print("Computing Elastic Energy...")
+            self.elastic_energy()
+        elif xc_type == 'precomputed':
+            [self.K_list,self.axial_pos_mesh] = xc_info
+            print("Reading XC Stiffness Matrices...")
+            self.get_axial_props_from_K_list()
+
+            print("Initializing Axial Model (1D Analysis)")
+            super().__init__(self.axial_mesh,self.k,self.o)
+
+            print("Computing Elastic Energy...")
+            self.elastic_energy()
+
+        elif xc_type== 'analytical':
+            print("Coming soon to a theater near you...")
+        else:
+            print("please use one of the documented methods")
 
     def get_xc_orientations_for_1D(self):
         #define orientation of the x2 axis w.r.t. the beam axis x1 to allow for 
@@ -89,6 +111,83 @@ class BeamModel(Axial):
     def get_axial_props_from_xcs(self):
         '''
         CORE FUNCTION FOR PROCESSING MULTIPLE 2D XCs TO PREPARE A 1D MODEL
+        '''
+        # (mesh1D_2D,(meshes2D,mats2D)) = info2D 
+        # mesh1D_1D = info1D
+        self.xcs = []
+        # K_list = []
+        
+        def get_flat_sym_stiff(K_mat):
+            K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
+            return K_flat
+        
+        sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
+        T2_66 = TensorFunctionSpace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+        k2 = Function(T2_66)
+        #TODO:same process for mass matrix
+        S2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
+        a2 = Function(S2)
+        rho2 = Function(S2)
+        # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
+        V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
+        c2 = Function(V2_2)
+        
+        for i,[mesh2d,mat2D] in enumerate(zip(self.xc_meshes,self.mats)):
+            print('    computing properties for XC '+str(i+1)+'/'+str(self.numxc)+'...')
+            #instantiate class for cross-section i
+            self.xcs.append(CrossSection(mesh2d,mat2D))
+            #analyze cross section
+            self.xcs[i].getXCStiffnessMatrix()
+
+            #output stiffess matrix
+            if sym_cond==True:
+                #need to add fxn
+                print("symmetric mode not available yet,try again soon")
+                exit()
+                k2.vector.array[21*i,21*(i+1)] = self.xcs[i].K.flatten()
+            elif sym_cond==False:
+                k2.vector.array[36*i:36*(i+1)] = self.xcs[i].K.flatten()
+                a2.vector.array[i] = self.xcs[i].A
+                rho2.vector.array[i] = self.xcs[i].rho
+                c2.vector.array[2*i:2*(i+1)] = [self.xcs[i].yavg,self.xcs[i].zavg]
+
+        print("Done computing cross-sectional properties...")
+
+        print("Interpolating cross-sectional properties to axial mesh...")
+        #interpolate from axial_pos_mesh to axial_mesh 
+
+        #initialize fxn spaces
+        self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+        self.V_2 = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
+        self.S = FunctionSpace(self.axial_mesh,('CG',1))
+        
+        #interpolate beam constitutive matrix
+        self.k = Function(self.T_66)
+        self.k.interpolate(k2)
+
+        #interpolate xc area
+        self.a = Function(self.S)
+        self.a.interpolate(a2)
+
+        #interpolate xc density
+        self.rho = Function(self.S)
+        self.rho.interpolate(rho2)
+
+        #interpolate centroidal location in g frame
+        self.c = Function(self.V_2)
+        self.c.interpolate(c2)
+
+        # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+        k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
+        a2.vector.destroy()
+        c2.vector.destroy()
+        rho2.vector.destroy()
+
+        print("Done interpolating cross-sectional properties to axial mesh...")
+    
+    def get_axial_props_from_K_list(self):
+        '''
+        FUNCTION TO POPULATE TENSOR FXN SPACE WITH BEAM CONSTITUITIVE MATRIX 
         '''
         # (mesh1D_2D,(meshes2D,mats2D)) = info2D 
         # mesh1D_1D = info1D
@@ -370,6 +469,5 @@ class BeamModel(Axial):
             # print(xc.K)
             # print('displacements and rotations:')
             # print(self.uh.sub(0).x.array)
-
 
 #TODO: need to add joints to allow for the assembly of models with connections (e.g. branching, loops, frames, etc)
