@@ -688,3 +688,45 @@ class CrossSection:
 #         R[k,k] = lin.norm(Q[:,k]); Q[:,k] = Q[:,k] / R[k,k]
     
 #     return -Q, -R  # Return the resultant negative matrices Q and R
+
+class CrossSectionAnalytical:
+    def __init__(self,shape,params):
+        #process params based on shape
+
+        if shape=='rectangle':
+            self.h = params['h']
+            self.w = params['w']
+            self.E = params['E']
+            self.nu = params['nu']
+
+        elif shape =='box':
+            self.h = params['h']
+            self.w = params['w']
+            self.t_h = params['t_h']
+            self.t_w = params['t_w']
+            self.E = params['E']
+            self.nu = params['nu']
+
+        else:
+            print("busy doing nothing...")
+        
+        
+    def compute_stiffness(self):
+        A = (self.h*self.w)-((self.h-2*self.t_h)*(self.w-self.t_w))
+        G = self.E / (2*(1+self.nu))
+        if self.h>=self.w:
+            J = (self.w * self.h ** 3) * (2 / 9) * (1 / (1 + (self.h / self.w) ** 2))
+        else:
+            J = (self.h * self.w ** 3) * (2 / 9) * (1 / (1 + (self.w / self.h) ** 2))
+
+        kappa = 5/6
+        
+        EA = self.E*A
+        kGA1=kappa*G*A
+        kGA2=kappa*G*A
+        GJ = G*J
+        EI1 = self.E*self.w*self.h**3 /12
+        EI2 = self.E*self.h*self.w**3 /12
+        
+        return np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2,]))
+    
