@@ -17,7 +17,7 @@ from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector,
 from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
                 inner,dot,grad,split,cross,Measure,sin,cos)
 from FROOT_BAT.elements import *
-from FROOT_BAT.cross_section import CrossSection
+from FROOT_BAT.cross_section import CrossSection,CrossSectionAnalytical
 from FROOT_BAT.axial import Axial
 from FROOT_BAT.utils import get_pts_and_cells
 from petsc4py.PETSc import ScalarType
@@ -31,7 +31,7 @@ class BeamModel(Axial):
     Class that combines both 1D and 2D analysis
     '''
 
-    def __init__(self,axial_mesh,xc_info,xc_type='EBPE',shape=None):
+    def __init__(self,axial_mesh,xc_info,xc_type='EBPE'):
         '''
         axial_mesh: mesh used for 1D analysis (often this is a finer
             discretization than the 1D mesh used for locating xcs)
@@ -86,12 +86,15 @@ class BeamModel(Axial):
             self.get_axial_props_from_K_list()
 
         elif xc_type== 'analytical':
-            [self.xc_params] = xc_info
-            self.numxc = len(self.xc_meshes)
+            # xc_info consists of a list of dictionaries of the relevant xc parameter
+            [self.xc_params,self.axial_pos_mesh,self.orientations] = xc_info
+            self.numxc = len(self.xc_params)
 
-            print("Computing analytical cross section properties for "+str(shape)"...")
+            print("Orienting XCs along beam axis....")
+            self.get_xc_orientations_for_1D()
 
-            self.get_axial_props_from_analytic_formulae(shape)
+            print("Computing analytical cross section properties ...")
+            self.get_axial_props_from_analytic_formulae()
         else:
             print("please use one of the documented methods")
         
@@ -257,7 +260,7 @@ class BeamModel(Axial):
 
         print("Done interpolating cross-sectional properties to axial mesh...")
     
-    def get_axial_props_from_analytic_formulae(self,shape):
+    def get_axial_props_from_analytic_formulae(self):
         def get_flat_sym_stiff(K_mat):
             K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
             return K_flat
@@ -272,30 +275,33 @@ class BeamModel(Axial):
         # # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
         # V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
         # c2 = Function(V2_2)
-        
-        for i,K in enumerate(self.K_list):
-            print('    computing properties for XC '+str(i+1)+'/'+str(self.numxc)+'...')
-            #output stiffess matrix
+        self.xcs = []
+        for i,xc in enumerate(self.xc_params):
+            print('    computing properties for ' + str(xc['shape'])+ ' XC: '+str(i+1)+'/'+str(self.numxc)+'...')
+            #get stiffess matrix
+            self.xcs.append(CrossSectionAnalytical(xc))
+            self.xcs[i].compute_stiffness()
+            print(self.xcs[i].K)
             if sym_cond==True:
                 #need to add fxn
                 print("symmetric mode not available yet,try again soon")
                 exit()
                 k2.vector.array[21*i,21*(i+1)] = self.xcs[i].K.flatten()
             elif sym_cond==False:
-                k2.vector.array[36*i:36*(i+1)] = K.flatten()
+                k2.vector.array[36*i:36*(i+1)] = self.xcs[i].K.flatten()
                 # a2.vector.array[i] = self.xcs[i].A
                 # rho2.vector.array[i] = self.xcs[i].rho
                 # c2.vector.array[2*i:2*(i+1)] = [self.xcs[i].yavg,self.xcs[i].zavg]
 
-        print("Done reading cross-sectional properties...")
+        print("Done finding cross-sectional properties...")
 
         print("Interpolating cross-sectional properties to axial mesh...")
         #interpolate from axial_pos_mesh to axial_mesh 
 
         #initialize fxn spaces
         self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        self.V_2 = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
-        self.S = FunctionSpace(self.axial_mesh,('CG',1))
+        # self.V_2 = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
+        # self.S = FunctionSpace(self.axial_mesh,('CG',1))
         
         #interpolate beam constitutive matrix
         self.k = Function(self.T_66)

@@ -26,16 +26,19 @@ H = .1
 W1= W
 H1= H
 
-L = 20
-mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-# with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
-#         file.write_mesh(mesh2d_0)
-mesh2d_1 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-mesh2d_2 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-mesh2d_3 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-mesh2d_4 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+L = 1
+meshes2D = []
+for h,w in zip([0.1,0.08,0.05,0.04,0.02],[0.06,0.07,0.08,0.09,0.1]):
+    meshes2D.append(mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[w, h]]),[N,N], cell_type=mesh.CellType.quadrilateral))
+# mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, h]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+# # with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
+# #         file.write_mesh(mesh2d_0)
+# mesh2d_1 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+# mesh2d_2 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+# mesh2d_3 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+# mesh2d_4 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W1, H1]]),[N,N], cell_type=mesh.CellType.quadrilateral)
  
-meshes2D = [mesh2d_0,mesh2d_1,mesh2d_2,mesh2d_3,mesh2d_4]
+# meshes2D = [mesh2d_0,mesh2d_1,mesh2d_2,mesh2d_3,mesh2d_4]
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
@@ -70,7 +73,7 @@ xc_info = [meshes2D,mats2D,axial_pos_mesh,orientations]
 
 ExampleBeam = BeamModel(axial_mesh,xc_info)
 
-# ExampleBeam.plot_xc_orientations()
+ExampleBeam.plot_xc_orientations()
 rho = 2.7e-3
 g = 9.81
 A = 0.01
@@ -85,7 +88,7 @@ likely what this will do under the hood is cache the loads and
 the points to be applied at the time of the solve as the assembly 
 of the system should not happen prior to the solution of the system
 for most users.'''
-F = .001
+F = 2
 ExampleBeam.add_point_load([(0,-F,-F)],[p2])
 
 #add boundary conditions
@@ -95,9 +98,9 @@ ExampleBeam.add_clamped_point(p1)
 #solve 
 ExampleBeam.solve()
 
-# ExampleBeam.plot_axial_displacement(warp_factor=5)
+ExampleBeam.plot_axial_displacement(warp_factor=5)
 
-ExampleBeam.recover_displacement(plot_xcs=False)
+ExampleBeam.recover_displacement(plot_xcs=True)
 
 ExampleBeam.plot_xc_disp_3D()
 

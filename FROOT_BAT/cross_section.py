@@ -633,7 +633,7 @@ class CrossSection:
         # warped = grid.warp_by_vector("u",factor=warp_factor)
         # actor_1 = plotter.add_mesh(warped, show_edges=True)
         grid.point_data['sigma11'] = sigma_sol_eval[:,0]
-        warped = grid.warp_by_scalar("sigma11",factor=0.0001)
+        warped = grid.warp_by_scalar("sigma11",factor=0.000001)
         actor_2 = plotter.add_mesh(warped,show_edges=True)
 
         # actor_1 = plotter.add_mesh(grid, style='points',color='k',point_size=12)
@@ -690,16 +690,16 @@ class CrossSection:
 #     return -Q, -R  # Return the resultant negative matrices Q and R
 
 class CrossSectionAnalytical:
-    def __init__(self,shape,params):
+    def __init__(self,params):
         #process params based on shape
 
-        if shape=='rectangle':
+        if params['shape']=='rectangle':
             self.h = params['h']
             self.w = params['w']
             self.E = params['E']
             self.nu = params['nu']
 
-        elif shape =='box':
+        elif params['shape'] =='box':
             self.h = params['h']
             self.w = params['w']
             self.t_h = params['t_h']
@@ -715,9 +715,9 @@ class CrossSectionAnalytical:
         A = (self.h*self.w)-((self.h-2*self.t_h)*(self.w-self.t_w))
         G = self.E / (2*(1+self.nu))
         if self.h>=self.w:
-            J = (self.w * self.h ** 3) * (2 / 9) * (1 / (1 + (self.h / self.w) ** 2))
-        else:
             J = (self.h * self.w ** 3) * (2 / 9) * (1 / (1 + (self.w / self.h) ** 2))
+        else:
+            J = (self.w * self.h ** 3) * (2 / 9) * (1 / (1 + (self.h / self.w) ** 2))
 
         kappa = 5/6
         
@@ -725,8 +725,8 @@ class CrossSectionAnalytical:
         kGA1=kappa*G*A
         kGA2=kappa*G*A
         GJ = G*J
-        EI1 = self.E*self.w*self.h**3 /12
-        EI2 = self.E*self.h*self.w**3 /12
+        EI1 = self.E*(self.w*self.h**3 /12 - ((self.w-2*self.t_w)*(self.h-2*self.t_h)**3) /12)
+        EI2 = self.E*(self.h*self.w**3 /12 - ((self.h-2*self.t_h)*(self.w-2*self.t_w)**3) /12)
         
-        return np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2,]))
+        self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2,]))
     
