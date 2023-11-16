@@ -86,11 +86,14 @@ for i in range(num_xc):
             't_w': t_web[i],
             'E':7.31E10,
             'nu':0.40576923076923066}
+            # 'nu':0.333}
     xc_params.append(params)
 xc_info = [xc_params,axial_pos_mesh,orientations]
 #initialize beam model
 PAV_wing = BeamModel(axial_mesh,xc_info,xc_type='analytical')
-
+for i,xc in enumerate(PAV_wing.xcs):
+    print('stiffness matrix '+str(i))
+    print(np.diag(xc.K))
 #gather loading data
 pts = PAV_wing.axial_pos_mesh.geometry.x[1:,:]
 fz_lbf= np.array([[325.1311971,
