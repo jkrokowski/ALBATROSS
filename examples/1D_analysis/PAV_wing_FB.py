@@ -17,25 +17,25 @@ centroid_list = []
 idx = [0,1,2,3,4,5] # used to reorder from VABS to FROOT_BAT convention
 num_xc = 11
 for i in range(11):
-    filename = path+'/PAV_xcs/PavCsData/PavCs'+str(i+1)+'.mat'
+    filename = path+'/PAV_xcs/PavCsData1/PavCs'+str(i+1)+'.mat'
 
     other_data = ['cs_K','cs_centroid']
 
-    msh,data = mat_to_mesh(filename,other_data,plot_xc=False)
+    msh,data = mat_to_mesh(filename,other_data,plot_xc=True)
 
     msh_list.append(msh)
 
-    # K = np.diag(np.diag(data[0][idx,:][:,idx]))
-    # K = data[0][idx,:][:,idx]
-    K = data[0]
+    # # K = np.diag(np.diag(data[0][idx,:][:,idx]))
+    # # K = data[0][idx,:][:,idx]
+    # K = data[0]
 
 
-    K_list.append(K)
-    centroid_list.append((data[1][0,0],data[1][0,1],data[1][0,2]))
-print(K_list[0])
-axial_pos_ne = list(np.ones((len(centroid_list)-1)))
+    # K_list.append(K)
+    # centroid_list.append((data[1][0,0],data[1][0,1],data[1][0,2]))
+# print(K_list[0])
+axial_pos_ne = list(np.ones((len(msh_list)-1)))
 beam_el_num = 10
-axial_ne = list(beam_el_num*np.ones((len(centroid_list)-1)))
+axial_ne = list(beam_el_num*np.ones((len(msh_list)-1)))
 
 meshname_axial_pos = 'PAV_axial_postion_mesh'
 meshname_axial = 'PAV_axial_mesh'
@@ -82,13 +82,19 @@ if False:
     plotter.show_axes()
 
     plotter.show()
+mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
+                        'MECH_PROPS':{'E':7.31E10,'nu':0.40576923076923066} ,
+                        'DENSITY':2.7e3}
+                        }
+mats2D = [mats for i in range(len(msh_list))]
 
 #define orienation of primary cross-section axis
-orientations = np.tile([0,1,0],len(K_list))
+orientations = np.tile([0,1,0],len(msh_list))
 #collect relevant beam model properties
-xc_info = [K_list,axial_pos_mesh,orientations]
+# xc_info = [K_list,axial_pos_mesh,orientations]
+xc_info = [msh_list,mats2D,axial_pos_mesh,orientations]
 #initialize beam model
-PAV_wing = BeamModel(axial_mesh,xc_info,xc_type='precomputed')
+PAV_wing = BeamModel(axial_mesh,xc_info)
 PAV_wing.plot_xc_orientations()
 #gather loading data
 pts = PAV_wing.axial_pos_mesh.geometry.x[1:,:]

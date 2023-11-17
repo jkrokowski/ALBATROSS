@@ -175,7 +175,18 @@ def mat_to_mesh(filename,aux_data=None, plot_xc = False ):
           grid = pyvista.UnstructuredGrid(topology, cell_types, x)
           plotter.add_mesh(grid,show_edges=True)
           plotter.show_axes()
+
+          if True:
+               # Add labels to points on the yz plane (where x == 0)
+               points = grid.points
+               # mask = points[:, 0] == 0
+               data=points - np.tile([[0,np.min(points[:,1]),0]],(points.shape[0],1))
+               m_to_in = 39.37
+               plotter.add_point_labels(points, (m_to_in*data).tolist())
+
+               # plotter.camera_position = [(-1.5, 1.5, 3.0), (0.05, 0.6, 1.2), (0.2, 0.9, -0.25)]
           plotter.add_points(np.array((0,0,0)))
+
           plotter.show()
           
      if aux_data is not None:
