@@ -2,7 +2,7 @@ import cffi
 from petsc4py.PETSc import ScalarType
 from dolfinx import fem,mesh
 import numpy as np
-from scipy.sparse import lil_matrix,csgraph,csr_matrix
+from scipy.sparse import lil_matrix,csgraph,csr_matrix,coo_matrix,dok_matrix
 from FROOT_BAT.utils import get_vtx_to_dofs
 import ufl
 from mpi4py import MPI
@@ -94,10 +94,19 @@ def get_nullspace(domain,ufl_form,fxn_space):
     
     #compute the fretsaw extension (returns a sparse matrix)
     print('computing fretsaw extension')
+    from cProfile import Profile
+    from pstats import SortKey, Stats
+    
+    with Profile() as profile:
+        print(f"{compute_fretsaw_extension(Ae,Ie,G,V) = }")
+        (   Stats(profile)
+            .strip_dirs()
+            .sort_stats(SortKey.CALLS)
+            .print_stats() )
     F = compute_fretsaw_extension(Ae,Ie,G,V)
 
     #compute the LU factorization of the fretsaw extension
-
+    sym_LU_inv_iter(F)
     #utilize LU factors to perform subspace inverse iteration
 
     #restrict to first n factors and orthogonalize
@@ -116,8 +125,8 @@ def get_nullspace(domain,ufl_form,fxn_space):
 
     #get nullspace from A
     from scipy.sparse.linalg import svds
-    u,s,vh = svds(A,k=nullity,which='SM')
-    uF,sF,vhF = svds(F,k=nullity,which='SM')
+    u,s,vh = svds(A,k=nullity,which='SM',maxiter=100000)
+    uF,sF,vhF = svds(F,k=nullity,which='SM',maxiter=100000)
 
     vh_restricted=vhF[-nullity:,:n]
 
@@ -191,8 +200,11 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
         # component 
         for p in Gcj[0]:
             #zero out the j-th column and eliminate zeros
-            nonzeros = Qe[p][:,j].nonzero()[0]
-            Qe[p][nonzeros,j] = np.zeros_like(nonzeros)
+            # nonzeros = Qe[p][:,j].nonzero()[0]
+            # Qe[p][nonzeros,j] = np.zeros_like(nonzeros)
+            
+            Qe[p][:,j] = np.zeros((n+k,1))
+
             #assign ej to column j
             Qe[p][j,j] = 1
 
@@ -206,22 +218,32 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
             for p in Gcj[i]:
                 # set the j-th column of Qp to e_r (e.g. a 1 in the r-th column )
                 #first, zero out any nonzero entries in the column
-                nonzeros = Qe[p][:,j].nonzero()[0]
-                Qe[p][nonzeros,j] = np.zeros_like(nonzeros)
+                # nonzeros = Qe[p].tocsc()[:,j].nonzero()[0]
+                # Qe[p][nonzeros,j] = np.zeros_like(nonzeros)
+                Qe[p][:,j] = np.zeros((n+k,1))
+
                 #set the r-th row pf the j-th column to be 1
                 Qe[p][r,j] = 1
         #for each extension matrix 
+        # print()
+    # ######
+    # #convert to dok
+    # Qe = [Qe[i].todok() for i in range(k)]
+    # for j in range(n):
+
+    # ####    
         for Q,I in zip(Qe,Ie):
-            #if ej is not in the nonzero colums of Ai, then set Qi to ej
+            #if ej is not in the nonzero columns of Ai, then set Qi to ej
             #check each NONZERO column for a 1 in the j-th row
             #if no 1 in any row, set j-th column to ej Qi(j,j) = 1
             if j not in I:
                 #first, zero out any nonzero entries in the column
-                # nonzeros = Q[:,j].nonzero()[0]
+                # nonzeros = Q.tocsc()[:,j].nonzero()[0]
                 # Q[nonzeros,j] = np.zeros_like(nonzeros)
-                Q[:,j] = np.zeros((n+k,1))
+                # Q[:,j] = np.zeros((n+k,1))
                 #set the j-th row to ej
                 Q[j,j] = 1
+        # print()
     #assemble the fretsaw extension
     #trim to (r x n) and convert to csr for efficient matrix operations
     for i,Q in enumerate(Qe):
@@ -358,11 +380,13 @@ def localAe_to_globalAe(Ae,Ie,n):
     col = np.tile(Ie,Ie.shape[0])
     Ae_global = csr_matrix((data,(row,col)),shape=(n,n))
     return Ae_global
-def sym_LU_inv_iter(A):
+def sym_LU_inv_iter(A,max_iter=1000):
+    #returns approximate null vectors of A
     "A: a sparse matrix"
     from scipy.sparse.linalg import splu
     lu = splu(A,permc_spec="NATURAL")
-    U = lu.U
+    U = lu.U.tocsr()
+    L = lu.L.tocsr()
     u,s,v = np.linalg.svd(A.A)
     uU,sU,vU = np.linalg.svd(U.A)
 
@@ -371,7 +395,20 @@ def sym_LU_inv_iter(A):
     #perform symmetric inverse iteration to solve A^T @ A @ x(i) = x(i-1)/||x(i-1)|| for x(i)
 
     #orthogonalize X matrix
-    
+    x = np.random.rand(U.shape[0],1)
+    from scipy.sparse.linalg import spsolve_triangular,spsolve
+    from scipy.sparse.linalg import norm
+    for _ in range(max_iter):
+        y1 = spsolve_triangular(L.T,x/np.linalg.norm(x),lower=False)
+        w1 = spsolve_triangular(U.T,y1)
+        y2 = spsolve_triangular(L,w1)
+        x = spsolve_triangular(U,y2,lower=False)
+        # w = spsolve_triangular(A,x/np.linalg.norm(x))
+        # w = spsolve(A.T,x/np.linalg.norm(x))
+        # x = spsolve(A,w)
+
+        print()
+
     print()
 
 def orthogonalize(U, eps=1e-15):
@@ -423,7 +460,7 @@ def main():
     if MESH_DIM==1:
         msh = mesh.create_interval(MPI.COMM_WORLD,5,[0,1])
     if MESH_DIM==2:
-        N = 100
+        N = 10
         W = .1
         H = .5
         msh = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
