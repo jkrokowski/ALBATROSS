@@ -81,15 +81,19 @@ def get_nullspace(domain,ufl_form,fxn_space):
     Ie = get_local_to_global(dof_to_G,fxn_space)
 
     # # constructs global stiffness matrix
+    print('assembling stiffness matrix:')
     A = assemble_stiffness_matrix(ufl_form)
 
     #extract element connectivity from dolfin mesh object
+    print('computing rigidity graph')
     G = get_rigidity_graph(domain)
 
     #get which elements are connected to each node
+    print('getting element to node map')
     V = get_node_to_el_map(domain)
     
     #compute the fretsaw extension (returns a sparse matrix)
+    print('computing fretsaw extension')
     F = compute_fretsaw_extension(Ae,Ie,G,V)
 
     #compute the LU factorization of the fretsaw extension
@@ -104,6 +108,7 @@ def get_nullspace(domain,ufl_form,fxn_space):
     # u,s,v = np.linalg.svd(A.toarray())
     # uF,sF,vHF = np.linalg.svd(F.toarray())
     
+    print('computing sparse nullspace:')
     #get rank and nullity (ONLY FOR TESTING, DON'T use large matrices)
     n = np.max(Ie) + 1
     rank = np.linalg.matrix_rank(A.toarray())
@@ -144,14 +149,14 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
     num_groups = 1
     #get number of local stiffness matrices
     k = len(Ae)
-    #initialize last non-zero row of the extension matrices
-    r = n
+    #initialize to last non-zero row of the extension matrices
+    r = n-1
 
     T = compute_spanning_tree(G)
     
     #initialize extension matrices (k total matrices)
     #these will be trimmed later using the final resultant r value
-    Qe = [lil_matrix((n*k,n),dtype=np.int8) for i in range(k)]
+    Qe = [lil_matrix((n+k,n),dtype=np.int8) for i in range(k)]
 
     for j in range(n):
         #initialize to the identity matrix
@@ -183,7 +188,7 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
             ele = np.sort(ele)
             
         #set column j of Qp to ej for all elements in the first connectivity 
-        # component G0j
+        # component 
         for p in Gcj[0]:
             #zero out the j-th column and eliminate zeros
             nonzeros = Qe[p][:,j].nonzero()[0]
@@ -212,16 +217,16 @@ def compute_fretsaw_extension(Ae,Ie,G,V):
             #if no 1 in any row, set j-th column to ej Qi(j,j) = 1
             if j not in I:
                 #first, zero out any nonzero entries in the column
-                nonzeros = Q[:,j].nonzero()[0]
-                Q[nonzeros,j] = np.zeros_like(nonzeros)
+                # nonzeros = Q[:,j].nonzero()[0]
+                # Q[nonzeros,j] = np.zeros_like(nonzeros)
+                Q[:,j] = np.zeros((n+k,1))
                 #set the j-th row to ej
                 Q[j,j] = 1
-
     #assemble the fretsaw extension
     #trim to (r x n) and convert to csr for efficient matrix operations
     for i,Q in enumerate(Qe):
-        Qe[i] = Q[0:r,0:n].tocsr()
-    F = csr_matrix((r,r))
+        Qe[i] = Q[0:r+1,0:n].tocsr()
+    F = csr_matrix((r+1,r+1))
 
     for A,I,Q in zip(Ae,Ie,Qe):
         A_global = localAe_to_globalAe(A,I,n)
@@ -321,7 +326,7 @@ def get_node_to_G_map(domain,fxn_space):
     #handle vector/mixed fxn spaces
     else:
         for i in range(domain.geometry.x.shape[0]):
-            print(i)
+            # print(i)
             dof_maps.append(i)
             # dof_maps.append(fxn_space.dofmap.cell_dofs(i))
         # dof_to_G=fxn_space.dofmap
@@ -343,11 +348,11 @@ def get_local_to_global(dof_to_G,fxn_space):
     return Ie
 
 def localAe_to_globalAe(Ae,Ie,n):
-    print('local A:')
-    print(Ae)
-    print('dof vector:')
-    print(Ie)
-    print()
+    # print('local A:')
+    # print(Ae)
+    # print('dof vector:')
+    # print(Ie)
+    # print()
     data = Ae.flatten()
     row = np.repeat(Ie,Ie.shape[0])
     col = np.tile(Ie,Ie.shape[0])
@@ -368,14 +373,57 @@ def sym_LU_inv_iter(A):
     #orthogonalize X matrix
     
     print()
+
+def orthogonalize(U, eps=1e-15):
+    """
+    Orthogonalizes the matrix U (d x n) using Gram-Schmidt Orthogonalization.
+    If the columns of U are linearly dependent with rank(U) = r, the last n-r columns 
+    will be 0.
+    
+    Args:
+        U (numpy.array): A d x n matrix with columns that need to be orthogonalized.
+        eps (float): Threshold value below which numbers are regarded as 0 (default=1e-15).
+    
+    Returns:
+        (numpy.array): A d x n orthogonal matrix. If the input matrix U's cols were
+            not linearly independent, then the last n-r cols are zeros.
+    
+    Examples:
+    ```python
+    >>> import numpy as np
+    >>> import gram_schmidt as gs
+    >>> gs.orthogonalize(np.array([[10., 3.], [7., 8.]]))
+    array([[ 0.81923192, -0.57346234],
+       [ 0.57346234,  0.81923192]])
+    >>> gs.orthogonalize(np.array([[10., 3., 4., 8.], [7., 8., 6., 1.]]))
+    array([[ 0.81923192 -0.57346234  0.          0.        ]
+       [ 0.57346234  0.81923192  0.          0.        ]])
+    ```
+    """
+    
+    n = len(U[0])
+    # numpy can readily reference rows using indices, but referencing full rows is a little
+    # dirty. So, work with transpose(U)
+    V = U.T
+    for i in range(n):
+        prev_basis = V[0:i]     # orthonormal basis before V[i]
+        coeff_vec = np.dot(prev_basis, V[i].T)  # each entry is np.dot(V[j], V[i]) for all j < i
+        # subtract projections of V[i] onto already determined basis V[0:i]
+        V[i] -= np.dot(coeff_vec, prev_basis).T
+        if np.linalg.norm(V[i]) < eps:
+            V[i][V[i] < eps] = 0.   # set the small entries to 0
+        else:
+            V[i] /= np.linalg.norm(V[i])
+    return V.T
+
 def main():
     MESH_DIM = 2
-    FXN_SPACE_DIM = 2
+    FXN_SPACE_DIM = 1
 
     if MESH_DIM==1:
         msh = mesh.create_interval(MPI.COMM_WORLD,5,[0,1])
     if MESH_DIM==2:
-        N = 3
+        N = 100
         W = .1
         H = .5
         msh = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
@@ -412,9 +460,13 @@ def main():
 
     ufl_form = ufl.inner(ufl.grad(u), ufl.grad(v)) *ufl.dx
 
-    # get_nullspace(msh,ufl_form,V)
     A = assemble_stiffness_matrix(ufl_form)
-    sym_LU_inv_iter(A)
+    print('stiffness matrix size:')
+    print(A.shape)
+    get_nullspace(msh,ufl_form,V)
+
+    # # get_nullspace(msh,ufl_form,V)
+    # sym_LU_inv_iter(A)
     return
 
 
