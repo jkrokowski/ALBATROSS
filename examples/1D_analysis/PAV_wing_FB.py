@@ -1,6 +1,8 @@
 #create gmsh readable xcs from PEGASUS wing data
-import scipy.io
 import os
+# # print(os.environ)
+os.environ['SCIPY_USE_PROPACK'] = "1"
+import scipy.io
 import meshio
     
 import pyvista 
@@ -21,7 +23,7 @@ for i in range(11):
 
     other_data = ['cs_K','cs_centroid']
 
-    msh,data = mat_to_mesh(filename,other_data,plot_xc=True)
+    msh,data = mat_to_mesh(filename,other_data,plot_xc=False)
 
     msh_list.append(msh)
 

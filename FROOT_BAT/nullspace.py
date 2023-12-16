@@ -2,10 +2,15 @@ import cffi
 from petsc4py.PETSc import ScalarType
 from dolfinx import fem,mesh
 import numpy as np
+
+import os
+os.environ['SCIPY_USE_PROPACK'] = "1"
+
 from scipy.sparse import lil_matrix,csgraph,csr_matrix,coo_matrix,dok_matrix
 from FROOT_BAT.utils import get_vtx_to_dofs
 import ufl
 from mpi4py import MPI
+
 
 
 class LocalAssembler():
@@ -97,16 +102,22 @@ def get_nullspace(domain,ufl_form,fxn_space):
     from cProfile import Profile
     from pstats import SortKey, Stats
     
-    with Profile() as profile:
-        print(f"{compute_fretsaw_extension(Ae,Ie,G,V) = }")
-        (   Stats(profile)
-            .strip_dirs()
-            .sort_stats(SortKey.CALLS)
-            .print_stats() )
-    F = compute_fretsaw_extension(Ae,Ie,G,V)
-
+    # with Profile() as profile:
+    #     print(f"{compute_fretsaw_extension(Ae,Ie,G,V) = }")
+    #     (   Stats(profile)
+    #         .strip_dirs()
+    #         .sort_stats(SortKey.CALLS)
+    #         .print_stats() )
+    import time
+    t0 =time.time()
+    # F = compute_fretsaw_extension(Ae,Ie,G,V)
+    t1 = time.time()
     #compute the LU factorization of the fretsaw extension
-    sym_LU_inv_iter(F)
+    
+    # vhF_sym = sym_LU_inv_iter(F)
+    t2 = time.time()
+    vhA_sym = sym_LU_inv_iter(A)
+    t3 = time.time()
     #utilize LU factors to perform subspace inverse iteration
 
     #restrict to first n factors and orthogonalize
@@ -120,16 +131,34 @@ def get_nullspace(domain,ufl_form,fxn_space):
     print('computing sparse nullspace:')
     #get rank and nullity (ONLY FOR TESTING, DON'T use large matrices)
     n = np.max(Ie) + 1
-    rank = np.linalg.matrix_rank(A.toarray())
-    nullity = A.shape[0]-rank
+    # rank = np.linalg.matrix_rank(A.toarray())
+    # nullity = A.shape[0]-rank
+    nullity=1
 
     #get nullspace from A
     from scipy.sparse.linalg import svds
-    u,s,vh = svds(A,k=nullity,which='SM',maxiter=100000)
-    uF,sF,vhF = svds(F,k=nullity,which='SM',maxiter=100000)
+    # u,s,vh = svds(A,k=nullity,which='SM',maxiter=100000)
+    t4 = time.time()
+    # uF,sF,vhF = svds(F,k=nullity,which='SM',maxiter=100000)
+    t5 = time.time()
+    # u,s,vh = svds(A,k=1,which='SM',solver='propack', return_singular_vectors="vh")
+    # uF,sF,vhF = svds(F,k=1,which='SM',solver='propack', return_singular_vectors="vh")
 
-    vh_restricted=vhF[-nullity:,:n]
+    # vhF_restricted=vhF[-nullity:,:n]
+    # nullspace_basis = orthogonalize(vh.T)
 
+    # nullspace_basis_F = orthogonalize(vhF_restricted.T)
+
+    print('fretsaw computation:')
+    print(t1-t0)
+    print('fretsaw inverse iteration:')
+    print(t2-t1)
+    print('standard inverse iteration:')
+    print(t3-t2)
+    print('standard sparse svd:')
+    print(t4-t3)
+    print('fretsaw sparse svd:')
+    print(t5-t4)
     return
 
 def compute_fretsaw_extension(Ae,Ie,G,V):
@@ -383,33 +412,50 @@ def localAe_to_globalAe(Ae,Ie,n):
 def sym_LU_inv_iter(A,max_iter=1000):
     #returns approximate null vectors of A
     "A: a sparse matrix"
-    from scipy.sparse.linalg import splu
-    lu = splu(A,permc_spec="NATURAL")
-    U = lu.U.tocsr()
-    L = lu.L.tocsr()
-    u,s,v = np.linalg.svd(A.A)
-    uU,sU,vU = np.linalg.svd(U.A)
+    from scipy.sparse.linalg import splu,svds
+    # lu = splu(A,permc_spec="NATURAL")
+    # from scipy.linalg import lu
+    # p, l, U = lu(A.A)
+    lu = splu(A)
+    U = lu.U
+    L = lu.L
+    # u,s,v = np.linalg.svd(A.A)
+    # uU,sU,vU = np.linalg.svd(U.A)
+    
 
     #initialize random X matrix of size n x n_z (where nz is nullity dim)
 
     #perform symmetric inverse iteration to solve A^T @ A @ x(i) = x(i-1)/||x(i-1)|| for x(i)
 
     #orthogonalize X matrix
-    x = np.random.rand(U.shape[0],1)
+    # x = np.random.rand(U.shape[0],1)
+    x = np.ones((U.shape[0]))
+
     from scipy.sparse.linalg import spsolve_triangular,spsolve
     from scipy.sparse.linalg import norm
+
+    # w = spsolve_triangular(U,x,lower=False)
+    # x = w/np.linalg.norm(w)
+    tol = 1e-8
     for _ in range(max_iter):
-        y1 = spsolve_triangular(L.T,x/np.linalg.norm(x),lower=False)
-        w1 = spsolve_triangular(U.T,y1)
-        y2 = spsolve_triangular(L,w1)
-        x = spsolve_triangular(U,y2,lower=False)
+        w = spsolve_triangular(L,x/np.linalg.norm(x))
+        x = spsolve_triangular(U,w,lower=False)
+        x = x/np.linalg.norm(x)
+
+        if np.linalg.norm(A.dot(x)) < tol:
+            break
+        
+        # y1 = spsolve_triangular(L.T,x/np.linalg.norm(x),lower=False)
+        # w1 = spsolve_triangular(U.T,y1)
+        # y2 = spsolve_triangular(L,w1)
+        # x = spsolve_triangular(U,y2,lower=False)
+        
+        
         # w = spsolve_triangular(A,x/np.linalg.norm(x))
         # w = spsolve(A.T,x/np.linalg.norm(x))
         # x = spsolve(A,w)
 
-        print()
-
-    print()
+    return x
 
 def orthogonalize(U, eps=1e-15):
     """
@@ -460,7 +506,7 @@ def main():
     if MESH_DIM==1:
         msh = mesh.create_interval(MPI.COMM_WORLD,5,[0,1])
     if MESH_DIM==2:
-        N = 10
+        N = 1000
         W = .1
         H = .5
         msh = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)

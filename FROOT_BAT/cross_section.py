@@ -234,10 +234,10 @@ class CrossSection:
         #very very fast, but memory intensive
         # m,n1=self.A_mat.getSize()
         # Anp = self.A_mat.getValues(range(m),range(n1))
-        print('computing QR factorization')
-        print(self.A_mat.size)
-        Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-        q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
+        # print('computing QR factorization')
+        # print(self.A_mat.size)
+        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        # q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
 
         t4 = time.time()
         #=============
@@ -246,8 +246,8 @@ class CrossSection:
         #scipy sparse svd, slow, but seems to work okay
         #still
 
-        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-        # sols_sps= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
+        Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        # _,_,self.sparse_sols= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
         t5 = time.time()
 
         # self.A_mat.
@@ -267,11 +267,41 @@ class CrossSection:
         # nullspace = Pc.dot(q_lu_coo.transpose().tocsc()[:,-12:])
         t6 = time.time()
         #=============
-        #========SLEPc approach ======#
-        #not super fast, but seems to work as long as the subspace utilized is large enough
-        
+        #========scipy lu + sparse svd ======#
+        from scipy.sparse import csc_matrix
+        Acsc = Acsr.tocsc()
+        from scipy.sparse.linalg import splu
+        # lu = splu(Acsc)
+        # U = lu.U
+        # _,_,self.sparse_sols= svds(U,k=12,which='SM',solver='propack', return_singular_vectors="vh")
         t7=time.time()
+        
+        #========scipy inverse iteration ======#
+        from scipy.sparse.linalg import splu
+        lu = splu(Acsc)
+        U = lu.U
+        L = lu.L
+        
+        X = np.ones((U.shape[0],12))
 
+        from scipy.sparse.linalg import spsolve_triangular,spsolve
+        from scipy.sparse.linalg import norm
+
+        # w = spsolve_triangular(U,x,lower=False)
+        # x = w/np.linalg.norm(w)
+        tol = 1e-8
+        max_iter = 100
+        residual = np.linalg.norm(Acsc.dot(X))
+        for _ in range(max_iter):
+            w = spsolve_triangular(L,X/np.linalg.norm(X,axis=0))
+            X = spsolve_triangular(U,w,lower=False)
+            X = X/np.linalg.norm(X,axis=0)
+            residual = np.linalg.norm(Acsc.dot(X))
+
+            if residual < tol:
+                break
+
+        t8=time.time()
 
         
         if True:
@@ -286,8 +316,10 @@ class CrossSection:
             print('scipy svds time:')
             print(t5-t4)
             print(t6-t5)
-            print('scipy qr time:')
+            print('scipy lu+svds time:')
             print(t7-t6)
+            print('scipy inverse iteration time:')
+            print(t8-t7)
 
 
         # A_mat_csr = self.A_mat.getValuesCSR()
@@ -300,7 +332,7 @@ class CrossSection:
         t7=time.time()
         # self.sparse_sols = hstack([q1coo.getcol(i) for i in range(-12,0)])
         cols = np.arange(-12,0)
-        self.sparse_sols = q1coo.tocsc()[:,cols]
+        # self.sparse_sols = q1coo.tocsc()[:,cols]
         t8=time.time()
         self.sols = self.sparse_sols.toarray()
         t9=time.time()
@@ -729,4 +761,45 @@ class CrossSectionAnalytical:
         EI2 = self.E*(self.h*self.w**3 /12 - ((self.h-2*self.t_h)*(self.w-2*self.t_w)**3) /12)
         
         self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2,]))
+
+def orthogonalize(U, eps=1e-15):
+    """
+    Orthogonalizes the matrix U (d x n) using Gram-Schmidt Orthogonalization.
+    If the columns of U are linearly dependent with rank(U) = r, the last n-r columns 
+    will be 0.
     
+    Args:
+        U (numpy.array): A d x n matrix with columns that need to be orthogonalized.
+        eps (float): Threshold value below which numbers are regarded as 0 (default=1e-15).
+    
+    Returns:
+        (numpy.array): A d x n orthogonal matrix. If the input matrix U's cols were
+            not linearly independent, then the last n-r cols are zeros.
+    
+    Examples:
+    ```python
+    >>> import numpy as np
+    >>> import gram_schmidt as gs
+    >>> gs.orthogonalize(np.array([[10., 3.], [7., 8.]]))
+    array([[ 0.81923192, -0.57346234],
+       [ 0.57346234,  0.81923192]])
+    >>> gs.orthogonalize(np.array([[10., 3., 4., 8.], [7., 8., 6., 1.]]))
+    array([[ 0.81923192 -0.57346234  0.          0.        ]
+       [ 0.57346234  0.81923192  0.          0.        ]])
+    ```
+    """
+    
+    n = len(U[0])
+    # numpy can readily reference rows using indices, but referencing full rows is a little
+    # dirty. So, work with transpose(U)
+    V = U.T
+    for i in range(n):
+        prev_basis = V[0:i]     # orthonormal basis before V[i]
+        coeff_vec = np.dot(prev_basis, V[i].T)  # each entry is np.dot(V[j], V[i]) for all j < i
+        # subtract projections of V[i] onto already determined basis V[0:i]
+        V[i] -= np.dot(coeff_vec, prev_basis).T
+        if np.linalg.norm(V[i]) < eps:
+            V[i][V[i] < eps] = 0.   # set the small entries to 0
+        else:
+            V[i] /= np.linalg.norm(V[i])
+    return V.T

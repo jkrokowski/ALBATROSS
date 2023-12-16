@@ -1,3 +1,6 @@
+import os
+# # print(os.environ)
+os.environ['SCIPY_USE_PROPACK'] = "1"
 from FROOT_BAT import cross_section
 
 from dolfinx import mesh,plot
@@ -15,9 +18,9 @@ domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], c
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':100,'nu':0.2} }
-                        }
-
+                        'MECH_PROPS':{'E':7.31E10,'nu':0.40576923076923066} ,
+                        'DENSITY':2.7e3}
+        }
 #analyze cross section
 squareXC = cross_section.CrossSection(domain,mats)
 squareXC.getXCStiffnessMatrix()
