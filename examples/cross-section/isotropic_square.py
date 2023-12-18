@@ -10,7 +10,7 @@ import numpy as np
 from dolfinx.io import XDMFFile
 
 #create mesh
-N = 3
+N = 5
 W = .1
 H = .1
 

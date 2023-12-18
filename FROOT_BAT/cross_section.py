@@ -278,29 +278,46 @@ class CrossSection:
         
         #========scipy inverse iteration ======#
         from scipy.sparse.linalg import splu
-        lu = splu(Acsc)
-        U = lu.U
-        L = lu.L
+        lu = splu(Acsr.tocsc())
+        U = lu.U.tocsr()
+        L = lu.L.tocsr()
         
-        X = np.ones((U.shape[0],12))
-
+        Xprev = np.ones((U.shape[0],12))
+        # Xprev= X0/np.linalg.norm(X0,axis=0)
         from scipy.sparse.linalg import spsolve_triangular,spsolve
         from scipy.sparse.linalg import norm
+        from scipy.sparse import identity
+        
+        I = identity(U.shape[0])
 
-        # w = spsolve_triangular(U,x,lower=False)
-        # x = w/np.linalg.norm(w)
         tol = 1e-8
         max_iter = 100
-        residual = np.linalg.norm(Acsc.dot(X))
+
         for _ in range(max_iter):
-            w = spsolve_triangular(L,X/np.linalg.norm(X,axis=0))
-            X = spsolve_triangular(U,w,lower=False)
-            X = X/np.linalg.norm(X,axis=0)
-            residual = np.linalg.norm(Acsc.dot(X))
+            Y = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
+            # Y,_ = np.linalg.qr(Y)
+            X = spsolve_triangular(U,Y,lower=False)
+
+            # residual = np.linalg.norm(Acsr.dot(X/np.linalg.norm(X)))
+            # X = X/np.linalg.norm(X,axis=0)
+            X, _ = np.linalg.qr(X)
+            residual = np.linalg.norm(Acsr.dot(X)-Xprev)
+            Xprev = X
+            
+
+            # X = orthogonalize(X)
+            # X = orthogonalize(X.T).T
+            # residual = np.linalg.norm(Acsr.dot(X))
+            # X = X/np.linalg.norm(X,axis=0)
+            # residual = np.linalg.norm(Acsr.dot(X))
+            # Xcsr = csr_matrix(X)
+            # XXT = Xcsr.dot(Xcsr.T)
+            # residual = np.linalg.norm((I-XXT).dot(Y))
 
             if residual < tol:
                 break
-
+        self.sols = X
+        self.sparse_sols = csr_matrix(self.sols)
         t8=time.time()
 
         
@@ -334,7 +351,7 @@ class CrossSection:
         cols = np.arange(-12,0)
         # self.sparse_sols = q1coo.tocsc()[:,cols]
         t8=time.time()
-        self.sols = self.sparse_sols.toarray()
+        # self.sols = self.sparse_sols.toarray()
         t9=time.time()
         print("extraction of sparse cols:")
         print(t8-t7)

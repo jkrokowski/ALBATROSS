@@ -441,9 +441,6 @@ def sym_LU_inv_iter(A,max_iter=1000):
         w = spsolve_triangular(L,x/np.linalg.norm(x))
         x = spsolve_triangular(U,w,lower=False)
         x = x/np.linalg.norm(x)
-
-        if np.linalg.norm(A.dot(x)) < tol:
-            break
         
         # y1 = spsolve_triangular(L.T,x/np.linalg.norm(x),lower=False)
         # w1 = spsolve_triangular(U.T,y1)
@@ -454,7 +451,10 @@ def sym_LU_inv_iter(A,max_iter=1000):
         # w = spsolve_triangular(A,x/np.linalg.norm(x))
         # w = spsolve(A.T,x/np.linalg.norm(x))
         # x = spsolve(A,w)
+        res = np.linalg.norm(A.dot(x))
 
+        if res < tol:
+            break
     return x
 
 def orthogonalize(U, eps=1e-15):
@@ -506,7 +506,7 @@ def main():
     if MESH_DIM==1:
         msh = mesh.create_interval(MPI.COMM_WORLD,5,[0,1])
     if MESH_DIM==2:
-        N = 1000
+        N = 10
         W = .1
         H = .5
         msh = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
