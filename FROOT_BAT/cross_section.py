@@ -232,12 +232,13 @@ class CrossSection:
 
         #========sparseqr approach ======#
         #very very fast, but memory intensive
-        # m,n1=self.A_mat.getSize()
-        # Anp = self.A_mat.getValues(range(m),range(n1))
-        # print('computing QR factorization')
-        # print(self.A_mat.size)
-        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-        # q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
+        m,n1=self.A_mat.getSize()
+        Anp = self.A_mat.getValues(range(m),range(n1))
+        print('computing QR factorization')
+        print(self.A_mat.size)
+        Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
+        X0 = q1coo.tocsc()[:,-12:]
 
         t4 = time.time()
         #=============
@@ -278,32 +279,55 @@ class CrossSection:
         
         #========scipy inverse iteration ======#
         from scipy.sparse.linalg import splu
-        lu = splu(Acsr.tocsc())
+        lu = splu(Acsr.T.tocsc(),permc_spec='NATURAL')
         U = lu.U.tocsr()
         L = lu.L.tocsr()
         
         Xprev = np.ones((U.shape[0],12))
+        X = Xprev
         # Xprev= X0/np.linalg.norm(X0,axis=0)
         from scipy.sparse.linalg import spsolve_triangular,spsolve
         from scipy.sparse.linalg import norm
         from scipy.sparse import identity
         
-        I = identity(U.shape[0])
+        # I = identity(U.shape[0])
 
-        tol = 1e-8
+        tol = 1e-13
         max_iter = 100
 
         for _ in range(max_iter):
-            Y = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
+            # W = spsolve_triangular(U.T,Xprev/np.linalg.norm(Xprev,axis=0))
+            # Y = spsolve_triangular(U,W,lower=False)
+            # Ay = Acsr.dot(Y)
+            # X,_ = np.linalg.qr(Y)
+            
+            # AX=Acsr.dot(X)
+            # res = np.linalg.norm(X-Xprev)
+            # res2 = np.linalg.norm(AX)
+            # res3 = np.linalg.norm(AX-Xprev)
+
+            # Xprev = X
+            #==========
+            # Y = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
+            W = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
             # Y,_ = np.linalg.qr(Y)
-            X = spsolve_triangular(U,Y,lower=False)
+            Y = spsolve_triangular(U,W,lower=False)
 
             # residual = np.linalg.norm(Acsr.dot(X/np.linalg.norm(X)))
             # X = X/np.linalg.norm(X,axis=0)
+            AY = Acsr.dot(Y)
             X, _ = np.linalg.qr(X)
-            residual = np.linalg.norm(Acsr.dot(X)-Xprev)
-            Xprev = X
-            
+            AX = Acsr.dot(X)
+            # Ax = Ax/np.linalg.norm(Ax,axis=0)
+            res = np.linalg.norm(X-Xprev)
+            res1 = np.linalg.norm(AY)
+            res2 = np.linalg.norm(AX)
+            res3 = np.linalg.norm(AX-Xprev)
+            res4 = np.linalg.norm(AY-Xprev)
+            res5 = np.linalg.norm(Y-Xprev)
+
+            Xprev = X``
+            #=======
 
             # X = orthogonalize(X)
             # X = orthogonalize(X.T).T
@@ -314,8 +338,15 @@ class CrossSection:
             # XXT = Xcsr.dot(Xcsr.T)
             # residual = np.linalg.norm((I-XXT).dot(Y))
 
-            if residual < tol:
+            if res2 < tol:
                 break
+        # self.sparse_sols = q1coo.tocsc()[:,-12:]
+        # self.sols = self.sparse_sols.A
+        Pr = csc_matrix((np.ones(U.shape[0]), (lu.perm_r, np.arange(U.shape[0]))))
+        X2 = Pr.T.dot(X)
+        X3 = Pr.dot(X)
+        X0 = q1coo.tocsc()[:,-12:]
+        X0new, _ = np.linalg.qr(X0.A)
         self.sols = X
         self.sparse_sols = csr_matrix(self.sols)
         t8=time.time()
