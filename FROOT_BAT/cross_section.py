@@ -9,13 +9,13 @@ import os
 os.environ['SCIPY_USE_PROPACK'] = "1"
 from scipy.sparse.linalg import svds,inv
 import sparseqr
-from scipy.sparse import csr_matrix,hstack
+from scipy.sparse import csr_matrix,hstack,csc_matrix
 
 from dolfinx.plot import create_vtk_mesh
 import pyvista
 
 from FROOT_BAT.material import *
-from FROOT_BAT.utils import get_vtx_to_dofs,get_pts_and_cells
+from FROOT_BAT.utils import get_vtx_to_dofs,get_pts_and_cells,sparseify
 
 #TODO: find cross-sectional properties about the zero point
 #TODO: allow user to specify a point to find xs props about
@@ -201,37 +201,6 @@ class CrossSection:
         self.A_mat = assemble_matrix(form(self.Residual))
         self.A_mat.assemble()
 
-        import time
-        #====numpy svd approach=====#
-        #this is clearly one of the worst options at large scales
-        t0 = time.time()
-        # m1,n1=self.A_mat.getSize()
-        # Anp = self.A_mat.getValues(range(m1),range(n1))
-
-        # Usvd,sv,Vsvd = np.linalg.svd(Anp)
-        # self.sols = Vsvd[-12:,:].T
-        t1= time.time()
-        #===========
-
-        #========numpy qr approach ======#
-        #faster, but still bad
-        # m,n1=self.A_mat.getSize()
-        # Anp = self.A_mat.getValues(range(m),range(n1))
-        # q,r = np.linalg.qr(Anp,mode='complete')
-        # # q1,r1 = np.linalg.qr(Anp.T,mode='complete')
-        t2 = time.time()
-        #=============
-
-        #========numpy qr approach ======#
-        #gram schmidt variant, still dense and slow and bad
-        # m,n1=self.A_mat.getSize()
-        # Anp = self.A_mat.getValues(range(m),range(n1))
-        # q1,r1 = qr_gs_modsr(Anp.T)
-        t3 = time.time()
-        #=============
-
-        #========sparseqr approach ======#
-        #very very fast, but memory intensive
         m,n1=self.A_mat.getSize()
         Anp = self.A_mat.getValues(range(m),range(n1))
         print('computing QR factorization')
@@ -240,7 +209,49 @@ class CrossSection:
         q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
         X0 = q1coo.tocsc()[:,-12:]
 
-        t4 = time.time()
+        self.sparse_sols = q1coo.tocsc()[:,-12:]
+        self.sols = self.sparse_sols.A
+
+        # import time
+        # #====numpy svd approach=====#
+        # #this is clearly one of the worst options at large scales
+        # t0 = time.time()
+        # # m1,n1=self.A_mat.getSize()
+        # # Anp = self.A_mat.getValues(range(m1),range(n1))
+
+        # # Usvd,sv,Vsvd = np.linalg.svd(Anp)
+        # # self.sols = Vsvd[-12:,:].T
+        # t1= time.time()
+        # #===========
+
+        # #========numpy qr approach ======#
+        # #faster, but still bad
+        # # m,n1=self.A_mat.getSize()
+        # # Anp = self.A_mat.getValues(range(m),range(n1))
+        # # q,r = np.linalg.qr(Anp,mode='complete')
+        # # # q1,r1 = np.linalg.qr(Anp.T,mode='complete')
+        # t2 = time.time()
+        # #=============
+
+        # #========numpy qr approach ======#
+        # #gram schmidt variant, still dense and slow and bad
+        # # m,n1=self.A_mat.getSize()
+        # # Anp = self.A_mat.getValues(range(m),range(n1))
+        # # q1,r1 = qr_gs_modsr(Anp.T)
+        # t3 = time.time()
+        # #=============
+
+        #========sparseqr approach ======#
+        #very very fast, but memory intensive
+        # m,n1=self.A_mat.getSize()
+        # Anp = self.A_mat.getValues(range(m),range(n1))
+        # print('computing QR factorization')
+        # print(self.A_mat.size)
+        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        # q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
+        # X0 = q1coo.tocsc()[:,-12:]
+
+        # t4 = time.time()
         #=============
 
         #==========
@@ -249,7 +260,7 @@ class CrossSection:
 
         # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
         # _,_,self.sparse_sols= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
-        t5 = time.time()
+        # t5 = time.time()
 
         # self.A_mat.
 
@@ -266,7 +277,7 @@ class CrossSection:
         # Pc = csc_matrix((np.ones(B.perm_c.shape[0]), (np.arange(B.perm_c.shape[0]), B.perm_c)))
         # q_lu_coo,r_lu_coo,E,rank = sparseqr.qr(U.transpose(),economy=True)
         # nullspace = Pc.dot(q_lu_coo.transpose().tocsc()[:,-12:])
-        t6 = time.time()
+        # t6 = time.time()
         #=============
         #========scipy lu + sparse svd ======#
         # from scipy.sparse import csc_matrix
@@ -275,7 +286,7 @@ class CrossSection:
         # lu = splu(Acsc)
         # U = lu.U
         # _,_,self.sparse_sols= svds(U,k=12,which='SM',solver='propack', return_singular_vectors="vh")
-        t7=time.time()
+        # t7=time.time()
         
         #========scipy inverse iteration ======#
         # from scipy.sparse.linalg import splu
@@ -341,8 +352,7 @@ class CrossSection:
 
         #     if res < tol:
         #         break
-        self.sparse_sols = q1coo.tocsc()[:,-12:]
-        self.sols = self.sparse_sols.A
+        
         # Pr = csc_matrix((np.ones(U.shape[0]), (lu.perm_r, np.arange(U.shape[0]))))
         # Pc = csc_matrix((np.ones(U.shape[0]), (np.arange(U.shape[0]), lu.perm_c)))
         # X2 = Pr.T.dot(X)
@@ -351,25 +361,25 @@ class CrossSection:
         # X0new, _ = np.linalg.qr(X0.A)
         # self.sols = X
         # self.sparse_sols = csr_matrix(self.sols)
-        t8=time.time()
+        # t8=time.time()
 
         
-        if True:
-            print('numpy svd time:')
-            print(t1-t0)
-            print('numpy qr time:')
-            print(t2-t1)
-            print('numpy gs_modsr qr time:')
-            print(t3-t2)
-            print('sparse qr time:')
-            print(t4-t3)
-            print('scipy svds time:')
-            print(t5-t4)
-            print(t6-t5)
-            print('scipy lu+svds time:')
-            print(t7-t6)
-            print('scipy inverse iteration time:')
-            print(t8-t7)
+        # if True:
+        #     print('numpy svd time:')
+        #     print(t1-t0)
+        #     print('numpy qr time:')
+        #     print(t2-t1)
+        #     print('numpy gs_modsr qr time:')
+        #     print(t3-t2)
+        #     print('sparse qr time:')
+        #     print(t4-t3)
+        #     print('scipy svds time:')
+        #     print(t5-t4)
+        #     print(t6-t5)
+        #     print('scipy lu+svds time:')
+        #     print(t7-t6)
+        #     print('scipy inverse iteration time:')
+        #     print(t8-t7)
 
 
         # A_mat_csr = self.A_mat.getValuesCSR()
@@ -379,17 +389,17 @@ class CrossSection:
 
         #convert to dense (want to avoid)
         # print('making nullspace from null column vectors....')
-        t7=time.time()
-        # self.sparse_sols = hstack([q1coo.getcol(i) for i in range(-12,0)])
-        cols = np.arange(-12,0)
-        # self.sparse_sols = q1coo.tocsc()[:,cols]
-        t8=time.time()
-        # self.sols = self.sparse_sols.toarray()
-        t9=time.time()
-        print("extraction of sparse cols:")
-        print(t8-t7)
-        print("saving as dense:")
-        print(t9-t8)
+        # t7=time.time()
+        # # self.sparse_sols = hstack([q1coo.getcol(i) for i in range(-12,0)])
+        # cols = np.arange(-12,0)
+        # # self.sparse_sols = q1coo.tocsc()[:,cols]
+        # t8=time.time()
+        # # self.sols = self.sparse_sols.toarray()
+        # t9=time.time()
+        # print("extraction of sparse cols:")
+        # print(t8-t7)
+        # print("saving as dense:")
+        # print(t9-t8)
         # self.sols = q1coo[:,-12:]
 
         # self.sols = nullspace.toarray()
@@ -411,7 +421,7 @@ class CrossSection:
         #===========
 
         # A_mat_csr = self.A_mat.getValuesCSR()
-        print()
+        # print()
         
     def decoupleModes(self):
         x = self.x
@@ -507,7 +517,17 @@ class CrossSection:
         ubar_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
         uhat_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
 
-        self.sols_decoup = (self.sparse_sols.dot(inv(csr_matrix(mat)))).toarray()
+        # def sparseify(mat,sparse_format='csr'):
+        #     lim = np.finfo(float).eps
+        #     mat.real[abs(mat.real) < lim] = 0.0
+        #     if sparse_format == 'csc':
+        #         return csc_matrix(mat)
+        #     elif sparse_format == 'csr':
+        #         return csr_matrix(mat)
+        
+        mat_sparse = sparseify(mat,sparse_format='csc')
+
+        self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
         print()
 
@@ -624,10 +644,13 @@ class CrossSection:
         uhat_field.vector.destroy()     #need to add to prevent PETSc memory leak 
 
         #compute Flexibility matrix
+        K1_sparse = sparseify(K1,sparse_format='csr')
+        # self.K1_inv = 
         self.K1_inv = np.linalg.inv(K1)
-
+        print(K1)
         self.S = self.K1_inv.T@K2@self.K1_inv
         self.K = np.linalg.inv(self.S)
+        print()
     
     def getXSMassMatrix(self):
         return

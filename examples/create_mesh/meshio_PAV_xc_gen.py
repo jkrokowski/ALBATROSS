@@ -3,7 +3,7 @@ import scipy.io
 import os
 path = os.getcwd()
 print(path)
-mat = scipy.io.loadmat(path+'/PAV_xcs/PavCsData/PavCs1.mat')
+mat = scipy.io.loadmat(path+'/PAV_xcs/PavCsData/PavCs11.mat')
 
 elems = mat['vabs_2d_mesh_elements']
 nodes = mat['vabs_2d_mesh_nodes']

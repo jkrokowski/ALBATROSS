@@ -6,6 +6,7 @@ import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
 import scipy.io
+from scipy.sparse import csc_matrix,csr_matrix
 import meshio
 
 from dolfinx.geometry import BoundingBoxTree,compute_collisions,compute_colliding_cells
@@ -225,3 +226,11 @@ def project(v, target_func, bcs=[]):
     solver = PETSc.KSP().create(A.getComm())
     solver.setOperators(A)
     solver.solve(b, target_func.vector)
+
+def sparseify(mat,sparse_format='csr'):
+     lim = np.finfo(float).eps
+     mat.real[abs(mat.real) < lim] = 0.0
+     if sparse_format == 'csc':
+          return csc_matrix(mat)
+     elif sparse_format == 'csr':
+          return csr_matrix(mat)

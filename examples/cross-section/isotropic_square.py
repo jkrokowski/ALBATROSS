@@ -29,7 +29,7 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
         }
 #analyze cross section
 squareXC = cross_section.CrossSection(domain,mats)
-squareXC.getXCStiffnessMatrix()
+squareXC.getXSStiffnessMatrix()
 
 #output stiffess matrix
 print(squareXC.K)

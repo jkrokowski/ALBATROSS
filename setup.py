@@ -1,16 +1,16 @@
 from distutils.core import setup
 import setuptools
 setup(
-    name='FROOT_BAT',
-    version='0.1',
+    name='ALBATROSS',
+    version='0.0.1',
     packages=[
-        'FROOT_BAT'
+        'ALBATROSS'
     ],
     url='https://github.com/jkrokowski/FROOT_BAT',
     author='Joshua Krokowski',
     author_email='jkrokowski@ucsd.edu',
-    description="FEniCSx Represenation Of slender Objects for Three-Dimensional Beam Analysis Tasks",
+    description="Analysis Library for Beams And Three-Dimensional Representations Of Slender Structures",
     install_requires=[
-        'numpy'
+        'numpy','sparseqr','scipy','fenicsx'
     ]
 )
