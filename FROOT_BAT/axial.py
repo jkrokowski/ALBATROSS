@@ -38,12 +38,12 @@ class Axial:
     beam_props: 2-tensor (6x6) function defining beam properties along span
     '''
 
-    def __init__(self,domain,xcinfo,orientation):
+    def __init__(self,domain,xsinfo,orientation):
         #import domain, function, and beam properties
         self.domain = domain
         self.beam_element = BeamElementRefined(domain)
         self.eleDOFs = 6
-        self.xcinfo = xcinfo
+        self.xsinfo = xsinfo
 
         self.dx = Measure('dx',self.domain)
         self.dx_shear = Measure('dx',self.domain,metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
@@ -103,7 +103,7 @@ class Axial:
                         dot(self.tgrad(theta), self.a2)])
 
     def generalized_stresses(self,w):
-        return dot(self.xcinfo, self.generalized_strains(w))
+        return dot(self.xsinfo, self.generalized_strains(w))
 
     #constructing RHS:
     def add_dist_load(self,f):
@@ -292,7 +292,7 @@ class Axial:
     def get_local_disp(self,points):
         '''
         returns the displacement and rotation at a specific 
-        point on the beam axis with respect to the axial direction and xc principle axes
+        point on the beam axis with respect to the axial direction and xs principle axes
 
         ARGS:
             point = tuple of (x,y,z) locations to return displacements and rotations
@@ -380,7 +380,7 @@ class Axial:
     def plot_axial_displacement(self,warp_factor=1):
         '''
         returns a fxn defined over a 3D mesh generated from the 
-        2D xc's and the 1D analysis mesh
+        2D xs's and the 1D analysis mesh
         '''
         pyvista.global_theme.background = [255, 255, 255, 255]
         pyvista.global_theme.font.color = 'black'

@@ -144,7 +144,7 @@ def get_pts_and_cells(domain,points):
      # disp = self.uh.sub(0).eval(points_on_proc,cells)
      # rot = self.uh.sub(1).eval(points_on_proc,cells)
 
-def mat_to_mesh(filename,aux_data=None, plot_xc = False ):
+def mat_to_mesh(filename,aux_data=None, plot_xs = False ):
      mat = scipy.io.loadmat(filename)
      data = []
      for item in aux_data:
@@ -164,7 +164,7 @@ def mat_to_mesh(filename,aux_data=None, plot_xc = False ):
      with XDMFFile(MPI.COMM_WORLD, 'file.xdmf', "r") as xdmf:
           msh = xdmf.read_mesh(name='Grid')
 
-     if plot_xc:
+     if plot_xs:
 
           msh.topology.create_connectivity(msh.topology.dim-1, 0)
 

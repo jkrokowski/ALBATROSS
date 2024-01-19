@@ -18,8 +18,8 @@ from FROOT_BAT.material import *
 from FROOT_BAT.utils import get_vtx_to_dofs,get_pts_and_cells
 
 #TODO: find cross-sectional properties about the zero point
-#TODO: allow user to specify a point to find xc props about
-#TODO: provide a method to translate between different xc values
+#TODO: allow user to specify a point to find xs props about
+#TODO: provide a method to translate between different xs values
 
 class CrossSection:
     def __init__(self, msh, material ,celltags=None):
@@ -48,7 +48,7 @@ class CrossSection:
         self.p,self.q,self.r,self.s=indices(4)
         self.a,self.B = indices(2)
         
-        #need to think a bit furth about mutlimaterial xc's here
+        #need to think a bit furth about mutlimaterial xs's here
         #TODO: rn, hard coded to just use the first material density
         self.rho = self.material[self.mat_ids[0][0]]['DENSITY']
 
@@ -68,7 +68,7 @@ class CrossSection:
         self.yavg = assemble_scalar(form(self.x[0]*self.dx))/self.A
         self.zavg = assemble_scalar(form(self.x[1]*self.dx))/self.A
 
-    def getXCStiffnessMatrix(self):
+    def getXSStiffnessMatrix(self):
         
         # Construct Displacement Coefficient mixed function space
         self.Ve = VectorElement("CG",self.msh.ufl_cell(),1,dim=3)
@@ -95,7 +95,7 @@ class CrossSection:
         print('decoupling modes...')
         self.decoupleModes()
         print('computing stiffness matrix')
-        self.computeXCStiffnessMat()
+        self.computeXSStiffnessMat()
         # PETSc.garbage_cleanup()
    
     def applyRotation(self,C,alpha,beta,gamma):
@@ -247,7 +247,7 @@ class CrossSection:
         #scipy sparse svd, slow, but seems to work okay
         #still
 
-        Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
         # _,_,self.sparse_sols= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
         t5 = time.time()
 
@@ -269,86 +269,88 @@ class CrossSection:
         t6 = time.time()
         #=============
         #========scipy lu + sparse svd ======#
-        from scipy.sparse import csc_matrix
-        Acsc = Acsr.tocsc()
-        from scipy.sparse.linalg import splu
+        # from scipy.sparse import csc_matrix
+        # Acsc = Acsr.tocsc()
+        # from scipy.sparse.linalg import splu
         # lu = splu(Acsc)
         # U = lu.U
         # _,_,self.sparse_sols= svds(U,k=12,which='SM',solver='propack', return_singular_vectors="vh")
         t7=time.time()
         
         #========scipy inverse iteration ======#
-        from scipy.sparse.linalg import splu
-        lu = splu(Acsr.T.tocsc(),permc_spec='NATURAL')
-        U = lu.U.tocsr()
-        L = lu.L.tocsr()
+        # from scipy.sparse.linalg import splu
+        # #'NATURAL' specifies partial pivoting
+        # lu = splu(Acsr.tocsc(),permc_spec='NATURAL')
+        # U = lu.U.tocsr()
+        # L = lu.L.tocsr()
         
-        Xprev = np.ones((U.shape[0],12))
-        X = Xprev
-        # Xprev= X0/np.linalg.norm(X0,axis=0)
-        from scipy.sparse.linalg import spsolve_triangular,spsolve
-        from scipy.sparse.linalg import norm
-        from scipy.sparse import identity
+        # Xprev = np.ones((U.shape[0],12))
+        # X = Xprev
+        # # Xprev= X0/np.linalg.norm(X0,axis=0)
+        # from scipy.sparse.linalg import spsolve_triangular,spsolve
+        # from scipy.sparse.linalg import norm
+        # from scipy.sparse import identity
         
-        # I = identity(U.shape[0])
+        # # I = identity(U.shape[0])
 
-        tol = 1e-13
-        max_iter = 100
+        # tol = 1e-13
+        # max_iter = 100
 
-        for _ in range(max_iter):
-            # W = spsolve_triangular(U.T,Xprev/np.linalg.norm(Xprev,axis=0))
-            # Y = spsolve_triangular(U,W,lower=False)
-            # Ay = Acsr.dot(Y)
-            # X,_ = np.linalg.qr(Y)
+        # for _ in range(max_iter):
+        #     # W = spsolve_triangular(U.T,Xprev/np.linalg.norm(Xprev,axis=0))
+        #     # Y = spsolve_triangular(U,W,lower=False)
+        #     # Ay = Acsr.dot(Y)
+        #     # X,_ = np.linalg.qr(Y)
             
-            # AX=Acsr.dot(X)
-            # res = np.linalg.norm(X-Xprev)
-            # res2 = np.linalg.norm(AX)
-            # res3 = np.linalg.norm(AX-Xprev)
+        #     # AX=Acsr.dot(X)
+        #     # res = np.linalg.norm(X-Xprev)
+        #     # res2 = np.linalg.norm(AX)
+        #     # res3 = np.linalg.norm(AX-Xprev)
 
-            # Xprev = X
-            #==========
-            # Y = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
-            W = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
-            # Y,_ = np.linalg.qr(Y)
-            Y = spsolve_triangular(U,W,lower=False)
+        #     # Xprev = X
+        #     #==========
+        #     # Y = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
+        #     W = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
+        #     # Y,_ = np.linalg.qr(Y)
+        #     Y = spsolve_triangular(U,W,lower=False)
 
-            # residual = np.linalg.norm(Acsr.dot(X/np.linalg.norm(X)))
-            # X = X/np.linalg.norm(X,axis=0)
-            AY = Acsr.dot(Y)
-            X, _ = np.linalg.qr(X)
-            AX = Acsr.dot(X)
-            # Ax = Ax/np.linalg.norm(Ax,axis=0)
-            res = np.linalg.norm(X-Xprev)
-            res1 = np.linalg.norm(AY)
-            res2 = np.linalg.norm(AX)
-            res3 = np.linalg.norm(AX-Xprev)
-            res4 = np.linalg.norm(AY-Xprev)
-            res5 = np.linalg.norm(Y-Xprev)
+        #     # residual = np.linalg.norm(Acsr.dot(X/np.linalg.norm(X)))
+        #     # X = X/np.linalg.norm(X,axis=0)
+        #     AY = Acsr.dot(Y)
+        #     X, _ = np.linalg.qr(X)
+        #     AX = Acsr.dot(X)
+        #     # Ax = Ax/np.linalg.norm(Ax,axis=0)
+        #     res = np.linalg.norm(X-Xprev)
+        #     res1 = np.linalg.norm(AY)
+        #     res2 = np.linalg.norm(AX)
+        #     res3 = np.linalg.norm(AX-Xprev)
+        #     res4 = np.linalg.norm(AY-Xprev)
+        #     res5 = np.linalg.norm(Y-Xprev)
 
-            Xprev = X``
-            #=======
+        #     Xprev = X
+        #     #=======
 
-            # X = orthogonalize(X)
-            # X = orthogonalize(X.T).T
-            # residual = np.linalg.norm(Acsr.dot(X))
-            # X = X/np.linalg.norm(X,axis=0)
-            # residual = np.linalg.norm(Acsr.dot(X))
-            # Xcsr = csr_matrix(X)
-            # XXT = Xcsr.dot(Xcsr.T)
-            # residual = np.linalg.norm((I-XXT).dot(Y))
+        #     # X = orthogonalize(X)
+        #     # X = orthogonalize(X.T).T
+        #     # residual = np.linalg.norm(Acsr.dot(X))
+        #     # X = X/np.linalg.norm(X,axis=0)
+        #     # residual = np.linalg.norm(Acsr.dot(X))
+        #     # Xcsr = csr_matrix(X)
+        #     # XXT = Xcsr.dot(Xcsr.T)
+        #     # residual = np.linalg.norm((I-XXT).dot(Y))
 
-            if res2 < tol:
-                break
-        # self.sparse_sols = q1coo.tocsc()[:,-12:]
-        # self.sols = self.sparse_sols.A
-        Pr = csc_matrix((np.ones(U.shape[0]), (lu.perm_r, np.arange(U.shape[0]))))
-        X2 = Pr.T.dot(X)
-        X3 = Pr.dot(X)
-        X0 = q1coo.tocsc()[:,-12:]
-        X0new, _ = np.linalg.qr(X0.A)
-        self.sols = X
-        self.sparse_sols = csr_matrix(self.sols)
+        #     if res < tol:
+        #         break
+        self.sparse_sols = q1coo.tocsc()[:,-12:]
+        self.sols = self.sparse_sols.A
+        # Pr = csc_matrix((np.ones(U.shape[0]), (lu.perm_r, np.arange(U.shape[0]))))
+        # Pc = csc_matrix((np.ones(U.shape[0]), (np.arange(U.shape[0]), lu.perm_c)))
+        # X2 = Pr.T.dot(X)
+        # X3 = Pr.dot(X)
+        # X0 = q1coo.tocsc()[:,-12:]
+        # X0new, _ = np.linalg.qr(X0.A)
+        # self.sols = X
+        # self.sparse_sols = csr_matrix(self.sols)
         t8=time.time()
 
         
@@ -438,7 +440,7 @@ class CrossSection:
         ubar_mode = Function(UBAR)
         uhat_mode = Function(UHAT)
 
-        #area and center of xc
+        #area and center of xs
         A = self.A
         yavg = self.yavg
         zavg = self.zavg
@@ -481,7 +483,7 @@ class CrossSection:
             sigma12 = sigma[0,1]
             sigma13 = sigma[0,2]
 
-            #integrate stresses over cross-section at "root" of beam and construct xc load vector
+            #integrate stresses over cross-section at "root" of beam and construct xs load vector
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
@@ -509,7 +511,7 @@ class CrossSection:
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
         print()
 
-    def computeXCStiffnessMat(self):
+    def computeXSStiffnessMat(self):
         x = self.x
         dx = self.dx
         yavg = self.yavg
@@ -585,7 +587,7 @@ class CrossSection:
             sigma12 = sigma[0,1]
             sigma13 = sigma[0,2]
 
-            #integrate stresses over cross-section at "root" of beam and construct xc load vector
+            #integrate stresses over cross-section at "root" of beam and construct xs load vector
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
@@ -627,7 +629,7 @@ class CrossSection:
         self.S = self.K1_inv.T@K2@self.K1_inv
         self.K = np.linalg.inv(self.S)
     
-    def getXCMassMatrix(self):
+    def getXSMassMatrix(self):
         return
     
     def coeff_to_field(self,fxn,coeff,vtx_to_dof):
@@ -651,9 +653,9 @@ class CrossSection:
                         [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
                         [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
     
-    def recover_stress_xc(self,loads):
+    def recover_stress_xs(self,loads):
         '''
-        loads: 6x1 vector of the loads over the xc
+        loads: 6x1 vector of the loads over the xs
         '''
         # print('loads:')
         # print(loads)
@@ -696,7 +698,7 @@ class CrossSection:
         # points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
 
         # sigma_sol_eval = utotal.eval(points_on_proc,cells)        
-        #TODO: now plot over xc
+        #TODO: now plot over xs
         warp_factor = 1
 
         #plot Axial mesh
