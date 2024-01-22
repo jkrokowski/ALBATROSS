@@ -1,13 +1,13 @@
-# FROOT-BAT 
-**F**EniCSx **R**epresenation **O**f slender **O**bjects for  **T**hree-Dimensional **B**eam **A**nalysis **T**asks
+# ALBATROSS
+**A**nalysis **L**ibrary for **B**eams **A**nd **T**hree-dimensional **R**epresentations **O**f **S**lender **S**tructures
 
-Cross-sectional Analysis via polynomial expansion for displacements via BAT-CAVE (**C**ross-Sectional **A**nalysis from **V**ariable **E**pansions) 
+A library for modeling slender structures implementing topologically 1D beam models in 3D ambient space using FEniCSx. Included cross-sectional analysis for determining section properties.
 
-Topologically 1D beam models in 3D ambient space using FEniCSx via BAT-WIING (**W**ith **I**ntervals **I**nvolving **N**onlinear **G**eometry)  
+Current models include:
+* Static Timoshenko (shear-deformable) 1D beam theory
+* Cross-sectional analysis for computing the cross-section properties of arbitrary shapes
 
-Timoshenko 6x6 stiffness matrices with a mixed finite element function space
-
-Based on the formulation and example file from Jeremy Bleyer here:
+1D analysis code is heavily borrowed from the formulation and example files from Jeremy Bleyer here:
 https://comet-fenics.readthedocs.io/en/latest/demo/beams_3D/beams_3D.html
 
 TBD: Installation information
