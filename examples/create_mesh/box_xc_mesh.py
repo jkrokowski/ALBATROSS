@@ -52,5 +52,7 @@ msh.name = 'box_XC'
 with XDMFFile(msh.comm, f"output/box_XC.xdmf", "w") as file:
     file.write_mesh(msh)
 
+gmsh.fltk.run()
+
 # close gmsh API
 gmsh.finalize()

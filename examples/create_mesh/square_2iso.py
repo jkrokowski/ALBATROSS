@@ -50,8 +50,8 @@ msh.name = xcName
 cell_markers.name = f"{msh.name}_cells"
 facet_markers.name = f"{msh.name}_facets"
 
-# close gmsh API
-gmsh.finalize()
+# # close gmsh API
+# gmsh.finalize()
 
 def create_mesh(mesh, cell_type, prune_z=False):
     cells = mesh.get_cells_type(cell_type)
@@ -69,3 +69,5 @@ if MPI.COMM_WORLD.rank == 0:
     print(mesh.cells)
     print(mesh.cell_data)
     meshio.write(f"output/"+xcName+".xdmf", mesh)
+
+gmsh.finalize()

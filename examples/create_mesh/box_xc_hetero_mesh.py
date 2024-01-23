@@ -56,7 +56,7 @@ msh, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, MPI.COMM_SEL
 msh.name = xcName
 cell_markers.name = f"{msh.name}_cells"
 facet_markers.name = f"{msh.name}_facets"
-
+gmsh.fltk.run()
 # close gmsh API
 gmsh.finalize()
 

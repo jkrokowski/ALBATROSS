@@ -7,8 +7,8 @@ import pyvista
 import numpy as np
 from dolfinx.plot import create_vtk_mesh
 
-from FROOT_BAT.utils import mat_to_mesh,beam_interval_mesh_3D
-from FROOT_BAT.beam_model import BeamModel
+from ALBATROSS.utils import mat_to_mesh,beam_interval_mesh_3D
+from ALBATROSS.beam_model import BeamModel
 path = os.getcwd()
 
 #unit conversions
@@ -77,7 +77,7 @@ if True:
 #define orienation of primary cross-section axis
 orientations = np.tile([0,1,0],len(node_x))
 #collect relevant beam model properties
-xc_params = []
+xs_params = []
 for i in range(num_xc):
     params={'shape': 'box',
             'h': height[i],
@@ -87,11 +87,11 @@ for i in range(num_xc):
             'E':7.31E10,
             'nu':0.40576923076923066}
             # 'nu':0.333}
-    xc_params.append(params)
-xc_info = [xc_params,axial_pos_mesh,orientations]
+    xs_params.append(params)
+xs_info = [xs_params,axial_pos_mesh,orientations]
 #initialize beam model
-PAV_wing = BeamModel(axial_mesh,xc_info,xc_type='analytical')
-for i,xc in enumerate(PAV_wing.xcs):
+PAV_wing = BeamModel(axial_mesh,xs_info,xs_type='analytical')
+for i,xc in enumerate(PAV_wing.xss):
     print('stiffness matrix '+str(i))
     print(np.diag(xc.K))
 #gather loading data

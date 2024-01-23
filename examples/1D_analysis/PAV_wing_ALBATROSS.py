@@ -9,8 +9,8 @@ import pyvista
 import numpy as np
 from dolfinx.plot import create_vtk_mesh
 
-from FROOT_BAT.utils import mat_to_mesh,beam_interval_mesh_3D
-from FROOT_BAT.beam_model import BeamModel
+from ALBATROSS.utils import mat_to_mesh,beam_interval_mesh_3D
+from ALBATROSS.beam_model import BeamModel
 path = os.getcwd()
 
 msh_list = []

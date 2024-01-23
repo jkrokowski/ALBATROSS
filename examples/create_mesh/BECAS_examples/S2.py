@@ -72,11 +72,11 @@ gmsh.write(xcName+".msh")
 if '-nopopup' not in sys.argv:
     gmsh.fltk.run()
 
-#use meshio to convert msh file to xdmf
-msh, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, MPI.COMM_SELF,0,gdim=gdim)
-msh.name = xcName
-cell_markers.name = f"{msh.name}_cells"
-facet_markers.name = f"{msh.name}_facets"
+# #use meshio to convert msh file to xdmf
+# msh, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, MPI.COMM_SELF,0,gdim=gdim)
+# msh.name = xcName
+# cell_markers.name = f"{msh.name}_cells"
+# facet_markers.name = f"{msh.name}_facets"
 
 gmsh.finalize()
 

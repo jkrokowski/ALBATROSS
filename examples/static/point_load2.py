@@ -5,8 +5,8 @@ import numpy as np
 from dolfinx import mesh,plot,fem
 import pyvista
 
-from FROOT_BAT import beam_model,cross_section,utils,axial
-from FROOT_BAT.beam_model import BeamModel
+from ALBATROSS import beam_model,cross_section,utils,axial
+from ALBATROSS.beam_model import BeamModel
 # from FROOT_BAT.utils import beam_interval_mesh_3D
 
 from ufl import as_vector,as_matrix,sin,cos

@@ -14,8 +14,8 @@ from scipy.sparse import csr_matrix,hstack,csc_matrix
 from dolfinx.plot import create_vtk_mesh
 import pyvista
 
-from FROOT_BAT.material import *
-from FROOT_BAT.utils import get_vtx_to_dofs,get_pts_and_cells,sparseify
+from ALBATROSS.material import *
+from ALBATROSS.utils import get_vtx_to_dofs,get_pts_and_cells,sparseify
 
 #TODO: find cross-sectional properties about the zero point
 #TODO: allow user to specify a point to find xs props about

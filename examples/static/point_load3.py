@@ -4,7 +4,7 @@ from mpi4py import MPI
 import numpy as np
 from dolfinx import mesh,plot,fem
 import pyvista
-import FROOT_BAT
+import ALBATROSS
 
 # from FROOT_BAT import beam_model,cross_section,utils,axial
 # from FROOT_BAT.beam_model import BeamModel
@@ -46,10 +46,10 @@ meshname_axial_pos = 'axial_postion_mesh'
 meshname_axial = 'axial_mesh'
 
 #mesh for locating beam cross-sections along beam axis
-axial_pos_mesh = FROOT_BAT.utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
+axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
 
 #mesh used for 1D analysis
-axial_mesh = FROOT_BAT.utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
+axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 
 #note orientation vector does not have to be a unit fector
 # orientations = np.tile([-np.sqrt(2),np.sqrt(2),0],len(meshes2D))
@@ -61,7 +61,7 @@ mats2D = [mats for i in range(len(meshes2D))]
 
 xs_info = [meshes2D,mats2D,axial_pos_mesh,orientations]
 
-ExampleBeam = FROOT_BAT.beam_model.BeamModel(axial_mesh,xs_info)
+ExampleBeam = ALBATROSS.beam_model.BeamModel(axial_mesh,xs_info)
 
 #check that 
 ExampleBeam.plot_xs_orientations()

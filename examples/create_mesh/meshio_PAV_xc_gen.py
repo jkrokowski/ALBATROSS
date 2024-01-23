@@ -41,7 +41,7 @@ grid = pyvista.UnstructuredGrid(topology, cell_types, x)
 plotter.add_mesh(grid,show_edges=True)
 plotter.show()
 
-from FROOT_BAT.cross_section import CrossSection
+from ALBATROSS.cross_section import CrossSection
 mats = {'Aluminum':{ 'TYPE':'ISOTROPIC',
                         'MECH_PROPS':{'E':7.31e10,'nu':0.33} ,
                         'DENSITY':2768}

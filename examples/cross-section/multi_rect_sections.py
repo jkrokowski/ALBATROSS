@@ -8,7 +8,9 @@ Finally, a finer mesh is constructed (e.g. to be used in the 1D analysis) and th
     course mesh is interpolated into the fine mesh 2-tensor (6x6) fxn space. This allows
     ufl expresssion using the stiffness matrix at any point to be used.
 '''
-from FROOT_BAT import cross_section,geometry,utils
+import sys
+print(sys.path)
+from ALBATROSS import cross_section,utils
 
 from dolfinx import mesh,plot
 import pyvista
@@ -28,7 +30,7 @@ pts = [(0,0,0),(L,0,0)]
 filename = "output/test_beam.xdmf"
 meshname = 'test_beam'
 
-mesh1D = geometry.beamIntervalMesh3D(pts,[nx],meshname)
+mesh1D = utils.beam_interval_mesh_3D(pts,[nx],meshname)
 
 if True:
     utils.plot_xdmf_mesh(mesh1D,add_nodes=True)
@@ -40,14 +42,15 @@ meshes2d = [mesh2d_0,mesh2d_1]
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':100,'nu':0.2} }
-                        }
+                        'MECH_PROPS':{'E':100.,'nu':.2} ,
+                        'DENSITY':2.7e3}
+        }
 
 K_list = []
 for mesh2d in meshes2d:
     #analyze cross section
     squareXC = cross_section.CrossSection(mesh2d,mats)
-    squareXC.getXCStiffnessMatrix()
+    squareXC.getXSStiffnessMatrix()
 
     #output stiffess matrix
     K_list.append(squareXC.K)
@@ -69,7 +72,7 @@ k1.vector.array = K_entries
 
 meshname = 'test_beam1'
 
-mesh1D_fine = geometry.beamIntervalMesh3D(pts,[nx*10],meshname)
+mesh1D_fine = utils.beam_interval_mesh_3D(pts,[nx*10],meshname)
 
 if True:
     utils.plot_xdmf_mesh(mesh1D_fine,add_nodes=True)

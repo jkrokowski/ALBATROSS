@@ -1,7 +1,7 @@
 import os
 # # print(os.environ)
 os.environ['SCIPY_USE_PROPACK'] = "1"
-from FROOT_BAT import cross_section
+import ALBATROSS
 
 from dolfinx import mesh,plot
 import pyvista
@@ -28,11 +28,11 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
                         'DENSITY':2.7e3}
         }
 #analyze cross section
-squareXC = cross_section.CrossSection(domain,mats)
-squareXC.getXSStiffnessMatrix()
+squareXS = ALBATROSS.cross_section.CrossSection(domain,mats)
+squareXS.getXSStiffnessMatrix()
 
 #output stiffess matrix
-print(squareXC.K)
+print(squareXS.K)
 
 if True:
     #plot mesh

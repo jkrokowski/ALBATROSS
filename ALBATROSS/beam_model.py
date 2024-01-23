@@ -16,10 +16,10 @@ from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector,
                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
                 inner,dot,grad,split,cross,Measure,sin,cos)
-from FROOT_BAT.elements import *
-from FROOT_BAT.cross_section import CrossSection,CrossSectionAnalytical
-from FROOT_BAT.axial import Axial
-from FROOT_BAT.utils import get_pts_and_cells
+from ALBATROSS.elements import *
+from ALBATROSS.cross_section import CrossSection,CrossSectionAnalytical
+from ALBATROSS.axial import Axial
+from ALBATROSS.utils import get_pts_and_cells
 from petsc4py.PETSc import ScalarType
 import numpy as np
 import pyvista
