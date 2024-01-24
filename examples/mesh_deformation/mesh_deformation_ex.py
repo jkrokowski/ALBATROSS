@@ -38,7 +38,8 @@ if True:
     grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
     plotter = pyvista.Plotter()
     plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-    plotter.view_isometric()
+    plotter.view_xy()
+    plotter.show_bounds()
     plotter.show_axes()
     if not pyvista.OFF_SCREEN:
         plotter.show()
@@ -91,8 +92,9 @@ if True:
     grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
     plotter = pyvista.Plotter()
     plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-    plotter.view_isometric()
+    plotter.view_xy()
     plotter.show_axes()
+    plotter.show_bounds()
     if not pyvista.OFF_SCREEN:
         plotter.show()
 

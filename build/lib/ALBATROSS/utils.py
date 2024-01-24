@@ -161,7 +161,7 @@ def create_2D_box(pts,thicknesses,num_el,meshname):
      #initialize, add model and activate
      print("Generating 2D box xs mesh...")
      gmsh.initialize()
-     gmsh.option.setNumber("General.Terminal",0) #suppress gmsh output
+     gmsh.option.setNumber("General.Terminal",0)
      gmsh.model.add(meshname)
      gmsh.model.setCurrent(meshname)
      

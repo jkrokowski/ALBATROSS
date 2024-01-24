@@ -39,6 +39,9 @@ topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange
 
 grid = pyvista.UnstructuredGrid(topology, cell_types, x)
 plotter.add_mesh(grid,show_edges=True)
+plotter.view_xy()
+plotter.show_axes()
+plotter.show_bounds()
 plotter.show()
 
 from ALBATROSS.cross_section import CrossSection
