@@ -10,19 +10,13 @@ import numpy as np
 from dolfinx.io import XDMFFile
 
 #create mesh
-N = 10
+N = 40
 W = .1
 H = .1
 
 # domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[-W/2,-H/2],[W/2, H/2]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 
-
-#define material parameters
-# mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-#                         'MECH_PROPS':{'E':7.31E10,'nu':0.40576923076923066} ,
-#                         'DENSITY':2.7e3}
-#         }
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
                         'MECH_PROPS':{'E':100.,'nu':.2} ,
                         'DENSITY':2.7e3}

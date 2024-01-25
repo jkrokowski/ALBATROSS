@@ -22,7 +22,7 @@ t4 = 0.01
 
 points = [(-W/2,H/2),(W/2,H/2),(W/2,-H/2),(-W/2,-H/2)]
 thicknesses = [t1,t2,t3,t4]
-num_el = 4*[4]
+num_el = 4*[3]
 domain = ALBATROSS.utils.create_2D_box(points,thicknesses,num_el,'box_xs')
 
 if True:
@@ -58,15 +58,13 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 gdim = 3
 tdim = 1 
 
-#create or read in series of 2D meshes
-N = 10
-W = .1
-H = .1
+# #create or read in series of 2D meshes
+# N = 10
+# W = .1
+# H = .1
 
 L = 1
-meshes2D = []
-for h,w in zip([0.1,0.08,0.05,0.04,0.02],[0.06,0.07,0.08,0.09,0.1]):
-    meshes2D.append(mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[w, h]]),[N,N], cell_type=mesh.CellType.quadrilateral))
+meshes2D= 2*[domain]
 
 #define material parameters
 mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
@@ -89,7 +87,7 @@ axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_
 #mesh used for 1D analysis
 axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 
-#note orientation vector does not have to be a unit fector
+#note orientation vector does not have to be a unit vector
 # orientations = np.tile([-np.sqrt(2),np.sqrt(2),0],len(meshes2D))
 # orientations = np.tile([np.sqrt(2),-np.sqrt(2),0],len(meshes2D))
 orientations = np.tile([0,1,0],len(meshes2D))
@@ -138,15 +136,4 @@ ExampleBeam.recover_stress()
 
 print("xs centroid local displacements and rotations")
 print(ExampleBeam.get_local_disp([p1,p2]))
-
-# #compare to Euler-Bernoulli solution (constant XS beam)
-# print('Max Deflection for point load (EB analytical)')
-# E = mats['Unobtainium']['MECH_PROPS']['E']
-# rho = mats['Unobtainium']['DENSITY']
-# I = H**4/12
-# print( (-F*L**3)/(3*E*I) )
-
-#TODO:
-# ExampleBeam.get_max_stress()
-# ExampleBeam.plot_stress_over_xs()
 
