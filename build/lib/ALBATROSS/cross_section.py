@@ -4,12 +4,9 @@ from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
 from petsc4py import PETSc
 
-import os
-# # print(os.environ)
-os.environ['SCIPY_USE_PROPACK'] = "1"
 from scipy.sparse.linalg import svds,inv
 import sparseqr
-from scipy.sparse import csr_matrix,hstack,csc_matrix
+from scipy.sparse import csr_matrix,csc_matrix
 
 from dolfinx.plot import create_vtk_mesh
 import pyvista
@@ -17,9 +14,8 @@ import pyvista
 from ALBATROSS.material import *
 from ALBATROSS.utils import get_vtx_to_dofs,get_pts_and_cells,sparseify
 
-#TODO: find cross-sectional properties about the zero point
 #TODO: allow user to specify a point to find xs props about
-#TODO: provide a method to translate between different xs values
+#TODO: provide a method to translate between different xs values?
 
 class CrossSection:
     def __init__(self, msh, material ,celltags=None):
@@ -202,227 +198,25 @@ class CrossSection:
         self.A_mat.assemble()
 
         m,n1=self.A_mat.getSize()
-        Anp = self.A_mat.getValues(range(m),range(n1))
-        print('computing QR factorization')
+        # Anp = self.A_mat.getValues(range(m),range(n1))
+        print('Computing QR factorization')
         print(self.A_mat.size)
         Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-        q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
-        X0 = q1coo.tocsc()[:,-12:]
+        import time
+        t0= time.time()
+        #perform QR factorization and store as struct in householder form
+        QR= sparseqr.qr_factorize( Acsr.transpose() )
+        #build matrix of unit vectors for selecting last 12 columns
+        X = np.zeros((m,12))
+        for i in range(12):
+            X[m-1-i,11-i]=1
+        # print(X)
+        #perform matrix multiplication implicitly to construct orthogonal nullspace basis
+        self.sols = sparseqr.qmult(QR,X)
+        # print(self.sols)
+        self.sparse_sols = sparseify(self.sols,sparse_format='csc')
+        print("QR factorization time = %f" % (time.time()-t0))
 
-        self.sparse_sols = q1coo.tocsc()[:,-12:]
-        self.sols = self.sparse_sols.A
-
-        # import time
-        # #====numpy svd approach=====#
-        # #this is clearly one of the worst options at large scales
-        # t0 = time.time()
-        # # m1,n1=self.A_mat.getSize()
-        # # Anp = self.A_mat.getValues(range(m1),range(n1))
-
-        # # Usvd,sv,Vsvd = np.linalg.svd(Anp)
-        # # self.sols = Vsvd[-12:,:].T
-        # t1= time.time()
-        # #===========
-
-        # #========numpy qr approach ======#
-        # #faster, but still bad
-        # # m,n1=self.A_mat.getSize()
-        # # Anp = self.A_mat.getValues(range(m),range(n1))
-        # # q,r = np.linalg.qr(Anp,mode='complete')
-        # # # q1,r1 = np.linalg.qr(Anp.T,mode='complete')
-        # t2 = time.time()
-        # #=============
-
-        # #========numpy qr approach ======#
-        # #gram schmidt variant, still dense and slow and bad
-        # # m,n1=self.A_mat.getSize()
-        # # Anp = self.A_mat.getValues(range(m),range(n1))
-        # # q1,r1 = qr_gs_modsr(Anp.T)
-        # t3 = time.time()
-        # #=============
-
-        #========sparseqr approach ======#
-        #very very fast, but memory intensive
-        # m,n1=self.A_mat.getSize()
-        # Anp = self.A_mat.getValues(range(m),range(n1))
-        # print('computing QR factorization')
-        # print(self.A_mat.size)
-        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-        # q1coo,r1coo,E,rank = sparseqr.qr(Acsr.transpose(),economy=True)
-        # X0 = q1coo.tocsc()[:,-12:]
-
-        # t4 = time.time()
-        #=============
-
-        #==========
-        #scipy sparse svd, slow, but seems to work okay
-        #still
-
-        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-        # _,_,self.sparse_sols= svds(Acsr,k=12,which='SM',solver='propack', return_singular_vectors="vh")
-        # t5 = time.time()
-
-        # self.A_mat.
-
-        # #========LU+ suitesparse qr approach ======#
-        # # m,n1=self.A_mat.getSize()
-        # # Anp = self.A_mat.getValues(range(m),range(n1))
-        # # q1,r1 = np.linalg.qr(Anp.T,mode='complete')
-        # print(self.A_mat.size)
-        # Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
-        # from scipy.sparse.linalg import splu
-        # from scipy.sparse import csc_matrix
-        # B = splu(Acsr.transpose())
-        # U = B.U
-        # Pc = csc_matrix((np.ones(B.perm_c.shape[0]), (np.arange(B.perm_c.shape[0]), B.perm_c)))
-        # q_lu_coo,r_lu_coo,E,rank = sparseqr.qr(U.transpose(),economy=True)
-        # nullspace = Pc.dot(q_lu_coo.transpose().tocsc()[:,-12:])
-        # t6 = time.time()
-        #=============
-        #========scipy lu + sparse svd ======#
-        # from scipy.sparse import csc_matrix
-        # Acsc = Acsr.tocsc()
-        # from scipy.sparse.linalg import splu
-        # lu = splu(Acsc)
-        # U = lu.U
-        # _,_,self.sparse_sols= svds(U,k=12,which='SM',solver='propack', return_singular_vectors="vh")
-        # t7=time.time()
-        
-        #========scipy inverse iteration ======#
-        # from scipy.sparse.linalg import splu
-        # #'NATURAL' specifies partial pivoting
-        # lu = splu(Acsr.tocsc(),permc_spec='NATURAL')
-        # U = lu.U.tocsr()
-        # L = lu.L.tocsr()
-        
-        # Xprev = np.ones((U.shape[0],12))
-        # X = Xprev
-        # # Xprev= X0/np.linalg.norm(X0,axis=0)
-        # from scipy.sparse.linalg import spsolve_triangular,spsolve
-        # from scipy.sparse.linalg import norm
-        # from scipy.sparse import identity
-        
-        # # I = identity(U.shape[0])
-
-        # tol = 1e-13
-        # max_iter = 100
-
-        # for _ in range(max_iter):
-        #     # W = spsolve_triangular(U.T,Xprev/np.linalg.norm(Xprev,axis=0))
-        #     # Y = spsolve_triangular(U,W,lower=False)
-        #     # Ay = Acsr.dot(Y)
-        #     # X,_ = np.linalg.qr(Y)
-            
-        #     # AX=Acsr.dot(X)
-        #     # res = np.linalg.norm(X-Xprev)
-        #     # res2 = np.linalg.norm(AX)
-        #     # res3 = np.linalg.norm(AX-Xprev)
-
-        #     # Xprev = X
-        #     #==========
-        #     # Y = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
-        #     W = spsolve_triangular(L,Xprev/np.linalg.norm(Xprev,axis=0))
-        #     # Y,_ = np.linalg.qr(Y)
-        #     Y = spsolve_triangular(U,W,lower=False)
-
-        #     # residual = np.linalg.norm(Acsr.dot(X/np.linalg.norm(X)))
-        #     # X = X/np.linalg.norm(X,axis=0)
-        #     AY = Acsr.dot(Y)
-        #     X, _ = np.linalg.qr(X)
-        #     AX = Acsr.dot(X)
-        #     # Ax = Ax/np.linalg.norm(Ax,axis=0)
-        #     res = np.linalg.norm(X-Xprev)
-        #     res1 = np.linalg.norm(AY)
-        #     res2 = np.linalg.norm(AX)
-        #     res3 = np.linalg.norm(AX-Xprev)
-        #     res4 = np.linalg.norm(AY-Xprev)
-        #     res5 = np.linalg.norm(Y-Xprev)
-
-        #     Xprev = X
-        #     #=======
-
-        #     # X = orthogonalize(X)
-        #     # X = orthogonalize(X.T).T
-        #     # residual = np.linalg.norm(Acsr.dot(X))
-        #     # X = X/np.linalg.norm(X,axis=0)
-        #     # residual = np.linalg.norm(Acsr.dot(X))
-        #     # Xcsr = csr_matrix(X)
-        #     # XXT = Xcsr.dot(Xcsr.T)
-        #     # residual = np.linalg.norm((I-XXT).dot(Y))
-
-        #     if res < tol:
-        #         break
-        
-        # Pr = csc_matrix((np.ones(U.shape[0]), (lu.perm_r, np.arange(U.shape[0]))))
-        # Pc = csc_matrix((np.ones(U.shape[0]), (np.arange(U.shape[0]), lu.perm_c)))
-        # X2 = Pr.T.dot(X)
-        # X3 = Pr.dot(X)
-        # X0 = q1coo.tocsc()[:,-12:]
-        # X0new, _ = np.linalg.qr(X0.A)
-        # self.sols = X
-        # self.sparse_sols = csr_matrix(self.sols)
-        # t8=time.time()
-
-        
-        # if True:
-        #     print('numpy svd time:')
-        #     print(t1-t0)
-        #     print('numpy qr time:')
-        #     print(t2-t1)
-        #     print('numpy gs_modsr qr time:')
-        #     print(t3-t2)
-        #     print('sparse qr time:')
-        #     print(t4-t3)
-        #     print('scipy svds time:')
-        #     print(t5-t4)
-        #     print(t6-t5)
-        #     print('scipy lu+svds time:')
-        #     print(t7-t6)
-        #     print('scipy inverse iteration time:')
-        #     print(t8-t7)
-
-
-        # A_mat_csr = self.A_mat.getValuesCSR()
-        # print(A_mat_csr[0].shape)
-        # print(A_mat_csr[1].shape)
-        # print(A_mat_csr[2].shape)
-
-        #convert to dense (want to avoid)
-        # print('making nullspace from null column vectors....')
-        # t7=time.time()
-        # # self.sparse_sols = hstack([q1coo.getcol(i) for i in range(-12,0)])
-        # cols = np.arange(-12,0)
-        # # self.sparse_sols = q1coo.tocsc()[:,cols]
-        # t8=time.time()
-        # # self.sols = self.sparse_sols.toarray()
-        # t9=time.time()
-        # print("extraction of sparse cols:")
-        # print(t8-t7)
-        # print("saving as dense:")
-        # print(t9-t8)
-        # self.sols = q1coo[:,-12:]
-
-        # self.sols = nullspace.toarray()
-        # self.sols = q_lu_coo.toarray()[:,-12:]
-        # print(q1coo.shape)
-        # self.sols_sparse = q1coo.tocsc()[:,-12:]
-
-        #======slepc iterative approach (conv issues)=======#
-        # import slepc4py,sys
-        # slepc4py.init(sys.argv)
-        # Prob = slepc4py.SLEPc.SVD().create()
-        # Prob.setOperators(self.A_mat)
-        # Prob.setType("trlanczos")
-        # Prob.setDimensions(12,PETSc.DECIDE,PETSc.DECIDE)
-        # Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)
-        # Prob.setTolerances(1e-8, 1000)
-        # Prob.setImplicitTranspose(True)
-        # Prob.solve()
-        #===========
-
-        # A_mat_csr = self.A_mat.getValuesCSR()
-        # print()
-        
     def decoupleModes(self):
         x = self.x
         dx = self.dx
@@ -516,16 +310,10 @@ class CrossSection:
         # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
         ubar_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
         uhat_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
-
-        # def sparseify(mat,sparse_format='csr'):
-        #     lim = np.finfo(float).eps
-        #     mat.real[abs(mat.real) < lim] = 0.0
-        #     if sparse_format == 'csc':
-        #         return csc_matrix(mat)
-        #     elif sparse_format == 'csr':
-        #         return csr_matrix(mat)
         
         mat_sparse = sparseify(mat,sparse_format='csc')
+
+        print(mat_sparse.nnz)
 
         self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
@@ -637,20 +425,17 @@ class CrossSection:
                 K2[idx1,idx2] = Kxx
                 K2[idx2,idx1] = Kxx
 
-
-
         #see https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
         ubar_field.vector.destroy()     #need to add to prevent PETSc memory leak   
         uhat_field.vector.destroy()     #need to add to prevent PETSc memory leak 
 
+        # K1_sparse = sparseify(K1,sparse_format='csr')
+
         #compute Flexibility matrix
-        K1_sparse = sparseify(K1,sparse_format='csr')
-        # self.K1_inv = 
         self.K1_inv = np.linalg.inv(K1)
-        print(K1)
         self.S = self.K1_inv.T@K2@self.K1_inv
+        #invert to find stiffness matrix
         self.K = np.linalg.inv(self.S)
-        print()
     
     def getXSMassMatrix(self):
         return
@@ -680,14 +465,8 @@ class CrossSection:
         '''
         loads: 6x1 vector of the loads over the xs
         '''
-        # print('loads:')
-        # print(loads)
-        # print('K1 inverse:')
-        # print(self.K1_inv)
-        # print('sols_decoup:')
-        # print(self.sols_decoup)
+
         disp_coeff = self.sols_decoup[:,6:]@self.K1_inv@loads
-        # print(disp_coeff)
 
         U2d = FunctionSpace(self.msh,self.Ve)
         ubar = Function(U2d)
@@ -701,9 +480,6 @@ class CrossSection:
         self.coeff_to_field(utilde,disp_coeff,self.utilde_vtx_to_dof)
         self.coeff_to_field(ubreve,disp_coeff,self.ubreve_vtx_to_dof)
 
-        # u_total = ubar
-
-    
         sigma = self.map_disp_to_stress(ubar,uhat)
 
         S = TensorFunctionSpace(self.msh,('CG',1),shape=(3,3))
@@ -746,53 +522,11 @@ class CrossSection:
         # glyphs = grid.glyph(orient="u",factor=.25)
         # actor_2 = plotter.add_mesh(glyphs,color='b')
 
-
         plotter.view_xy()
         plotter.show_axes()
 
         # if not pyvista.OFF_SCREEN:
         plotter.show()
-
-#from https://colab.research.google.com/github/QuantEcon/lecture-python.notebooks/blob/master/qr_decomp.ipynb
-# import numpy.linalg as lin
-# def qr_gs_modsr(A, type=complex):
-    
-#     A = np.array(A, dtype=type)
-    
-#     (m,n) = np.shape(A) # Get matrix A's shape m - # of rows, m - # of columns
-   
-#     # Q - an orthogonal matrix of m-column vectors
-#     # R - an upper triangular matrix (the Gaussian elimination of A to the row-echelon form)
-    
-#     # Initialization: [ Q - multivector Q = A of shape (m x n) ]
-#     #                 [ R - multivector of shape (n x n)       ]
-
-#     Q = np.array(A, dtype=type)      # Q - matrix A
-#     R = np.zeros((n, n), dtype=type) # R - matrix of 0's    
-
-#     # **** Objective: ****
-
-#     # For each column vector r[k] in R:
-#        # Compute r[k,i] element in R, k-th column q[k] in Q;
-
-#     for k in range(n):
-#         # For a span of the previous column vectors q[0..k] in Q, 
-#         # compute the R[i,k] element in R as the inner product of vectors q[i] and q[k],
-#         # compute k-th column vector q[k] as the product of scalar R[i,k] and i-th vector q[i],
-#         # subtracting it from the k-th column vector q[k] in Q
-#         for i in range(k):
-
-#             # **** Compute k-th column q[k] of Q and k-th row r[k] of R **** 
-#             R[i,k] = np.transpose(Q[:,i]).dot(Q[:,k])
-#             Q[:,k] = Q[:,k] - R[i,k] * Q[:,i]
-            
-#         # Compute the r[k,k] pseudo-diagonal element in R 
-#         # as the Euclidean norm of the k-th vector q[k] in Q,
-
-#         # Normalize the k-th vector q[k] in Q, dividing it by the norm r[k,k]
-#         R[k,k] = lin.norm(Q[:,k]); Q[:,k] = Q[:,k] / R[k,k]
-    
-#     return -Q, -R  # Return the resultant negative matrices Q and R
 
 class CrossSectionAnalytical:
     def __init__(self,params):
@@ -834,45 +568,3 @@ class CrossSectionAnalytical:
         EI2 = self.E*(self.h*self.w**3 /12 - ((self.h-2*self.t_h)*(self.w-2*self.t_w)**3) /12)
         
         self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2,]))
-
-def orthogonalize(U, eps=1e-15):
-    """
-    Orthogonalizes the matrix U (d x n) using Gram-Schmidt Orthogonalization.
-    If the columns of U are linearly dependent with rank(U) = r, the last n-r columns 
-    will be 0.
-    
-    Args:
-        U (numpy.array): A d x n matrix with columns that need to be orthogonalized.
-        eps (float): Threshold value below which numbers are regarded as 0 (default=1e-15).
-    
-    Returns:
-        (numpy.array): A d x n orthogonal matrix. If the input matrix U's cols were
-            not linearly independent, then the last n-r cols are zeros.
-    
-    Examples:
-    ```python
-    >>> import numpy as np
-    >>> import gram_schmidt as gs
-    >>> gs.orthogonalize(np.array([[10., 3.], [7., 8.]]))
-    array([[ 0.81923192, -0.57346234],
-       [ 0.57346234,  0.81923192]])
-    >>> gs.orthogonalize(np.array([[10., 3., 4., 8.], [7., 8., 6., 1.]]))
-    array([[ 0.81923192 -0.57346234  0.          0.        ]
-       [ 0.57346234  0.81923192  0.          0.        ]])
-    ```
-    """
-    
-    n = len(U[0])
-    # numpy can readily reference rows using indices, but referencing full rows is a little
-    # dirty. So, work with transpose(U)
-    V = U.T
-    for i in range(n):
-        prev_basis = V[0:i]     # orthonormal basis before V[i]
-        coeff_vec = np.dot(prev_basis, V[i].T)  # each entry is np.dot(V[j], V[i]) for all j < i
-        # subtract projections of V[i] onto already determined basis V[0:i]
-        V[i] -= np.dot(coeff_vec, prev_basis).T
-        if np.linalg.norm(V[i]) < eps:
-            V[i][V[i] < eps] = 0.   # set the small entries to 0
-        else:
-            V[i] /= np.linalg.norm(V[i])
-    return V.T

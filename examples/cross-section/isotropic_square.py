@@ -1,18 +1,15 @@
-import os
-# # print(os.environ)
-os.environ['SCIPY_USE_PROPACK'] = "1"
+#simple example of cross-sectional analysis of an isotropic square:
 import ALBATROSS
 
 from dolfinx import mesh,plot
 import pyvista
 from mpi4py import MPI
 import numpy as np
-from dolfinx.io import XDMFFile
 
 #create mesh
-N = 40
-W = .1
-H = .1
+N = 150
+W = 1
+H = 1
 
 # domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[-W/2,-H/2],[W/2, H/2]]),[N,N], cell_type=mesh.CellType.quadrilateral)
@@ -25,7 +22,12 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 squareXS = ALBATROSS.cross_section.CrossSection(domain,mats)
 squareXS.getXSStiffnessMatrix()
 
-#output stiffess matrix
+#output flexibility matrix
+print('Flexibility matrix:')
+print(squareXS.S)
+
+#output stiffness matrix
+print('Stiffness matrix:')
 print(squareXS.K)
 
 if True:

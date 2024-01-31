@@ -1,9 +1,5 @@
 #create gmsh readable xcs from PEGASUS wing data
 import os
-# # print(os.environ)
-os.environ['SCIPY_USE_PROPACK'] = "1"
-import scipy.io
-import meshio
     
 import pyvista 
 import numpy as np
@@ -12,7 +8,8 @@ from dolfinx.plot import create_vtk_mesh
 from ALBATROSS.utils import mat_to_mesh,beam_interval_mesh_3D
 from ALBATROSS.beam_model import BeamModel
 path = os.getcwd()
-
+import time
+t0=time.time()
 msh_list = []
 K_list = []
 centroid_list = []
@@ -23,18 +20,10 @@ for i in range(11):
 
     other_data = ['cs_K','cs_centroid']
 
-    msh,data = mat_to_mesh(filename,other_data,plot_xc=False)
+    msh,data = mat_to_mesh(filename,other_data,plot_xs=False)
 
     msh_list.append(msh)
 
-    # # K = np.diag(np.diag(data[0][idx,:][:,idx]))
-    # # K = data[0][idx,:][:,idx]
-    # K = data[0]
-
-
-    # K_list.append(K)
-    # centroid_list.append((data[1][0,0],data[1][0,1],data[1][0,2]))
-# print(K_list[0])
 axial_pos_ne = list(np.ones((len(msh_list)-1)))
 beam_el_num = 10
 axial_ne = list(beam_el_num*np.ones((len(msh_list)-1)))
@@ -97,7 +86,9 @@ orientations = np.tile([0,1,0],len(msh_list))
 xc_info = [msh_list,mats2D,axial_pos_mesh,orientations]
 #initialize beam model
 PAV_wing = BeamModel(axial_mesh,xc_info)
-PAV_wing.plot_xc_orientations()
+t1 =time.time()
+print('time to anlayze beam xs: %f' % (t1-t0))
+PAV_wing.plot_xs_orientations()
 #gather loading data
 pts = PAV_wing.axial_pos_mesh.geometry.x[1:,:]
 fz_lbf= np.array([[325.1311971,
