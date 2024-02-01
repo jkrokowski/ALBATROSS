@@ -119,6 +119,10 @@ print(np.max(PAV_wing.uh.sub(0).collapse().x.array)*m_to_in)
 print((PAV_wing.uh.sub(0).collapse().x.array)*m_to_in)
 PAV_wing.plot_axial_displacement(warp_factor=10)
 
+PAV_wing.recover_displacement(plot_xss=True)
+
+PAV_wing.plot_xs_disp_3D()
+
 print()
 
  

@@ -20,55 +20,76 @@ import argparse
 from femo.fea.fea_dolfinx import FEA
 from femo.csdl_opt.fea_model import FEAModel
 from python_csdl_backend import Simulator as py_simulator
+import ALBATROSS
 
 plot_with_pyvista = True
 folder = 'output/'
 
-L = 1.0
-h = 0.1
-b = 0.1
-vol = b*h*L
-print(vol)
+#################################################################
+########### CONSTRUCT & READ INPUT MESHES (1D & 2D) #############
+#################################################################
 
-#################################################################
-########### CONSTRUCT BEAM MESH #################################
-#################################################################
-gmsh.initialize()
-# model and mesh parameters
-gdim = 3
-tdim = 1
-L = 1.0
-# lc = 1e-1 #TODO: find if there is an easier way to set the number of elements
-#construct line in 3D space
-gmsh.model.add("Beam")
-gmsh.model.setCurrent("Beam")
-p1 = gmsh.model.occ.addPoint(0,0,0)
-p2 = gmsh.model.occ.addPoint(L, 0, 0)
-line1 = gmsh.model.occ.addLine(p1,p2)
-# Synchronize OpenCascade representation with gmsh model
-gmsh.model.occ.synchronize()
-# add physical marker
-gmsh.model.add_physical_group(tdim,[line1])
-#adjust mesh size parameters
-gmsh.option.setNumber('Mesh.MeshSizeMin', 0.02*L)
-gmsh.option.setNumber('Mesh.MeshSizeMax', 0.02*L)
-#generate the mesh and optionally write the gmsh mesh file
-gmsh.model.mesh.generate(gdim)
-gmsh.write(folder+"beam_mesh.msh")
-#use meshio to convert msh file to xdmf
-msh, cell_markers, facet_markers = gmshio.model_to_mesh(gmsh.model, MPI.COMM_SELF, 0)
-msh.name = 'beam_mesh'
-cell_markers.name = f"{msh.name}_cells"
-facet_markers.name = f"{msh.name}_facets"
-#write xdmf mesh file
-with XDMFFile(msh.comm, folder+f"beam_mesh.xdmf", "w") as file:
-    file.write_mesh(msh)
-# close gmsh API
-gmsh.finalize()
+#general geometry parameters
+L = 1
+W = .1
+H = .1
 
-#################################################################
-########### READ MESH, EXTRACT MESH DETAILS #####################
-#################################################################
+#defining cross-section geometry
+#box xs wall thickness:
+t1 = 0.01
+t2 = 0.01
+t3 = 0.01
+t4 = 0.01
+xs_points = [(-W/2,H/2),(W/2,H/2),(W/2,-H/2),(-W/2,-H/2)]
+thicknesses = [t1,t2,t3,t4]
+num_el = 4*[4]
+
+#populate a list of the mesh objects
+meshes = []
+num_xs = 3
+for i in range(num_xs):
+    meshes.append(ALBATROSS.utils.create_2D_box(xs_points,thicknesses,num_el,'box_xs'))
+
+#define xs material properties
+mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
+                        'MECH_PROPS':{'E':100.,'nu':.2} ,
+                        'DENSITY':2.7e3}
+        }
+
+#define position of each xs in space
+node_x = np.array([0, L/2, L])
+node_y = np.zeros_like(node_x)
+node_z = np.zeros_like(node_x)
+axial_pts = np.concatenate([node_x.reshape((num_xs,1)),node_y.reshape((num_xs,1)),node_z.reshape((num_xs,1))],axis=1)
+
+#define orienation of primary cross-section axis
+orientations = np.tile([0,1,0],len(node_x))
+
+# CONSTRUCT MESH FOR POSITIONING XS'S IN SPACE
+# 1: define beam nodes
+axial_pos_pts = axial_pts
+# 2: define number of 1D elements btwn each xs for axial position mesh
+axial_pos_ne = list(np.ones((num_xs-1))) 
+# 3: specify axial position mesh name
+meshname_axial_pos = 'demo_axial_postion_mesh'
+# construct mesh
+axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D(axial_pos_pts,
+                                                       axial_pos_ne,
+                                                       meshname_axial_pos)
+
+# CONSTRUCT MESH FOR 1D ANALYSIS
+# 1: define beam nodes (previously done)
+#       --> these are the same as the those used for the axial position mesh
+# 2: define number of 1D elements btwn each xs for axial position mesh
+beam_el_num = 100
+axial_ne = list(beam_el_num*np.ones((num_xs-1)))
+# 3: specify name for 1D analysis mesh
+meshname_axial = 'demo_axial_mesh'
+# construct mesh
+axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D(axial_pts,axial_ne,meshname_axial)
+
+#analyze cross section
+boxXS = ALBATROSS.cross_section.CrossSection(domain,mats)
 
 #read in xdmf mesh from generation process
 fileName = folder+"beam_mesh.xdmf"
@@ -85,114 +106,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--nel',dest='nel',default=nt,
                     help='Number of elements')
 
-# args = parser.parse_args()
-# num_el = int(args.nel)
-
-#################################################################
-##### ENTER MATERIAL PARAMETERS AND CONSTITUTIVE MODEL ##########
-#################################################################
-E = Constant(domain,70e3)
-nu = Constant(domain,0.3)
-G = E/2/(1+nu)
-rho = Constant(domain,2.7e-3)
-g = Constant(domain,9.81)
-# L = Constant(domain,L)
-V = Constant(domain,vol)
-
-#define spatial coordinate
-x = SpatialCoordinate(domain)
-
-def get_constitutive_matrix(t,w):
-    S = t*w
-    #axial
-    ES = E*S
-    #bending
-    EI1 = E*w*t**3/12
-    EI2 = E*w**3*t/12
-    #approximate torsional constant (see wikipedia)
-    def torsional_constant(a,b):
-        return (a*b**3)*((1/3)-0.21*(b/a)*(1-((b**4)/(12*a**4))))
-    # #TODO: handle this case:
-    J = torsional_constant(t,w)
-    # # if t>=w:
-    # #     J = torsional_constant(t,w)
-    # # else:
-    # #     J = torsional_constant(w,t)
-    GJ = G*J
-    # GJ = G*0.26*t*w**3
-    #shear
-    kappa = Constant(domain,5./6.)
-    GS1 = kappa*G*S
-    GS2 = kappa*G*S
-
-    #construct constitutive matrix
-    Q = diag(as_vector([ES, GS1, GS2, GJ, EI1, EI2]))
-    return Q
-
-
-
-# thick = Constant(domain,0.3)
-# width = Constant(domain,0.1)
-# Q = get_constitutive_matrix(thick,width)
-
-#################################################################
-########### CONSTRUCT VARIATIONAL FORMULATION ###################
-#################################################################
-
 def PDEres(statefxn,testfxn,inputfxn,f, dss,wid):
-    thi=inputfxn
-    # Compute transformation Jacobian between reference interval and elements
-    def tangent(domain):
-        t = Jacobian(domain)
-        return as_vector([t[0,0], t[1, 0], t[2, 0]])/sqrt(inner(t,t))
-
-    t = tangent(domain)
-
-    #compute section local axis
-    ez = as_vector([0, 0, 1])
-    a1 = cross(t, ez)
-    a1 /= sqrt(dot(a1, a1))
-    a2 = cross(t, a1)
-    a2 /= sqrt(dot(a2, a2))
-
-    u_ = statefxn
-    du = testfxn
-    (w_, theta_) = split(u_)
-    (dw, dtheta) = split(du)
-
-
-    def tgrad(u):
-        return dot(grad(u), t)
-    def generalized_strains(u):
-        (w, theta) = split(u)
-        return as_vector([dot(tgrad(w), t),
-                        dot(tgrad(w), a1)-dot(theta, a2),
-                        dot(tgrad(w), a2)+dot(theta, a1),
-                        dot(tgrad(theta), t),
-                        dot(tgrad(theta), a1),
-                        dot(tgrad(theta), a2)])
-    def generalized_stresses(u):
-        Q = get_constitutive_matrix(thi,wid)
-        return dot(Q, generalized_strains(u))
-
-    Sig = generalized_stresses(du)
-    Eps =  generalized_strains(u_)
-
-    #modify quadrature scheme for shear components
-    dx_shear = dx(scheme="default",metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
-    #LHS assembly
-    k_form = sum([Sig[i]*Eps[i]*dx for i in [0, 3, 4, 5]]) + (Sig[1]*Eps[1]+Sig[2]*Eps[2])*dx_shear
-
-    # #weight per unit length
-    q = -rho*thi*wid*g
-    # #RHS
-    # # l_form = -q*dx
-    # l_form = -q*w_[2]*dx
-
-    l_form = dot(f,du[2])*dss #+ q*du[2]*dx
-
-    res = k_form - l_form
-
+    
+    
     return res
 
 #################################################################

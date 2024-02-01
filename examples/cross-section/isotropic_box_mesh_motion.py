@@ -51,7 +51,8 @@ boxXS = ALBATROSS.cross_section.CrossSection(domain,mats)
 boxXS.getXSStiffnessMatrix()
 
 #output stiffess matrix
-print(boxXS.K)
+K_initial = boxXS.K
+print(K_initial)
 
 ##### MESH MOTION #####
 c_el = domain.ufl_domain().ufl_coordinate_element()
@@ -131,3 +132,14 @@ if True:
     if not pyvista.OFF_SCREEN:
         plotter.show()
 
+boxXS.getXSStiffnessMatrix()
+
+#output stiffess matrix
+K_new = boxXS.K
+print("K new:")
+print(K_new)
+
+K_diff = K_new- K_initial
+print('Percentage difference between new and old:')
+np.set_printoptions(precision=2,suppress=True)
+print(K_diff/K_initial)
