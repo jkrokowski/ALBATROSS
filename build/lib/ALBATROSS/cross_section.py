@@ -218,6 +218,8 @@ class CrossSection:
         print("QR factorization time = %f" % (time.time()-t0))
 
     def decoupleModes(self):
+        #this is a change of basis operation from the originally computed basis to one
+        # using our knowledge of what the solution should look like
         x = self.x
         dx = self.dx
         C = self.C
@@ -313,11 +315,8 @@ class CrossSection:
         
         mat_sparse = sparseify(mat,sparse_format='csc')
 
-        print(mat_sparse.nnz)
-
         self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
-        print()
 
     def computeXSStiffnessMat(self):
         x = self.x
@@ -357,6 +356,10 @@ class CrossSection:
 
         K1 = np.zeros((6,6))
         K2 = np.zeros((6,6))
+
+        #define displacement in terms of elastic solution coefficients (c7-c12)
+        print(self.sols_decoup.shape)
+        print(self.sols_decoup[:,6:].shape)
 
         #START LOOP HERE and loop through unit vectors for K1 and diagonal entries of K2
         # then combinations of ci=1 where there is more than one nonzero entry

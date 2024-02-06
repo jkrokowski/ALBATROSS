@@ -357,6 +357,16 @@ class CrossSection:
         K1 = np.zeros((6,6))
         K2 = np.zeros((6,6))
 
+        #define displacement in terms of elastic solution coefficients (c7-c12)
+        print(self.sols_decoup.shape)
+        print(self.sols_decoup[:,6:].shape)
+
+        from ufl import variable,coefficient,Coefficient
+
+        csol=variable(Constant(self.msh,PETSc.ScalarType(np.full(6,1.0))))
+        # self.Ce = VectorElement("CG",self.msh.ufl_cell(),1,dim=6)
+        # self.csol = FunctionSpace(self.msh, ("C"))
+
         #START LOOP HERE and loop through unit vectors for K1 and diagonal entries of K2
         # then combinations of ci=1 where there is more than one nonzero entry
         for idx,c in enumerate(Ctotal.T):

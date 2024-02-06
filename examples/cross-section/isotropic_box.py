@@ -1,7 +1,3 @@
-import os
-# # print(os.environ)
-os.environ['SCIPY_USE_PROPACK'] = "1"
-
 import ALBATROSS
 
 from dolfinx import mesh,plot
