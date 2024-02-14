@@ -46,3 +46,7 @@ boxXS.getXSStiffnessMatrix()
 
 #output stiffess matrix
 print(boxXS.K)
+print(boxXS.K_alt)
+print(boxXS.K_alt2)
+
+print()

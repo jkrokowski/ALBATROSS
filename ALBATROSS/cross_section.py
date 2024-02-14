@@ -1,4 +1,4 @@
-from ufl import (grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
+from ufl import (diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
 from dolfinx.fem import (Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
@@ -445,7 +445,35 @@ class CrossSection:
         self.S = self.K1_inv.T@K2@self.K1_inv
         #invert to find stiffness matrix
         self.K = np.linalg.inv(self.S)
-    
+
+        #####################################
+        ##### alternative computation #######
+        #####################################
+        
+        cell = self.msh.ufl_cell() #get cell type
+        c = variable(Constant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
+
+        #construct displacment as a fxn of solution coefficients
+        u = 1
+
+        #construct strain as a fxn of solution coefficients
+        eps = 1
+
+        #construct stress as fxn of solution coefficients
+        sigma = 1
+
+        #construct potential energy functional
+        L = 1
+
+        #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
+        self.K1_alt = diff(L,c)
+
+        #construct sum of Hessian matrices of potential energy functional w.r.t. each soltion coefficient
+        self.K2_alt = sum([diff(self.K1_alt,c)[:,:,i] for i in range(c.ufl_shape)])
+
+
+
+
     def getXSMassMatrix(self):
         return
     
