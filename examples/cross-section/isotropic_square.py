@@ -7,7 +7,7 @@ from mpi4py import MPI
 import numpy as np
 
 #create mesh
-N = 150
+N = 10
 W = 1
 H = 1
 

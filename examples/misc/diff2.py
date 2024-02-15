@@ -1,9 +1,11 @@
-from ufl import Cell,cross,grad,Measure,variable,diff,dot,as_vector,as_matrix,Constant,replace,Coefficient,interval,SpatialCoordinate
+from ufl import Cell,cross,grad,split,Measure,TensorElement,MixedElement,variable,diff,dot,as_vector,as_matrix,Constant,replace,Coefficient,interval,SpatialCoordinate
 from dolfinx import fem,mesh
 from mpi4py import MPI
+
+from ALBATROSS.utils import get_vtx_to_dofs
 # from petsc4py import PETSc
 
-domain=mesh.create_unit_interval(MPI.COMM_WORLD,10)
+domain=mesh.create_unit_square(MPI.COMM_WORLD,3,3)
 # cell = interval
 cell = domain.ufl_cell()
 c = variable(Constant(cell,shape=(6,)))
@@ -20,9 +22,21 @@ print(dudc)
 print(dudc.ufl_shape)
 
 V = fem.FunctionSpace(domain,('CG',1))
+# Uc = fem.TensorFunctionSpace(domain,('CG',1),shape=(3,6))
+Uc_e = TensorElement("CG",domain.ufl_cell(),1,shape=(3,6))
+Uc = fem.FunctionSpace(domain,MixedElement(4*[Uc_e]))
 ubar = fem.Function(V)
+u_c = fem.Function(Uc)
+ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
 dx = Measure('dx',domain)
-u_exp = u*ubar
+u_exp = ubar_c*c
+print(u_exp.ufl_shape)
+
+#get map from vertices to dofs for each displacment warping function
+ubar_vtx_to_dof = get_vtx_to_dofs(domain,Uc.sub(0)) #this works for sub.sub as well
+
+
+# ubar_c.vector.array = 
 
 # d2udc2 = dot(dudc.T,dudc)
 # print(d2udc2.ufl_shape)
@@ -34,15 +48,16 @@ print(d2udc2.ufl_shape)
 K2 = sum([d2udc2[:,:,i] for i in range(c.ufl_shape[0])])
 print(K2.ufl_shape)
 
-if False:
+if True:
     #cross-product notes
     x_vec = as_vector([x[0],x[1],0])
-    udisp = some_fxn
+    u_vec = as_vector([ubar,ubar,ubar])
+    # udisp = some_fxn
     #udisp.ufl_shape = (3,)
-    moments = cross(x,ubar)
+    moments = cross(x_vec,u_vec)
 
 
-
+print()
 
 # #take derivative of expression with respect to a variable:
 # dudc1 = diff(u_exp,c1) #diff() takes partial derivatives
