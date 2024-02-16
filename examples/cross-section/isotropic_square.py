@@ -30,6 +30,11 @@ print(squareXS.S)
 print('Stiffness matrix:')
 print(squareXS.K)
 
+print('numerical jacobian:')
+print(squareXS.K1)
+print('symbolic jacobian value:')
+print(squareXS.K1_alt_assembled)
+
 if True:
     #plot mesh
     pyvista.global_theme.background = [255, 255, 255, 255]

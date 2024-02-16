@@ -2,6 +2,8 @@ from ufl import Cell,cross,grad,split,Measure,TensorElement,MixedElement,variabl
 from dolfinx import fem,mesh
 from mpi4py import MPI
 
+import numpy as np
+
 from ALBATROSS.utils import get_vtx_to_dofs
 # from petsc4py import PETSc
 
@@ -32,11 +34,13 @@ dx = Measure('dx',domain)
 u_exp = ubar_c*c
 print(u_exp.ufl_shape)
 
+#construct fake test nullspace
+N = np.random.random((12*domain.geometry.x.shape[0],6))
+
 #get map from vertices to dofs for each displacment warping function
-ubar_vtx_to_dof = get_vtx_to_dofs(domain,Uc.sub(0)) #this works for sub.sub as well
+ubar_c_vtx_to_dof = get_vtx_to_dofs(domain,Uc.sub(0)) #this works for sub.sub as well
 
-
-# ubar_c.vector.array = 
+u_c.vector.array[ubar_c_vtx_to_dof.flatten()] = N.flatten()[ubar_c_vtx_to_dof.flatten()].flatten()
 
 # d2udc2 = dot(dudc.T,dudc)
 # print(d2udc2.ufl_shape)

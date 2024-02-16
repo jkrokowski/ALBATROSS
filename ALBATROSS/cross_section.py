@@ -1,4 +1,4 @@
-from ufl import (cross,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement)
+from ufl import (as_vector,variable,cross,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement,Constant)
 from dolfinx.fem import (Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
@@ -11,7 +11,7 @@ from scipy.sparse import csr_matrix,csc_matrix
 from dolfinx.plot import create_vtk_mesh
 import pyvista
 
-from ALBATROSS.material import *
+from ALBATROSS.material import getMatConstitutive
 from ALBATROSS.utils import get_vtx_to_dofs,get_pts_and_cells,sparseify
 
 #TODO: allow user to specify a point to find xs props about
@@ -357,16 +357,6 @@ class CrossSection:
         K1 = np.zeros((6,6))
         K2 = np.zeros((6,6))
 
-        #define displacement in terms of elastic solution coefficients (c7-c12)
-        print(self.sols_decoup.shape)
-        print(self.sols_decoup[:,6:].shape)
-
-        from ufl import variable,coefficient,Coefficient
-
-        csol=variable(Constant(self.msh,PETSc.ScalarType(np.full(6,1.0))))
-        # self.Ce = VectorElement("CG",self.msh.ufl_cell(),1,dim=6)
-        # self.csol = FunctionSpace(self.msh, ("C"))
-
         #START LOOP HERE and loop through unit vectors for K1 and diagonal entries of K2
         # then combinations of ci=1 where there is more than one nonzero entry
         for idx,c in enumerate(Ctotal.T):
@@ -441,6 +431,7 @@ class CrossSection:
         # K1_sparse = sparseify(K1,sparse_format='csr')
 
         #compute Flexibility matrix
+        self.K1 = K1
         self.K1_inv = np.linalg.inv(K1)
         self.S = self.K1_inv.T@K2@self.K1_inv
         #invert to find stiffness matrix
@@ -449,50 +440,53 @@ class CrossSection:
         #####################################
         ##### alternative computation #######
         #####################################
-        
         cell = self.msh.ufl_cell() #get cell type
+
         c = variable(Constant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
-        z = variable(Constant(self.msh,0.)) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
+        z = variable(Constant(cell)) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
         
+        #construct mixed tensor function space and functions for specifying warping displacements 
         Uc_e = TensorElement("CG",self.msh.ufl_cell(),1,shape=(3,6))
         Uc = FunctionSpace(self.msh,MixedElement(4*[Uc_e]))
         u_c = Function(Uc)
-        ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
 
+        #identify individual warping displacment functions
+        ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
+            
+        #populate warping displacement functions with information from orthogonalized solutions
         self.construct_warping_fxns(u_c,self.sols_decoup)
 
-        # Uc = TensorFunctionSpace(self.msh,('CG',1),shape=(3,6))
-        # ubar_c = Function(Uc)
-        # uhat_c = Function(Uc)
-        # utilde_c = Function(Uc)
-        # ubreve_c = Function(Uc)
-        
-
-        #populate warping displacement functions with information from orthogonalized solutions
-
         #construct displacment as a fxn of solution coefficients
-        u = ubar_c*c + uhat_c*c*z + utilde_c*c*z**2+ ubreve_c*c*z**3
+        u = ubar_c*c + uhat_c*c*z + utilde_c*c*pow(z,2)+ ubreve_c*c*pow(z,3)
 
         #construct strain as a fxn of solution coefficients
         eps = grad(u)
 
-        #construct stress as fxn of solution coefficients
-        sigma = C[i,j,k,l]*eps[k,l]
+        #get relevant stresses through xs as fxn of solution coefficients
+        sigma = as_tensor(self.C[1,j,k,l]*eps[k,l],(j))
 
         #construct potential energy functional
-        x_vec = as_vector([x[0],x[1],0])
-        L = (sigma[0,i] + cross(x_vec,sigma[0,i]) ) * dx
+        x_vec = as_vector([x[0],x[1],0]) # vector for cross-product
+        # F = [sigma[i]*dx for i in range(sigma.ufl_shape[0])]
+        F = sigma
 
+        M = cross(x_vec,sigma)
+        print(M.ufl_shape)
+        L = as_vector([F[0],F[1],F[2],M[0],M[1],M[2]])
+        L_int = sum([L[i]*dx for i in range(L.ufl_shape[0])])
+        print(L.ufl_shape)
+        # print(L_int.ufl_shape)
         #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
         self.K1_alt = diff(L,c)
+        print(self.K1_alt.ufl_shape)
         self.K1_alt_form = form(self.K1_alt)
-        self.K1_alt_assembled = assemble_matrix(self.K1_alt_form)
+        # self.K1_alt_assembled = assemble_matrix(self.K1_alt)
+        # self.K1_alt_assembled = assemble_matrix(self.K1_alt_form)
 
-        #construct sum of Hessian matrices of potential energy functional w.r.t. each soltion coefficient
-        self.K2_alt = sum([diff(self.K1_alt,c)[:,:,i] for i in range(c.ufl_shape)])
-        self.K2_alt_form = form(self.K2_alt)
-        self.K2_alt_assembled = assemble_matrix(self.K2_alt_form)
-
+        # #construct sum of Hessian matrices of potential energy functional w.r.t. each soltion coefficient
+        # self.K2_alt = sum([diff(self.K1_alt,c)[:,:,i] for i in range(c.ufl_shape)])
+        # self.K2_alt_form = form(self.K2_alt)
+        # self.K2_alt_assembled = assemble_matrix(self.K2_alt_form)
 
 
     def getXSMassMatrix(self):
@@ -504,19 +498,21 @@ class CrossSection:
         fxn.vector.destroy
 
     def construct_warping_fxns(self,u_c,N):
-        ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
-        Uc = u_c.function_space
+        #utility to populate data from decoupled modes to warping displacement functions
+        Uc = u_c.function_space #fxn space associated with fxn
 
-        #need to figure out the dof mapping for the tensor warping fxns (previously only managed vector fxns)
-        ubar_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(0))
-        uhat_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(1))
-        utilde_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(2))
-        ubreve_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(3))
+        #loop through subspaces and map values from nullspace to specified fxn values
+        vtx_to_dofs = []
+        for i in range(Uc.num_sub_spaces):
+            vtx_to_dofs.append(get_vtx_to_dofs(self.msh,Uc.sub(0)))
+            vtx_to_dofs_flat = vtx_to_dofs[i].flatten()
+            u_c.vector.array[vtx_to_dofs_flat] = N.flatten()[vtx_to_dofs_flat]
 
-        
-
-
-
+        # ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
+        # ubar_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(0))
+        # uhat_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(1))
+        # utilde_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(2))
+        # ubreve_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(3))
 
     def map_disp_to_stress(self,ubar,uhat):
         i,j,k,l=self.i,self.j,self.k,self.l
