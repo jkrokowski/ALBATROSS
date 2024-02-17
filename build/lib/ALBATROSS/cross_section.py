@@ -472,14 +472,18 @@ class CrossSection:
 
         M = cross(x_vec,sigma)
         print(M.ufl_shape)
+        
+        # V = FunctionSpace(self.msh,("CG",1))
+        # v = TestFunction(V)
         L = as_vector([F[0],F[1],F[2],M[0],M[1],M[2]])
+        # print(L.ufl_shape)
         L_int = sum([L[i]*dx for i in range(L.ufl_shape[0])])
-        print(L.ufl_shape)
         # print(L_int.ufl_shape)
         #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
-        self.K1_alt = diff(L,c)
-        print(self.K1_alt.ufl_shape)
-        self.K1_alt_form = form(self.K1_alt)
+        self.K1_alt = diff(L_int,c)
+        
+        # print(self.K1_alt.ufl_shape)
+        # self.K1_alt_form = form(self.K1_alt)
         # self.K1_alt_assembled = assemble_matrix(self.K1_alt)
         # self.K1_alt_assembled = assemble_matrix(self.K1_alt_form)
 
