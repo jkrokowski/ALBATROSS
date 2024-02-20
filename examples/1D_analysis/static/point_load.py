@@ -60,14 +60,14 @@ axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 # orientations = np.tile([np.sqrt(2),-np.sqrt(2),0],len(meshes2D))
 orientations = np.tile([0,1,0],len(meshes2D))
 # orientations = np.tile([-1,0,0],len(meshes2D))
-# orientations = np.array([0,1,0,0,1,0])
+# orientations = np.array([0,1,0,0,0,1])
 mats2D = [mats for i in range(len(meshes2D))]
 
 xc_info = [meshes2D,mats2D,axial_pos_mesh,orientations]
 
 ExampleBeam = BeamModel(axial_mesh,xc_info)
 
-# ExampleBeam.plot_xc_orientations()
+ExampleBeam.plot_xs_orientations()
 rho = 2.7e-3
 g = 9.81
 A = 0.01
@@ -92,9 +92,9 @@ ExampleBeam.add_clamped_point(p1)
 #solve 
 ExampleBeam.solve()
 
-ExampleBeam.plot_axial_displacement(warp_factor=5)
+ExampleBeam.plot_axial_displacement(warp_factor=10)
 
-ExampleBeam.recover_displacement(plot_xcs=True)
+ExampleBeam.recover_displacement(plot_xss=True)
 
 # ExampleBeam.plot_xc_disp_3D()
 

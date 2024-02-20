@@ -45,8 +45,9 @@ boxXS = ALBATROSS.cross_section.CrossSection(domain,mats)
 boxXS.getXSStiffnessMatrix()
 
 #output stiffess matrix
+np.set_printoptions(precision=3)
 print(boxXS.K)
-print(boxXS.K_alt)
-print(boxXS.K_alt2)
+# print(boxXS.K_alt)
+# print(boxXS.K_alt2)
 
 print()

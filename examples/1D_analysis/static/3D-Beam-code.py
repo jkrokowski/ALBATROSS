@@ -1,7 +1,7 @@
 #Reference 3D Solution for comparison with the beam analysis approach
 
 # Scaled variable
-Lx = 5
+Lx = 15
 W = 1
 H = 1
 
@@ -10,9 +10,10 @@ nu = 0.2
 mu = E/(2*(1+nu))
 lambda_ = (E*nu)/((1+nu)*(1-2*nu))
 rho = 1
-g = .1
-N=15
+g = .02
+N=12
 Nx = N*Lx
+print("number of dofs: %i" % (N*N*Nx))
 
 import numpy as np
 import ufl

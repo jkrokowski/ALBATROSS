@@ -440,57 +440,58 @@ class CrossSection:
         #####################################
         ##### alternative computation #######
         #####################################
-        cell = self.msh.ufl_cell() #get cell type
+        if False:
+            cell = self.msh.ufl_cell() #get cell type
 
-        c = variable(Constant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
-        z = variable(Constant(cell)) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
-        
-        #construct mixed tensor function space and functions for specifying warping displacements 
-        Uc_e = TensorElement("CG",self.msh.ufl_cell(),1,shape=(3,6))
-        Uc = FunctionSpace(self.msh,MixedElement(4*[Uc_e]))
-        u_c = Function(Uc)
-
-        #identify individual warping displacment functions
-        ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
+            c = variable(Constant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
+            z = variable(Constant(cell)) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
             
-        #populate warping displacement functions with information from orthogonalized solutions
-        self.construct_warping_fxns(u_c,self.sols_decoup)
+            #construct mixed tensor function space and functions for specifying warping displacements 
+            Uc_e = TensorElement("CG",self.msh.ufl_cell(),1,shape=(3,6))
+            Uc = FunctionSpace(self.msh,MixedElement(4*[Uc_e]))
+            u_c = Function(Uc)
 
-        #construct displacment as a fxn of solution coefficients
-        u = ubar_c*c + uhat_c*c*z + utilde_c*c*pow(z,2)+ ubreve_c*c*pow(z,3)
+            #identify individual warping displacment functions
+            ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
+                
+            #populate warping displacement functions with information from orthogonalized solutions
+            self.construct_warping_fxns(u_c,self.sols_decoup)
 
-        #construct strain as a fxn of solution coefficients
-        eps = grad(u)
+            #construct displacment as a fxn of solution coefficients
+            u = ubar_c*c + uhat_c*c*z + utilde_c*c*pow(z,2)+ ubreve_c*c*pow(z,3)
 
-        #get relevant stresses through xs as fxn of solution coefficients
-        sigma = as_tensor(self.C[0,j,k,l]*eps[k,l],(j))
+            #construct strain as a fxn of solution coefficients
+            eps = grad(u)
 
-        #construct potential energy functional
-        x_vec = as_vector([x[0],x[1],0]) # vector for cross-product
-        # F = [sigma[i]*dx for i in range(sigma.ufl_shape[0])]
-        F = sigma
+            #get relevant stresses through xs as fxn of solution coefficients
+            sigma = as_tensor(self.C[0,j,k,l]*eps[k,l],(j))
 
-        M = cross(x_vec,sigma)
-        print(M.ufl_shape)
-        
-        # V = FunctionSpace(self.msh,("CG",1))
-        # v = TestFunction(V)
-        L = as_vector([F[0],F[1],F[2],M[0],M[1],M[2]])
-        # print(L.ufl_shape)
-        L_int = sum([L[i]*dx for i in range(L.ufl_shape[0])])
-        # print(L_int.ufl_shape)
-        #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
-        self.K1_alt = diff(L_int,c)
-        
-        # print(self.K1_alt.ufl_shape)
-        # self.K1_alt_form = form(self.K1_alt)
-        # self.K1_alt_assembled = assemble_matrix(self.K1_alt)
-        # self.K1_alt_assembled = assemble_matrix(self.K1_alt_form)
+            #construct potential energy functional
+            x_vec = as_vector([x[0],x[1],0]) # vector for cross-product
+            # F = [sigma[i]*dx for i in range(sigma.ufl_shape[0])]
+            F = sigma
 
-        # #construct sum of Hessian matrices of potential energy functional w.r.t. each soltion coefficient
-        # self.K2_alt = sum([diff(self.K1_alt,c)[:,:,i] for i in range(c.ufl_shape)])
-        # self.K2_alt_form = form(self.K2_alt)
-        # self.K2_alt_assembled = assemble_matrix(self.K2_alt_form)
+            M = cross(x_vec,sigma)
+            print(M.ufl_shape)
+            
+            # V = FunctionSpace(self.msh,("CG",1))
+            # v = TestFunction(V)
+            L = as_vector([F[0],F[1],F[2],M[0],M[1],M[2]])
+            # print(L.ufl_shape)
+            L_int = sum([L[i]*dx for i in range(L.ufl_shape[0])])
+            # print(L_int.ufl_shape)
+            #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
+            self.K1_alt = diff(L_int,c)
+            
+            # print(self.K1_alt.ufl_shape)
+            # self.K1_alt_form = form(self.K1_alt)
+            # self.K1_alt_assembled = assemble_matrix(self.K1_alt)
+            # self.K1_alt_assembled = assemble_matrix(self.K1_alt_form)
+
+            # #construct sum of Hessian matrices of potential energy functional w.r.t. each soltion coefficient
+            # self.K2_alt = sum([diff(self.K1_alt,c)[:,:,i] for i in range(c.ufl_shape)])
+            # self.K2_alt_form = form(self.K2_alt)
+            # self.K2_alt_assembled = assemble_matrix(self.K2_alt_form)
 
 
     def getXSMassMatrix(self):

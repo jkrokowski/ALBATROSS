@@ -26,7 +26,7 @@ H = .1
 W1= W
 H1= H
 
-L = 20
+L = 12
 mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 # with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
 #         file.write_mesh(mesh2d_0)
@@ -86,9 +86,9 @@ ExampleBeam.solve()
 
 ExampleBeam.plot_axial_displacement(warp_factor=5)
 
-ExampleBeam.recover_displacement(plot_xcs=False)
+ExampleBeam.recover_displacement(plot_xss=False)
 
-ExampleBeam.plot_xc_disp_3D()
+ExampleBeam.plot_xs_disp_3D()
 
 ExampleBeam.recover_stress()
 print("xc centroid local displacments and rotations")

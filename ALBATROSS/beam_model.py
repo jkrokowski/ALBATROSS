@@ -335,6 +335,8 @@ class BeamModel(Axial):
     #     return
     
     def plot_xs_orientations(self):
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
         warp_factor = 1
 
         #plot Axial mesh
