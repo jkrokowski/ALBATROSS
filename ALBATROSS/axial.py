@@ -72,13 +72,8 @@ class Axial:
         self.Eps = self.generalized_strains(self.w)
 
         #assemble variational form separately for shear terms (using reduced integration)
-        #TODO: need to properly assemble off diagonal terms as well
-        #currently, this only assembles the diagonal terms :(
-        # self.a_form = (sum([self.Sig[i]*self.Eps[i]*self.dx for i in [0, 3, 4, 5]]) 
-        #                 + sum([self.Sig[i]*self.Eps[i]*self.dx_shear for i in [1,2]])) 
-        self.a_form = (self.Sig[0]*self.Eps[0]*self.dx
-                       + sum([self.Sig[i]*self.Eps[j]*self.dx_shear for i in [1,2] for j in [1,2]]) 
-                       + sum([self.Sig[i]*self.Eps[j]*self.dx for i in [3, 4, 5] for j in [3, 4, 5]]) )
+        self.a_form = (sum([self.Sig[i]*self.Eps[i]*self.dx for i in [0, 3, 4, 5]]) 
+                        + sum([self.Sig[i]*self.Eps[i]*self.dx_shear for i in [1,2]])) 
         # self.a_form = (inner(self.Sig,self.Eps))
 
     def tangent(self,domain):

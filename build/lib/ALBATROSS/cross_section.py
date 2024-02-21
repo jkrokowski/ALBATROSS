@@ -1,6 +1,8 @@
-from ufl import (as_vector,variable,cross,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement,Constant)
+from ufl import (dot,as_vector,variable,cross,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement)
+from ufl import Constant as uflConstant
 from dolfinx.fem import (Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
+from dolfinx.fem import Constant as femConstant
 import numpy as np
 from petsc4py import PETSc
 
@@ -443,9 +445,10 @@ class CrossSection:
         if False:
             cell = self.msh.ufl_cell() #get cell type
 
-            c = variable(Constant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
-            z = variable(Constant(cell)) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
-            
+            c = variable(uflConstant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
+            # z = variable(uflConstant(self.msh, PETSc.ScalarType(0.0))) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
+            z = variable(uflConstant(cell))
+
             #construct mixed tensor function space and functions for specifying warping displacements 
             Uc_e = TensorElement("CG",self.msh.ufl_cell(),1,shape=(3,6))
             Uc = FunctionSpace(self.msh,MixedElement(4*[Uc_e]))
@@ -457,14 +460,30 @@ class CrossSection:
             #populate warping displacement functions with information from orthogonalized solutions
             self.construct_warping_fxns(u_c,self.sols_decoup)
 
-            #construct displacment as a fxn of solution coefficients
-            u = ubar_c*c + uhat_c*c*z + utilde_c*c*pow(z,2)+ ubreve_c*c*pow(z,3)
+            # #construct displacment as a fxn of solution coefficients
+            # u = dot(ubar_c,c) + dot(uhat_c,c)*z # + utilde_c*c*pow(z,2)+ ubreve_c*c*pow(z,3)
+            ubar = dot(ubar_c,c)
+            uhat = dot(uhat_c,c)
 
-            #construct strain as a fxn of solution coefficients
-            eps = grad(u)
+            eps_xy = grad(ubar)
+            eps_z = uhat
+            eps = as_tensor([[eps_z[0],eps_z[1],eps_z[2]],
+                        [eps_xy[0,0],eps_xy[1,0],eps_xy[2,0]],
+                        [eps_xy[0,1],eps_xy[1,1],eps_xy[2,1]]])
+
+            # #construct strain as a fxn of solution coefficients
+            # eps_xy = grad(u)
+            # eps_z = diff(u,z)
+            # eps = as_tensor([[eps_z[0],eps_z[1],eps_z[2]],
+            #             [eps_xy[0,0],eps_xy[1,0],eps_xy[2,0]],
+            #             [eps_xy[0,1],eps_xy[1,1],eps_xy[2,1]]])
+            # print(eps_xy.ufl_shape)
+            # print(eps_z.ufl_shape)
+            # print(eps.ufl_shape)
 
             #get relevant stresses through xs as fxn of solution coefficients
             sigma = as_tensor(self.C[0,j,k,l]*eps[k,l],(j))
+            print(sigma.ufl_shape)
 
             #construct potential energy functional
             x_vec = as_vector([x[0],x[1],0]) # vector for cross-product
@@ -474,14 +493,15 @@ class CrossSection:
             M = cross(x_vec,sigma)
             print(M.ufl_shape)
             
-            # V = FunctionSpace(self.msh,("CG",1))
-            # v = TestFunction(V)
+            V = FunctionSpace(self.msh,("CG",1))
+            v = TestFunction(V)
             L = as_vector([F[0],F[1],F[2],M[0],M[1],M[2]])
-            # print(L.ufl_shape)
+            print(L.ufl_shape)
             L_int = sum([L[i]*dx for i in range(L.ufl_shape[0])])
             # print(L_int.ufl_shape)
             #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
-            self.K1_alt = diff(L_int,c)
+            self.K1_alt = diff(L,c)
+            print(self.K1_alt.ufl_shape)
             
             # print(self.K1_alt.ufl_shape)
             # self.K1_alt_form = form(self.K1_alt)

@@ -7,7 +7,7 @@ from mpi4py import MPI
 import numpy as np
 
 #create mesh
-N = 10
+N = 50
 W = 1
 H = 1
 
@@ -33,7 +33,7 @@ print(squareXS.K)
 print('numerical jacobian:')
 print(squareXS.K1)
 print('symbolic jacobian value:')
-print(squareXS.K1_alt_assembled)
+# print(squareXS.K1_alt)
 
 if True:
     #plot mesh

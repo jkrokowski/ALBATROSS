@@ -25,8 +25,8 @@ H = .1
 # H1 = 0.5*H
 W1= W
 H1= H
-
 L = 20
+
 mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 # with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
 #         file.write_mesh(mesh2d_0)
@@ -58,9 +58,9 @@ axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 #note orientation vector does not have to be a unit fector
 # orientations = np.tile([- np.sqrt(2),np.sqrt(2),0],len(meshes2D))
 # orientations = np.tile([np.sqrt(2),-np.sqrt(2),0],len(meshes2D))
-orientations = np.tile([0,1,0],len(meshes2D))
+# orientations = np.tile([0,1,0],len(meshes2D))
 # orientations = np.tile([-1,0,0],len(meshes2D))
-# orientations = np.array([0,1,0,0,0,1])
+orientations = np.array([0,1,0,0,0,1])
 mats2D = [mats for i in range(len(meshes2D))]
 
 xc_info = [meshes2D,mats2D,axial_pos_mesh,orientations]
@@ -109,6 +109,8 @@ E = mats['Unobtainium']['MECH_PROPS']['E']
 rho = mats['Unobtainium']['DENSITY']
 I = H**4/12
 print( (-F*L**3)/(3*E*I) )
+
+print('Max')
 
 #TODO:
 # ExampleBeam.get_max_stress()

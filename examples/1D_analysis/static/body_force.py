@@ -18,15 +18,15 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 5
-W = .1
-H = .1
+N = 20
+L = 20
+W = 1
+H = 1
 # W1 = 0.75*W
 # H1 = 0.5*H
 W1= W
 H1= H
 
-L = 12
 mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 # with XDMFFile(mesh2d_0.comm, 'mesh2d_0', "w") as file:
 #         file.write_mesh(mesh2d_0)
@@ -70,7 +70,7 @@ ExampleBeam = BeamModel(axial_mesh,xc_info)
 # ExampleBeam.plot_xc_orientations()
 rho = 2.7e-3
 g = 9.81
-A = 0.01
+A = W*H
 print('total force:')
 print(rho*g*A*L)
 #add loads
