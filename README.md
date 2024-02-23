@@ -7,9 +7,18 @@ Current models include:
 * Static Timoshenko (shear-deformable) 1D beam theory
 * Cross-sectional analysis for computing the cross-section properties of arbitrary shapes
 
-1D analysis code is heavily borrowed from the formulation and example files from Jeremy Bleyer here:
+1D analysis code is heavily borrowed from the formulation and wonderful example files from Jeremy Bleyer here:
 https://comet-fenics.readthedocs.io/en/latest/demo/beams_3D/beams_3D.html
 
-TBD: Installation information
+## Installation:
+The main requirements are FEniCSx, beyond the typical numpy, scipy, etc requirements. 
+For cross-sectional analysis, a python wrapped implementation of a sparse QR decomposition is used which can be installed from PyPi
+Usage of a [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) (or for even faster installation, [mamba](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html)) enviroment is recommended.
 
-TBD: License
+First, install the package dependencies:
+1. Install [Numpy](https://numpy.org/) and [SciPy](https://scipy.org/)
+2. Install [FEniCS](https://fenicsproject.org/download/) 
+3. Install [sparseqr](https://github.com/yig/PySPQR) 
+Finally, clone the repository and pip install from the top level directory:
+4. ```git clone https://github.com/jkrokowski/ALBATROSS.git```
+5. from the top level ALBATROSS directory, run ```pip install .```
