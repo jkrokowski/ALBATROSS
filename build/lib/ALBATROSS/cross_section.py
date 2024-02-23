@@ -555,7 +555,7 @@ class CrossSection:
                         [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
                         [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
     
-    def recover_stress_xs(self,loads):
+    def recover_stress_xs(self,loads,plot_stress=True):
         '''
         loads: 6x1 vector of the loads over the xs
         '''
@@ -582,45 +582,45 @@ class CrossSection:
         points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
 
         sigma_sol_eval = sigma_sol.eval(points_on_proc,cells)
-        print("Sigma Sol:")
-        print(sigma_sol_eval)
-        L = 0
-        utotal_exp = ubar+uhat*L+utilde*(L**2)+ubreve*(L**3)
-        utotal = Function(U2d)
-        utotal.interpolate(Expression(utotal_exp,U2d.element.interpolation_points()))
+        # print("Sigma Sol:")
+        # print(sigma_sol_eval)
+        # L = 0
+        # utotal_exp = ubar+uhat*L+utilde*(L**2)+ubreve*(L**3)
+        # utotal = Function(U2d)
+        # utotal.interpolate(Expression(utotal_exp,U2d.element.interpolation_points()))
         # points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
 
         # sigma_sol_eval = utotal.eval(points_on_proc,cells)        
-        #TODO: now plot over xs
-        warp_factor = 1
+        if plot_stress==True:
+            warp_factor = 1
 
-        #plot Axial mesh
-        tdim = self.msh.topology.dim
-        topology, cell_types, geom = create_vtk_mesh(self.msh,tdim)
-        grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-        plotter = pyvista.Plotter()
-        actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
-        RBG = np.array([[ 0,  0,  1],
-                             [ 1,  0,  0],
-                             [ 0,  1, 0]])
-        print(geom.shape[0])
-        # grid.point_data['u'] = (utotal.x.array.reshape((geom.shape[0],3)).T).T
-        # warped = grid.warp_by_vector("u",factor=warp_factor)
-        # actor_1 = plotter.add_mesh(warped, show_edges=True)
-        grid.point_data['sigma11'] = sigma_sol_eval[:,0]
-        warped = grid.warp_by_scalar("sigma11",factor=0.000001)
-        actor_2 = plotter.add_mesh(warped,show_edges=True)
+            #plot Axial mesh
+            tdim = self.msh.topology.dim
+            topology, cell_types, geom = create_vtk_mesh(self.msh,tdim)
+            grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+            plotter = pyvista.Plotter()
+            actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
+            RBG = np.array([[ 0,  0,  1],
+                                [ 1,  0,  0],
+                                [ 0,  1, 0]])
+            # print(geom.shape[0])
+            # grid.point_data['u'] = (utotal.x.array.reshape((geom.shape[0],3)).T).T
+            # warped = grid.warp_by_vector("u",factor=warp_factor)
+            # actor_1 = plotter.add_mesh(warped, show_edges=True)
+            grid.point_data['sigma11'] = sigma_sol_eval[:,0]
+            warped = grid.warp_by_scalar("sigma11",factor=0.000001)
+            actor_2 = plotter.add_mesh(warped,show_edges=True)
 
-        # actor_1 = plotter.add_mesh(grid, style='points',color='k',point_size=12)
-        # grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
-        # glyphs = grid.glyph(orient="u",factor=.25)
-        # actor_2 = plotter.add_mesh(glyphs,color='b')
+            # actor_1 = plotter.add_mesh(grid, style='points',color='k',point_size=12)
+            # grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
+            # glyphs = grid.glyph(orient="u",factor=.25)
+            # actor_2 = plotter.add_mesh(glyphs,color='b')
 
-        plotter.view_xy()
-        plotter.show_axes()
+            plotter.view_xy()
+            plotter.show_axes()
 
-        # if not pyvista.OFF_SCREEN:
-        plotter.show()
+            # if not pyvista.OFF_SCREEN:
+            plotter.show()
 
 class CrossSectionAnalytical:
     def __init__(self,params):
