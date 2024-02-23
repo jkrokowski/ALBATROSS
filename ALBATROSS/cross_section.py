@@ -14,7 +14,7 @@ from dolfinx.plot import create_vtk_mesh
 import pyvista
 
 from ALBATROSS.material import getMatConstitutive
-from ALBATROSS.utils import get_vtx_to_dofs,get_pts_and_cells,sparseify
+from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,get_pts_and_cells,sparseify
 
 #TODO: allow user to specify a point to find xs props about
 #TODO: provide a method to translate between different xs values?
@@ -621,7 +621,20 @@ class CrossSection:
 
             # if not pyvista.OFF_SCREEN:
             plotter.show()
-
+    def plot_mesh(self):
+        plot_xdmf_mesh(self.msh)
+        # #plots mesh o
+        # pyvista.global_theme.background = [255, 255, 255, 255]
+        # pyvista.global_theme.font.color = 'black'
+        # tdim = self.msh.topology.dim
+        # topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
+        # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+        # plotter = pyvista.Plotter()
+        # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+        # plotter.view_isometric()
+        # plotter.show_axes()
+        # if not pyvista.OFF_SCREEN:
+        #     plotter.show()
 class CrossSectionAnalytical:
     def __init__(self,params):
         #process params based on shape

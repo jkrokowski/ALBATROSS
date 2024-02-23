@@ -538,3 +538,6 @@ class BeamModel(Axial):
             # print(self.uh.sub(0).x.array)
 
 #TODO: need to add joints to allow for the assembly of models with connections (e.g. branching, loops, frames, etc)
+#TODO:
+# ExampleBeam.get_max_stress()
+# ExampleBeam.plot_stress_over_xs()
