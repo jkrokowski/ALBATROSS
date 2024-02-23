@@ -1,18 +1,19 @@
 #Reference 3D Solution for comparison with the beam analysis approach
 
 # Scaled variable
-Lx = 5
+Lx = 20
 W = 1
 H = 1
 
-E = 100000
+E = 10e6
 nu = 0.2
+rho = 2.7e-3
 mu = E/(2*(1+nu))
 lambda_ = (E*nu)/((1+nu)*(1-2*nu))
-rho = 1
-g = .1
-N=15
+g = 9.81
+N=20
 Nx = N*Lx
+print("number of dofs: %i" % (N*N*Nx))
 
 import numpy as np
 import ufl
@@ -107,7 +108,7 @@ for i, point in enumerate(points.T):
 points_on_proc = np.array(points_on_proc, dtype=np.float64)
 u_values = uh.eval(points_on_proc, cells)
 print(u_values)
-if False:
+if True:
     s = sigma(uh) -1./3*ufl.tr(sigma(uh))*ufl.Identity(len(uh))
     von_Mises = ufl.sqrt(3./2*ufl.inner(s, s))
 

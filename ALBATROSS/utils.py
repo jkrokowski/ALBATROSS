@@ -1,7 +1,7 @@
 import dolfinx.cpp.mesh
 import numpy as np
 import pyvista
-from dolfinx import plot
+from dolfinx import plot,mesh
 import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
@@ -118,6 +118,10 @@ def beam_interval_mesh_3D(pts,ne,meshname):
      with XDMFFile(MPI.COMM_WORLD, filename, "r") as xdmf:
           return xdmf.read_mesh(name=meshname)
      
+def create_rectangle(pts,num_el):
+     pts = np.array(pts)
+     return mesh.create_rectangle( MPI.COMM_WORLD,pts,num_el, cell_type=mesh.CellType.quadrilateral)
+
 def create_2D_box(pts,thicknesses,num_el,meshname):
      '''
      pts = list of 4 corners of hollow box in (x,y) locations 
@@ -229,23 +233,174 @@ def create_2D_box(pts,thicknesses,num_el,meshname):
      # close gmsh API
      gmsh.finalize()
 
-     def create_mesh(mesh, cell_type, prune_z=False):
-          cells = mesh.get_cells_type(cell_type)
-          cell_data = mesh.get_cell_data("gmsh:physical", cell_type)
-          points = mesh.points[:,:2] if prune_z else mesh.points
-          out_mesh = meshio.Mesh(points=points, cells={cell_type: cells}, cell_data={"name_to_read":[cell_data]})
-          return out_mesh
-
+     #read gmsh file and write and xdmf
      if MPI.COMM_WORLD.rank == 0:
           # Read in mesh
           msh = meshio.read("output/" +meshname + ".msh")
 
           # Create and save one file for the mesh, and one file for the facets 
-          mesh = create_mesh(msh, "quad", prune_z=True)
+          mesh = gmsh_to_xdmf(msh, "quad", prune_z=True)
           meshio.write(f"output/"+meshname+".xdmf", mesh)
 
      fileName = "output/"+ meshname + ".xdmf"
 
+     #read xdmf and return dolfinx mesh object
+     with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
+          #mesh generation with meshio seems to have difficulty renaming the mesh name
+          # (but not the file, hence the "Grid" name property)
+          domain = xdmf.read_mesh(name="Grid")
+          domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
+          # print("Finished meshing 2D with %i elements" % (domain.num_cells))
+          return domain
+     
+def create_circle(radius,num_el,meshname):
+     '''
+     radius = outer radius of disk
+     num_el = number of elements along radial direction 
+     meshname = name of mesh
+     '''
+     #mesh parameters
+     gdim=2
+     tdim=2
+
+     #cross section properties
+     xcName = meshname
+     R=radius 
+     num_el_thick = num_el
+     #TODO: use transfinite interpolation to control mesh number...
+     #set number of elements along circumference proportional to the 
+     # number of elements through the thickness
+     num_el_circum = 3 * num_el_thick
+
+     gmsh.initialize()
+     gmsh.model.add(xcName)
+     gmsh.model.setCurrent(xcName)
+
+     #meshtags
+     d1 = gmsh.model.occ.add_disk(0,0,0,R,R)
+
+     gmsh.model.occ.synchronize()
+     gmsh.model.add_physical_group(tdim,[d1])
+
+     gmsh.option.setNumber('Mesh.MeshSizeMin', R/num_el_thick)
+     gmsh.option.setNumber('Mesh.MeshSizeMax', R/num_el_thick)
+
+     gmsh.model.mesh.generate(gdim)
+
+     #uncomment this below if you want to run gmsh window for debug, etc
+     # gmsh.fltk.run()
+
+     #write xdmf mesh file
+     gmsh.write("output/" +meshname + ".msh")
+
+     # close gmsh API
+     gmsh.finalize()
+
+     #read gmsh file and write and xdmf
+     if MPI.COMM_WORLD.rank == 0:
+          # Read in mesh
+          msh = meshio.read("output/" +meshname + ".msh")
+
+          # Create and save one file for the mesh, and one file for the facets 
+          mesh = gmsh_to_xdmf(msh, "triangle", prune_z=True)
+          meshio.write(f"output/"+meshname+".xdmf", mesh)
+
+     fileName = "output/"+ meshname + ".xdmf"
+
+     #read xdmf and return dolfinx mesh object
+     with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
+          #mesh generation with meshio seems to have difficulty renaming the mesh name
+          # (but not the file, hence the "Grid" name property)
+          domain = xdmf.read_mesh(name="Grid")
+          domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
+          # print("Finished meshing 2D with %i elements" % (domain.num_cells))
+          return domain
+def create_hollow_disk(radius,thickness,num_el,meshname):
+     '''
+     radius = outer radius of disk
+     thicknesses = wall thickness
+     num_el = number of elements through thickness
+     meshname = name of mesh
+     '''
+     #mesh parameters
+     gdim=2
+     tdim=2
+
+     #cross section properties
+     xcName = meshname
+     R=radius 
+     t = thickness
+     num_el_thick = num_el
+     #set number of elements along circumference proportional to the 
+     # number of elements through the thickness
+     num_el_circum = int((2*R*np.pi/t)) * num_el_thick
+
+     gmsh.initialize()
+     gmsh.model.add(xcName)
+     gmsh.model.setCurrent(xcName)
+
+     #meshtags
+     markerId = 1
+     p1 = gmsh.model.geo.add_point(0,0,0)
+     p2 = gmsh.model.geo.add_point(0,R,0)
+     p3 = gmsh.model.geo.add_point(0,R-t,0)
+     p4 = gmsh.model.geo.add_point(0,-R,0)
+     p5 = gmsh.model.geo.add_point(0,-(R-t),0)
+
+     ca1 = gmsh.model.geo.add_circle_arc(p2,p1,p4)
+     ca2 = gmsh.model.geo.add_circle_arc(p3,p1,p5)
+     ca3 = gmsh.model.geo.add_circle_arc(p4,p1,p2)
+     ca4 = gmsh.model.geo.add_circle_arc(p5,p1,p3)
+     l1 = gmsh.model.geo.add_line(p2,p3)
+     l2 = gmsh.model.geo.add_line(p4,p5)
+
+     edges1 = gmsh.model.geo.addCurveLoop([ca1,l2,-ca2,-l1],-1)
+     hollow_disk1 = gmsh.model.geo.addPlaneSurface([edges1],-1)
+     edges2 = gmsh.model.geo.addCurveLoop([ca3,-l2,-ca4,l1],-1)
+     hollow_disk2 = gmsh.model.geo.addPlaneSurface([edges2],-1)
+
+     gmsh.model.geo.mesh.setTransfiniteCurve(ca1, int(num_el_circum))
+     gmsh.model.geo.mesh.setTransfiniteCurve(ca2, int(num_el_circum))
+     gmsh.model.geo.mesh.setTransfiniteCurve(ca3, int(num_el_circum))
+     gmsh.model.geo.mesh.setTransfiniteCurve(ca4, int(num_el_circum))
+     gmsh.model.geo.mesh.setTransfiniteCurve(l1,int(num_el_thick))
+     gmsh.model.geo.mesh.setTransfiniteCurve(l2,int(num_el_thick))
+     gmsh.model.geo.mesh.setTransfiniteSurface(hollow_disk1)
+     gmsh.model.geo.mesh.setTransfiniteSurface(hollow_disk2)
+
+     gmsh.model.add_physical_group(tdim,[hollow_disk1,hollow_disk2],0,xcName)
+
+     #generate the mesh and optionally write the gmsh mesh file
+     # gmsh.model.geo.remove_all_duplicates()
+     gmsh.model.geo.mesh.setRecombine(2, hollow_disk1)
+     gmsh.model.geo.mesh.setRecombine(2, hollow_disk2)
+
+     gmsh.model.geo.synchronize()
+     gmsh.model.mesh.generate(gdim)
+     # gmsh.model.mesh.removeDuplicateElements()
+     # gmsh.model.mesh.removeDuplicateNodes()
+
+     #uncomment this below if you want to run gmsh window for debug, etc
+     # gmsh.fltk.run()
+
+     #write xdmf mesh file
+     gmsh.write("output/" +meshname + ".msh")
+
+     # close gmsh API
+     gmsh.finalize()
+
+     #read gmsh file and write and xdmf
+     if MPI.COMM_WORLD.rank == 0:
+          # Read in mesh
+          msh = meshio.read("output/" +meshname + ".msh")
+
+          # Create and save one file for the mesh, and one file for the facets 
+          mesh = gmsh_to_xdmf(msh, "quad", prune_z=True)
+          meshio.write(f"output/"+meshname+".xdmf", mesh)
+
+     fileName = "output/"+ meshname + ".xdmf"
+
+     #read xdmf and return dolfinx mesh object
      with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
           #mesh generation with meshio seems to have difficulty renaming the mesh name
           # (but not the file, hence the "Grid" name property)
@@ -369,3 +524,11 @@ def sparseify(mat,sparse_format='csr'):
           return csc_matrix(mat)
      elif sparse_format == 'csr':
           return csr_matrix(mat)
+     
+
+def gmsh_to_xdmf(mesh, cell_type, prune_z=False):
+     cells = mesh.get_cells_type(cell_type)
+     cell_data = mesh.get_cell_data("gmsh:physical", cell_type)
+     points = mesh.points[:,:2] if prune_z else mesh.points
+     out_mesh = meshio.Mesh(points=points, cells={cell_type: cells}, cell_data={"name_to_read":[cell_data]})
+     return out_mesh

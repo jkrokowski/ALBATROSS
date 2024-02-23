@@ -335,6 +335,8 @@ class BeamModel(Axial):
     #     return
     
     def plot_xs_orientations(self):
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
         warp_factor = 1
 
         #plot Axial mesh
@@ -521,12 +523,12 @@ class BeamModel(Axial):
         Sig = s.eval(points_on_proc,cells)
 
         #SIG are the reaction forces in the xs. These are can then be fed back to the xs to recover the stresses
-        print("reaction forces along beam:")
-        print(Sig)
+        # print("reaction forces along beam:")
+        # print(Sig)
         for i,xs in enumerate(self.xss):
-            print("xs area = " + str(xs.A))
-            print("xs averaged stresses: ")
-            print(Sig[i])
+            # print("xs area = " + str(xs.A))
+            # print("xs averaged stresses: ")
+            # print(Sig[i])
 
             xs.recover_stress_xs(Sig[i])
 
@@ -536,3 +538,6 @@ class BeamModel(Axial):
             # print(self.uh.sub(0).x.array)
 
 #TODO: need to add joints to allow for the assembly of models with connections (e.g. branching, loops, frames, etc)
+#TODO:
+# ExampleBeam.get_max_stress()
+# ExampleBeam.plot_stress_over_xs()

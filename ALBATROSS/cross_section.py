@@ -1,6 +1,8 @@
-from ufl import (grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split)
+from ufl import (dot,as_vector,variable,cross,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement)
+from ufl import Constant as uflConstant
 from dolfinx.fem import (Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
+from dolfinx.fem import Constant as femConstant
 import numpy as np
 from petsc4py import PETSc
 
@@ -11,8 +13,8 @@ from scipy.sparse import csr_matrix,csc_matrix
 from dolfinx.plot import create_vtk_mesh
 import pyvista
 
-from ALBATROSS.material import *
-from ALBATROSS.utils import get_vtx_to_dofs,get_pts_and_cells,sparseify
+from ALBATROSS.material import getMatConstitutive
+from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,get_pts_and_cells,sparseify
 
 #TODO: allow user to specify a point to find xs props about
 #TODO: provide a method to translate between different xs values?
@@ -86,11 +88,11 @@ class CrossSection:
         for mat_id in self.mat_ids:
             self.Residual += self.constructMatResidual(mat_id)
 
-        print('extracting nullspace....')
+        print('Computing non-trivial solutions....')
         self.getModes()
-        print('decoupling modes...')
+        print('Orthogonalizing w.r.t. elastic modes...')
         self.decoupleModes()
-        print('computing stiffness matrix')
+        print('Computing Beam Constitutive Matrix....')
         self.computeXSStiffnessMat()
         # PETSc.garbage_cleanup()
    
@@ -431,11 +433,87 @@ class CrossSection:
         # K1_sparse = sparseify(K1,sparse_format='csr')
 
         #compute Flexibility matrix
+        self.K1 = K1
         self.K1_inv = np.linalg.inv(K1)
         self.S = self.K1_inv.T@K2@self.K1_inv
         #invert to find stiffness matrix
         self.K = np.linalg.inv(self.S)
-    
+
+        #####################################
+        ##### alternative computation #######
+        #####################################
+        if False:
+            cell = self.msh.ufl_cell() #get cell type
+
+            c = variable(uflConstant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
+            # z = variable(uflConstant(self.msh, PETSc.ScalarType(0.0))) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
+            z = variable(uflConstant(cell))
+
+            #construct mixed tensor function space and functions for specifying warping displacements 
+            Uc_e = TensorElement("CG",self.msh.ufl_cell(),1,shape=(3,6))
+            Uc = FunctionSpace(self.msh,MixedElement(4*[Uc_e]))
+            u_c = Function(Uc)
+
+            #identify individual warping displacment functions
+            ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
+                
+            #populate warping displacement functions with information from orthogonalized solutions
+            self.construct_warping_fxns(u_c,self.sols_decoup)
+
+            # #construct displacment as a fxn of solution coefficients
+            # u = dot(ubar_c,c) + dot(uhat_c,c)*z # + utilde_c*c*pow(z,2)+ ubreve_c*c*pow(z,3)
+            ubar = dot(ubar_c,c)
+            uhat = dot(uhat_c,c)
+
+            eps_xy = grad(ubar)
+            eps_z = uhat
+            eps = as_tensor([[eps_z[0],eps_z[1],eps_z[2]],
+                        [eps_xy[0,0],eps_xy[1,0],eps_xy[2,0]],
+                        [eps_xy[0,1],eps_xy[1,1],eps_xy[2,1]]])
+
+            # #construct strain as a fxn of solution coefficients
+            # eps_xy = grad(u)
+            # eps_z = diff(u,z)
+            # eps = as_tensor([[eps_z[0],eps_z[1],eps_z[2]],
+            #             [eps_xy[0,0],eps_xy[1,0],eps_xy[2,0]],
+            #             [eps_xy[0,1],eps_xy[1,1],eps_xy[2,1]]])
+            # print(eps_xy.ufl_shape)
+            # print(eps_z.ufl_shape)
+            # print(eps.ufl_shape)
+
+            #get relevant stresses through xs as fxn of solution coefficients
+            sigma = as_tensor(self.C[0,j,k,l]*eps[k,l],(j))
+            print(sigma.ufl_shape)
+
+            #construct potential energy functional
+            x_vec = as_vector([x[0],x[1],0]) # vector for cross-product
+            # F = [sigma[i]*dx for i in range(sigma.ufl_shape[0])]
+            F = sigma
+
+            M = cross(x_vec,sigma)
+            print(M.ufl_shape)
+            
+            V = FunctionSpace(self.msh,("CG",1))
+            v = TestFunction(V)
+            L = as_vector([F[0],F[1],F[2],M[0],M[1],M[2]])
+            print(L.ufl_shape)
+            L_int = sum([L[i]*dx for i in range(L.ufl_shape[0])])
+            # print(L_int.ufl_shape)
+            #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
+            self.K1_alt = diff(L,c)
+            print(self.K1_alt.ufl_shape)
+            
+            # print(self.K1_alt.ufl_shape)
+            # self.K1_alt_form = form(self.K1_alt)
+            # self.K1_alt_assembled = assemble_matrix(self.K1_alt)
+            # self.K1_alt_assembled = assemble_matrix(self.K1_alt_form)
+
+            # #construct sum of Hessian matrices of potential energy functional w.r.t. each soltion coefficient
+            # self.K2_alt = sum([diff(self.K1_alt,c)[:,:,i] for i in range(c.ufl_shape)])
+            # self.K2_alt_form = form(self.K2_alt)
+            # self.K2_alt_assembled = assemble_matrix(self.K2_alt_form)
+
+
     def getXSMassMatrix(self):
         return
     
@@ -443,6 +521,23 @@ class CrossSection:
         #uses vtx_to_dof map to populate field with correct solution coefficients
         fxn.vector.array = coeff.flatten()[vtx_to_dof].flatten()
         fxn.vector.destroy
+
+    def construct_warping_fxns(self,u_c,N):
+        #utility to populate data from decoupled modes to warping displacement functions
+        Uc = u_c.function_space #fxn space associated with fxn
+
+        #loop through subspaces and map values from nullspace to specified fxn values
+        vtx_to_dofs = []
+        for i in range(Uc.num_sub_spaces):
+            vtx_to_dofs.append(get_vtx_to_dofs(self.msh,Uc.sub(0)))
+            vtx_to_dofs_flat = vtx_to_dofs[i].flatten()
+            u_c.vector.array[vtx_to_dofs_flat] = N.flatten()[vtx_to_dofs_flat]
+
+        # ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
+        # ubar_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(0))
+        # uhat_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(1))
+        # utilde_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(2))
+        # ubreve_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(3))
 
     def map_disp_to_stress(self,ubar,uhat):
         i,j,k,l=self.i,self.j,self.k,self.l
@@ -460,7 +555,7 @@ class CrossSection:
                         [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
                         [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
     
-    def recover_stress_xs(self,loads):
+    def recover_stress_xs(self,loads,plot_stress=True):
         '''
         loads: 6x1 vector of the loads over the xs
         '''
@@ -487,46 +582,59 @@ class CrossSection:
         points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
 
         sigma_sol_eval = sigma_sol.eval(points_on_proc,cells)
-        print("Sigma Sol:")
-        print(sigma_sol_eval)
-        L = 0
-        utotal_exp = ubar+uhat*L+utilde*(L**2)+ubreve*(L**3)
-        utotal = Function(U2d)
-        utotal.interpolate(Expression(utotal_exp,U2d.element.interpolation_points()))
+        # print("Sigma Sol:")
+        # print(sigma_sol_eval)
+        # L = 0
+        # utotal_exp = ubar+uhat*L+utilde*(L**2)+ubreve*(L**3)
+        # utotal = Function(U2d)
+        # utotal.interpolate(Expression(utotal_exp,U2d.element.interpolation_points()))
         # points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
 
         # sigma_sol_eval = utotal.eval(points_on_proc,cells)        
-        #TODO: now plot over xs
-        warp_factor = 1
+        if plot_stress==True:
+            warp_factor = 1
 
-        #plot Axial mesh
-        tdim = self.msh.topology.dim
-        topology, cell_types, geom = create_vtk_mesh(self.msh,tdim)
-        grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-        plotter = pyvista.Plotter()
-        actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
-        RBG = np.array([[ 0,  0,  1],
-                             [ 1,  0,  0],
-                             [ 0,  1, 0]])
-        print(geom.shape[0])
-        # grid.point_data['u'] = (utotal.x.array.reshape((geom.shape[0],3)).T).T
-        # warped = grid.warp_by_vector("u",factor=warp_factor)
-        # actor_1 = plotter.add_mesh(warped, show_edges=True)
-        grid.point_data['sigma11'] = sigma_sol_eval[:,0]
-        warped = grid.warp_by_scalar("sigma11",factor=0.000001)
-        actor_2 = plotter.add_mesh(warped,show_edges=True)
+            #plot Axial mesh
+            tdim = self.msh.topology.dim
+            topology, cell_types, geom = create_vtk_mesh(self.msh,tdim)
+            grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+            plotter = pyvista.Plotter()
+            actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
+            RBG = np.array([[ 0,  0,  1],
+                                [ 1,  0,  0],
+                                [ 0,  1, 0]])
+            # print(geom.shape[0])
+            # grid.point_data['u'] = (utotal.x.array.reshape((geom.shape[0],3)).T).T
+            # warped = grid.warp_by_vector("u",factor=warp_factor)
+            # actor_1 = plotter.add_mesh(warped, show_edges=True)
+            grid.point_data['sigma11'] = sigma_sol_eval[:,0]
+            warped = grid.warp_by_scalar("sigma11",factor=0.000001)
+            actor_2 = plotter.add_mesh(warped,show_edges=True)
 
-        # actor_1 = plotter.add_mesh(grid, style='points',color='k',point_size=12)
-        # grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
-        # glyphs = grid.glyph(orient="u",factor=.25)
-        # actor_2 = plotter.add_mesh(glyphs,color='b')
+            # actor_1 = plotter.add_mesh(grid, style='points',color='k',point_size=12)
+            # grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
+            # glyphs = grid.glyph(orient="u",factor=.25)
+            # actor_2 = plotter.add_mesh(glyphs,color='b')
 
-        plotter.view_xy()
-        plotter.show_axes()
+            plotter.view_xy()
+            plotter.show_axes()
 
+            # if not pyvista.OFF_SCREEN:
+            plotter.show()
+    def plot_mesh(self):
+        plot_xdmf_mesh(self.msh)
+        # #plots mesh o
+        # pyvista.global_theme.background = [255, 255, 255, 255]
+        # pyvista.global_theme.font.color = 'black'
+        # tdim = self.msh.topology.dim
+        # topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
+        # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+        # plotter = pyvista.Plotter()
+        # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+        # plotter.view_isometric()
+        # plotter.show_axes()
         # if not pyvista.OFF_SCREEN:
-        plotter.show()
-
+        #     plotter.show()
 class CrossSectionAnalytical:
     def __init__(self,params):
         #process params based on shape
