@@ -1,4 +1,5 @@
-
+from ALBATROSS.beam_model import BeamModel
+from ALBATROSS.frame import Frame
 
 Wingbeam = BeamModel(1Dmesh,)
 Strutbeam = BeamModel(...)
@@ -10,7 +11,7 @@ Strutbeam.add_clamped_point(point2)
 #
 Wingbeam.add_connection(Strutbeam)
 
-Tbw = StickModel([Wingbeam,Strutbeam,Jurybeam])
+Tbw = Frame([Wingbeam,Strutbeam,Jurybeam])
 
 # Tbw.add_rigid_joint(Wingbeam,wingbeam_pt,Strutbeam,strutbeam_pt)
 
