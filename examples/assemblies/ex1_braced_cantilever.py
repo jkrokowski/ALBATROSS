@@ -59,12 +59,12 @@ axial_pos_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
 meshname_axial_pos = 'strut_axial_postion_mesh'
 axial_pos_mesh2 = utils.beam_interval_mesh_3D([p3,p4],[ne_2D],meshname_axial_pos)
 
-utils.plot_xdmf_mesh([axial_pos_mesh,axial_pos_mesh2])
+# utils.plot_xdmf_mesh([axial_pos_mesh,axial_pos_mesh2])
 
 #1D mesh used for 1D analysis
 meshname_axial = 'main_axial_mesh'
 ne_1D = 2 #number of elements for 1D mesh
-axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
+axial_mesh = utils.beam_interval_mesh_3D([p1,p4,p2],[ne_1D,ne_1D],meshname_axial)
 meshname_axial = 'strut_axial_mesh'
 axial_mesh2 = utils.beam_interval_mesh_3D([p3,p4],[ne_1D],meshname_axial)
 #define orientation of each xs with a vector
@@ -86,8 +86,8 @@ CantileverBeam = BeamModel(axial_mesh,xs_info)
 StrutBeam = BeamModel(axial_mesh2,xs_info2)
 
 #show the orientation of each xs and the interpolated orientation along the beam
-CantileverBeam.plot_xs_orientations()
-StrutBeam.plot_xs_orientations()
+# CantileverBeam.plot_xs_orientations()
+# StrutBeam.plot_xs_orientations()
 
 #applied fixed bc to first endpoint
 CantileverBeam.add_clamped_point(p1)
@@ -102,8 +102,10 @@ BracedFrame = Frame([CantileverBeam,StrutBeam])
 BracedFrame.plot_frame()
 
 # BracedFrame.add_connection({CantileverBeam,})
-BracedFrame.add_connection([CantileverBeam],p3)
-
+BracedFrame.add_connection([CantileverBeam,StrutBeam],p4)
+print(BracedFrame.Connections)
+BracedFrame.solve()
+# BracedFrame.solve()
 exit()
 #solve the linear problem
 CantileverBeam.solve()

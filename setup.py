@@ -5,7 +5,7 @@ from distutils.core import setup
 #     long_description = f.read()
 setup(
     name='ALBATROSS',
-    version='0.0.2',
+    version='0.0.3',
     # package_dir={"":"ALBATROSS"},
     packages=['ALBATROSS'],
     # packages=find_packages(where='ALBATROSS'),

@@ -218,23 +218,26 @@ class Axial:
         pt = x,y,z location of clamped point
         '''
         print("Adding clamped point...")
-        #marker fxn
-        def clamped_point(x):
-            x_check = np.isclose(x[0],pt[0])
-            y_check = np.isclose(x[1],pt[1])
-            z_check = np.isclose(x[2],pt[2])
-            return np.logical_and.reduce([x_check,y_check,z_check])
+        # #marker fxn
+        # def clamped_point(x):
+        #     x_check = np.isclose(x[0],pt[0])
+        #     y_check = np.isclose(x[1],pt[1])
+        #     z_check = np.isclose(x[2],pt[2])
+        #     return np.logical_and.reduce([x_check,y_check,z_check])
         #function for bc application
         ubc = Function(self.beam_element.W)
         with ubc.vector.localForm() as uloc:
             uloc.set(0.)
-        #find displacement DOFs
-        W0, disp_dofs = self.beam_element.W.sub(0).collapse()
-        clamped_disp_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),clamped_point)
+        
+        clamped_disp_dofs = self._get_dofs(pt,'disp')
+        clamped_rot_dofs = self._get_dofs(pt,'rot')
+        # #find displacement DOFs
+        # W0, disp_dofs = self.beam_element.W.sub(0).collapse()
+        # clamped_disp_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),clamped_point)
 
-        #find rotation DOFs
-        W1, rot_dofs = self.beam_element.W.sub(1).collapse()
-        clamped_rot_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),clamped_point)
+        # #find rotation DOFs
+        # W1, rot_dofs = self.beam_element.W.sub(1).collapse()
+        # clamped_rot_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),clamped_point)
         
         clamped_dofs= np.concatenate([clamped_disp_dofs,clamped_rot_dofs])
         clamped_bc = dirichletbc(ubc,clamped_dofs)
@@ -242,7 +245,22 @@ class Axial:
 
         # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
         ubc.vector.destroy()    #need to add to prevent PETSc memory leak 
-
+    
+    def _get_dofs(self,pt,dof_type="disp"):
+            def locate_pt(x):
+                x_check = np.isclose(x[0],pt[0])
+                y_check = np.isclose(x[1],pt[1])
+                z_check = np.isclose(x[2],pt[2])
+                return np.logical_and.reduce([x_check,y_check,z_check])
+            if dof_type=='disp':
+                #find displacement DOFs
+                W0, disp_map = self.beam_element.W.sub(0).collapse()
+                dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),locate_pt)
+            if dof_type=='rot':
+                W1, rot_map = self.beam_element.W.sub(1).collapse()
+                dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),locate_pt)
+    
+            return dofs
     def add_clamped_point_topo(self,dof):
         ubc = Function(self.beam_element.W)
         with ubc.vector.localForm() as uloc:
@@ -406,7 +424,7 @@ class Axial:
             plotter.show()
         else:
             figure = plot.screenshot("beam_mesh.png")
-
+    
     # def solve2(self):
     #     self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
     #     self.A_mat.assemble()
