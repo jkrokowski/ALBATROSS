@@ -87,8 +87,7 @@ class Frame():
             beam.Adense = csr_matrix(beam.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size).toarray()
             # beam.Acsr = csr_matrix(beam.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size)
             beam.b_vec = beam.b.array
-            print(beam.Adense.shape)
-            print(type(beam.b_vec))
+
             Alist.append(beam.Adense)
             blist.append(beam.b_vec)
             # size+=beam.Adense.shape[0]
@@ -102,8 +101,38 @@ class Frame():
         #reduce the arrays and vectors for one of the matrices that is connected
         #this should just be done by progressivly adding the list of dofs to reduce
         for cxn in self.Connections:
-            member_to_reduce = max(cxn.keys())
-            self.Members[member_to_reduce].Adense
+            #identify members that are in this connection
+            cxn_members = list(cxn.keys())
+            parent = cxn_members[0]
+            children = cxn_members[1:]
+            #store parent dofs
+            parent_dofs = cxn[parent]
+            for child in children:
+                #store child dofs
+                child_dofs = cxn[child]
+                #add contribution to parent matrix
+                Alist[parent][parent_dofs,parent_dofs] += Alist[child][child_dofs,child_dofs]
+                #delete rows and columns of child matrix and vector
+                Alist[child] = np.delete(np.delete(Alist[child],child_dofs,axis=0),child_dofs,axis=1)
+                blist[child]=np.delete(blist[child],child_dofs)
+       
+        #construct assembled system
+        Atotal = block_diag(Alist[0],Alist[1])
+        btotal = np.concatenate(blist)
+
+        #get solution of system
+        u = np.linalg.solve(Atotal,btotal)
+
+        #remap solution to functions for each beam
+        #for parents, simply populate the dof vector with the solution
+        # self.Members[0].dofs = 
+        self.Members[0].uh.vector.array = u[:blist[0].shape[0]]
+
+
+        # print(self.Members[0].uh.vector.array)
+        # for i,member in enumerate(self.Members):
+        #     member.uh.x.array = u[blist[i].shape[i]]
+
         # np.block()
         #build overall system from each beam:
         # for cxn in self.Connections:

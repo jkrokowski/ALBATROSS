@@ -11,6 +11,8 @@ import numpy as np
 from dolfinx.fem import Function
 from petsc4py import PETSc
 from scipy.sparse import csr_matrix
+from scipy.linalg import block_diag
+
 
 class Frame():
     def __init__(self,Beams):
@@ -85,21 +87,51 @@ class Frame():
             beam.Adense = csr_matrix(beam.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size).toarray()
             # beam.Acsr = csr_matrix(beam.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size)
             beam.b_vec = beam.b.array
-            print(beam.Adense.shape)
-            print(type(beam.b_vec))
+
             Alist.append(beam.Adense)
             blist.append(beam.b_vec)
-            size+=beam.Adense.shape[0]
+            # size+=beam.Adense.shape[0]
 
         #TODO: account for multiple beams connected at the same point
             #currently, this only accounts for a connection btwn two beams
-        size -= len(self.Connections)*6
+        # size -= len(self.Connections)*        
+            
+        #use scipy block_diag to construct overall numpy array and stack the vectors, then solve system
 
-
-        print(size)
+        #reduce the arrays and vectors for one of the matrices that is connected
+        #this should just be done by progressivly adding the list of dofs to reduce
         for cxn in self.Connections:
-            print(max(cxn,key=cxn.get))
-        np.block()
+            cxn_members = list(cxn.keys())
+            parent = cxn_members[0]
+            children = cxn_members[1:]
+            print(parent)
+            print(children)
+            parent_dofs = cxn[parent]
+            for child in children:
+                child_dofs = cxn[child]
+                #add contribution to parent matrix
+                Alist[parent][parent_dofs,parent_dofs] += Alist[child][child_dofs,child_dofs]
+                #delete rows and columns of child matrix and vector
+                Alist[child] = np.delete(np.delete(Alist[child],child_dofs,axis=0),child_dofs,axis=1)
+                blist[child]=np.delete(blist[child],child_dofs)
+
+        for A in Alist:
+            print(A.shape)
+        
+        Atotal = block_diag(Alist[0],Alist[1])
+        print(Atotal.shape)
+        btotal = np.concatenate(blist)
+
+        print(btotal.shape)
+
+        u = np.linalg.solve(Atotal,btotal)
+        print(u[:blist[0].shape[0]])
+        self.Members[0].uh.vector.array = u[:blist[0].shape[0]]
+        print(self.Members[0].uh.vector.array)
+        # for i,member in enumerate(self.Members):
+        #     member.uh.x.array = u[blist[i].shape[i]]
+
+        # np.block()
         #build overall system from each beam:
         # for cxn in self.Connections:
         #     print()
