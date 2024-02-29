@@ -64,7 +64,7 @@ axial_pos_mesh2 = utils.beam_interval_mesh_3D([p3,p4],[ne_2D],meshname_axial_pos
 #1D mesh used for 1D analysis
 meshname_axial = 'main_axial_mesh'
 ne_1D = 20 #number of elements for 1D mesh
-axial_mesh = utils.beam_interval_mesh_3D([p1,p4,p2],[ne_1D,ne_1D],meshname_axial)
+axial_mesh = utils.beam_interval_mesh_3D([p1,p4,p2],[ne_1D/2,ne_1D],meshname_axial)
 meshname_axial = 'strut_axial_mesh'
 axial_mesh2 = utils.beam_interval_mesh_3D([p3,p4],[ne_1D],meshname_axial)
 #define orientation of each xs with a vector
@@ -104,6 +104,7 @@ BracedFrame.plot_frame()
 # BracedFrame.add_connection({CantileverBeam,})
 BracedFrame.add_connection([CantileverBeam,StrutBeam],p4)
 print(BracedFrame.Connections)
+# BracedFrame.create_global_to_local_connectivity()
 BracedFrame.solve()
 CantileverBeam.plot_axial_displacement(10)
 # BracedFrame.solve()

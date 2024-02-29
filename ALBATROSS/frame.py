@@ -71,12 +71,53 @@ class Frame():
         # cxn = {cxn_member1:cxn_member1_dofs,cxn_member2:cxn_member2_dofs}
         self.Connections.append(cxn)
 
+    def create_frame_connectivity(self):
+        #store member dof numbers
+        for i,member in enumerate(self.Members):
+            member.num_local_dofs=member.member.beam_element.W.dofmap.index_map.size_global
+            member.num_global_dofs = member.num_local_dofs
+        
+        #compute the number of dofs that the total system is reduced due to the connection
+        num_cxn_dofs_total = 0
+        #loop through the connections to find the number of beams at each connection 
+        #   and the number of connected dofs at each
+        for cxn in self.Connections:
+            num_cxn_dofs = (len(cxn)-1)*len(cxn[list(cxn.keys())[0]])
+            num_cxn_dofs_total += num_cxn_dofs
+            #identify members that are in this connection
+            cxn_members = list(cxn.keys())
+            parent = cxn_members[0]
+            children = cxn_members[1:]
+            #store parent dofs
+            parent_dofs = cxn[parent]
+            
+            #ALL members should have a child and parents dofs property
+            self.Members[parent].child_dofs = (child,child_dofs)    
+            
+            for child in children:
+                #add child dofs
+                child_dofs = cxn[child]
+                #add parent dofs to member
+                self.Members[child].num_global_dofs -= num_cxn_dofs
+                self.Members[child].parent_dofs = (parent,parent_dofs)
+
+
+        # num_dofs_unconnected = sum([member.num_local_dofs for member in self.Members])
+        # self.num_dofs_global = num_dofs_unconnected - num_cxn_dofs_total
+        self.num_dofs_global = sum([member.num_global_dofs for member in self.Members])
+
+        print(self.num_dofs_global)
+
+        #use connection dictionary to 
+
+        for i,member in enumerate(self.Members):
+            member.global_frame_dofs = np.arange(self.Members[i].num_local_dofs)
+
     def solve(self):
         #TODO: PETSc implementation of all the below stuff
         #assemble all subsystems
         Alist = []
         blist = []
-        size = 0
         for beam in self.Members: 
             beam._construct_system() 
 
@@ -90,13 +131,10 @@ class Frame():
 
             Alist.append(beam.Adense)
             blist.append(beam.b_vec)
-            # size+=beam.Adense.shape[0]
 
         #TODO: account for multiple beams connected at the same point
             #currently, this only accounts for a connection btwn two beams
-        # size -= len(self.Connections)*        
             
-        #use scipy block_diag to construct overall numpy array and stack the vectors, then solve system
 
         #reduce the arrays and vectors for one of the matrices that is connected
         #this should just be done by progressivly adding the list of dofs to reduce
@@ -110,23 +148,56 @@ class Frame():
             for child in children:
                 #store child dofs
                 child_dofs = cxn[child]
+                # self.Members[child].parent_dofs_map = cxn[parent]
                 #add contribution to parent matrix
                 Alist[parent][parent_dofs,parent_dofs] += Alist[child][child_dofs,child_dofs]
                 #delete rows and columns of child matrix and vector
                 Alist[child] = np.delete(np.delete(Alist[child],child_dofs,axis=0),child_dofs,axis=1)
                 blist[child]=np.delete(blist[child],child_dofs)
-       
+                # self.Members[child].parent_dofs = parent_dofs
+                # self.Members[child].child_dofs = child_dofs
+        
         #construct assembled system
-        Atotal = block_diag(Alist[0],Alist[1])
+        Atotal = block_diag(*Alist)
         btotal = np.concatenate(blist)
+        # Atotal = block_diag(*[member.Adense for member in self.Members])
+        # btotal = np.concatenate([member.b_vec for member in self.Members])
 
-        #get solution of system
+        #get offsets
+        # for i,member in enumerate(self.Members):
+        #     if i ==0:
+        #         member.dof_offset = 0
+        #     else:
+        #         member.dof_offset = self.Members[i-1].dof_offset + Alist[i-1].shape[0]
+
+        #get displacement solution of system
         u = np.linalg.solve(Atotal,btotal)
 
         #remap solution to functions for each beam
-        #for parents, simply populate the dof vector with the solution
-        # self.Members[0].dofs = 
-        self.Members[0].uh.vector.array = u[:blist[0].shape[0]]
+        #for parents, simply populate the dof vector with the solution, accounting for the offset
+        for i,member in enumerate(self.Members):
+            if i ==0:
+                member.dof_offset = 0
+            else:
+                member.dof_offset = self.Members[i-1].dof_offset + Alist[i-1].shape[0]
+
+            dof_start = member.dof_offset
+            dof_stop = member.dof_offset+blist[i].shape[0] 
+            u_vals = u[dof_start:dof_stop]
+            # if member.parent_dofs:
+            #     u_vals = np.insert(u_vals,member.parent_dofs,u[member.parent_dofs])
+            #this logical test looks nasty, but it determines if any member is a child at least once 
+            #   so we can get the dofs for that member 
+            # if i in np.array([list(cxn.keys())[1:] for cxn in self.Connections]).flatten():
+            #     #get 
+                
+            # if member.par
+            # u_member = np.insert()
+            member.uh.vector.array = u_vals
+        #for children
+
+        #if the frame consists of a distinct members that are not connected (e.g. multiple frames?)
+        # we need to construct
 
 
         # print(self.Members[0].uh.vector.array)
