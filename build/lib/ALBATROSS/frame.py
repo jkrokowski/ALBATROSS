@@ -72,44 +72,126 @@ class Frame():
         self.Connections.append(cxn)
 
     def create_frame_connectivity(self):
-        #compute the number of dofs that the total system is reduced due to the connection
-        num_cxn_reduction_dofs = 0
-        #loop through the connections to find the number of beams at each connection 
-        #   and the number of connected dofs at each
-        for cxn in self.Connections:
-            num_cxn_reduction_dofs += (len(cxn)-1)*len(cxn[list(cxn.keys())[0]])
+        #store dof numbers for each member and initialize 
+        #TODO: move this to the point that the beam is added to the frame?
+        self.num_dofs_global=0
+        for i,member in enumerate(self.Members):
+            member.num_local_dofs=member.beam_element.W.dofmap.index_map.size_global
+            #initialize number of global dofs corresponding to each member
+            #   these will be reduced for each connection
+            member.num_global_dofs = member.num_local_dofs
+            member.child_dofs = {}
+            member.parent_dofs = {}
+            #this is an array of length member.num_local_dofs, which maps the local dofs to the global dofs
+            member.local_to_global = np.arange(self.num_dofs_global,self.num_dofs_global+member.num_local_dofs)
+            print('member %i:' % i)
+            print(member.local_to_global)
+            #increment the total number of global dofs
+            self.num_dofs_global += member.num_local_dofs
+            #build local to global dof map
         
-        #store member dof numbers
-        for member in self.Members:
-            member.num_local_dofs=member.member.beam_element.W.dofmap.index_map.size_global
-
-        num_dofs_unconnected = sum([member.num_local_dofs for member in self.Members])
-        self.num_dofs_global = num_dofs_unconnected - num_cxn_reduction_dofs
+        #next, we modify the above maps by building a map from global space to a reduced global space
+        #   and using the individual maps from the local space to the global space, we can build the local to the reduced global space 
+        self.num_dofs_global_reduced = self.num_dofs_global
+        self.reduced_dofs = []
+        for cxn in self.Connections:
+            #get number of dofs in this 
+            # num_cxn_dofs = (len(cxn)-1)*len(cxn[list(cxn.keys())[0]])
+            #identify members that are in this connection
+            cxn_members = list(cxn.keys())
+            parent = cxn_members[0]
+            children = cxn_members[1:]
+            parent_dofs = cxn[parent]
+            for child in children:
+                #add child dofs tuple to parent
+                child_dofs = cxn[child]
+                self.Members[parent].child_dofs[child] = child_dofs
+                #add parent dofs tuple to child
+                self.Members[child].parent_dofs[parent]= parent_dofs
+                #reduce number of unique global dofs for the assembled system by the number of child dofs
+                self.num_dofs_global_reduced -= child_dofs.shape[0]
+                # self.Members[child].num_global_dofs -= num_cxn_dofs
+                self.Members[child].local_to_global[child_dofs] = self.Members[parent].local_to_global[parent_dofs]
+                self.reduced_dofs.extend(child_dofs)
+        
         print(self.num_dofs_global)
+        print(self.num_dofs_global_reduced)
+        print(self.reduced_dofs)
 
-        #use connection dictionary to 
+        print('after modification:')
+        for i,member in enumerate(self.Members):
+            print('member %i:' % i)
+            print(member.local_to_global)
 
-        # for member in self.Members:
-        #     member.global_frame_dofs = 
+
+        #TODO: NOTHING BELOW HERE CAN BE TRUSTED
+        # print()
+        # print("check yourself!")
+        # print()
+
+        # #build maps from local dofs to global dofs
+
+        # # num_dofs_unconnected = sum([member.num_local_dofs for member in self.Members])
+        # # self.num_dofs_global = num_dofs_unconnected - num_cxn_dofs_total
+        # # self.num_dofs_global = sum([member.num_global_dofs for member in self.Members])
+        
+        # #assign global degrees of freedom for each member
+        # self.num_dofs_global = 0
+        # for i,member in enumerate(self.Members):
+        #     #populate list of dofs in global_frame_dofs property
+        #     member.global_frame_dofs = np.arange(self.num_dofs_global,self.num_dofs_global+member.num_global_dofs)
+
+        #     #increment the number of global dofs by the number of unique global dofs in the member
+        #     self.num_dofs_global += member.num_global_dofs
+        #     print("Member %i:" % i)
+        #     print('unique global frame dofs:')
+        #     print(member.global_frame_dofs)
+        #     print()
+
+        # print(self.num_dofs_global)
+
+        # # for each beam, map local dofs to global dofs with a list of length = local_dofs with global dof values
+        # #for each member
+        # member.global_to_local = np.zeros((member.num_local_dofs))
+
+
+        # #add global dofs of parent to global dofs of child
+        # print()
+        # for cxn in self.Connections:
+        #     cxn_members = list(cxn.keys())
+        #     parent = cxn_members[0]
+        #     children = cxn_members[1:]
+        #     # parent_dofs = cxn[parent]
+        #     for child in children:
+        #         print('indices:')
+        #         print(self.Members[parent].child_dofs[child])
+        #         print('vals:')
+        #         print(self.Members[parent].global_frame_dofs[self.Members[child].parent_dofs[1]])
+        #         self.Members[child].global_frame_dofs = np.insert(self.Members[child].global_frame_dofs,
+        #                                                           self.Members[parent].child_dofs[1],
+        #                                                           self.Members[parent].global_frame_dofs[self.Members[child].parent_dofs[1]])
 
     def solve(self):
         #TODO: PETSc implementation of all the below stuff
         #assemble all subsystems
-        Alist = []
-        blist = []
-        for beam in self.Members: 
-            beam._construct_system() 
+        # Alist = []
+        # blist = []
+        Atotal = np.zeros((self.num_dofs_global_reduced,self.num_dofs_global_reduced))
+        btotal = np.zeros((self.num_dofs_global_reduced))
+        for i,member in enumerate(self.Members): 
+            member._construct_system() 
 
             #initialize function to store solution of assembled system:
-            beam.uh = Function(beam.beam_element.W)
+            member.uh = Function(member.beam_element.W)
             # beam.uvec = beam.uh.vector #petsc vector
             # beam.uvec.setUp()
-            beam.Adense = csr_matrix(beam.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size).toarray()
+            member.Adense = csr_matrix(member.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size).toarray()
             # beam.Acsr = csr_matrix(beam.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size)
-            beam.b_vec = beam.b.array
+            member.b_vec = member.b.array
 
-            Alist.append(beam.Adense)
-            blist.append(beam.b_vec)
+            Atotal[member.local_to_global,member.local_to_global]
+            # Alist.append(beam.Adense)
+            # blist.append(beam.b_vec)
 
         #TODO: account for multiple beams connected at the same point
             #currently, this only accounts for a connection btwn two beams
@@ -137,8 +219,8 @@ class Frame():
                 # self.Members[child].child_dofs = child_dofs
         
         #construct assembled system
-        Atotal = block_diag(*Alist)
-        btotal = np.concatenate(blist)
+        # Atotal = block_diag(*Alist)
+        # btotal = np.concatenate(blist)
         # Atotal = block_diag(*[member.Adense for member in self.Members])
         # btotal = np.concatenate([member.b_vec for member in self.Members])
 
