@@ -118,18 +118,29 @@ class Frame():
                 self.reduced_dofs_vals.extend(parent_dofs)
 
         #construct map from global to global reduced dofs
-        self.global_to_global_reduced = np.arange(self.num_dofs_global)
-        self.global_to_global_reduced[self.reduced_dofs] = ?
+        #TODO: more thought may be needed here to manage the sparsity pattern
+        # self.global_to_global_reduced = np.arange(self.num_dofs_global)
+        # #loop through each dof and if the dof is greater than the reduced dof value, decrease all dofs by 1
+        # for i,dof in enumerate(self.global_to_global_reduced):
+        #     for j,reduced_dof in enumerate(self.reduced_dofs):
+        #         if j>=i:
+        #             dof -= 1
+
+        #ANOTHER IDEA: construct rectangular incidence matrix to transform between global and reduced global 
         
+
+
         print(self.num_dofs_global)
         print(self.num_dofs_global_reduced)
+        print('reduced dofs:')
         print(self.reduced_dofs)
-        print()
+        # print(self.global_to_global_reduced)
 
         print('after modification:')
         for i,member in enumerate(self.Members):
             print('member %i:' % i)
             print(member.local_to_global)
+
 
 
         #TODO: NOTHING BELOW HERE CAN BE TRUSTED
