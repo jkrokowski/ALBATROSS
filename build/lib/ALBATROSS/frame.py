@@ -75,6 +75,7 @@ class Frame():
         #store dof numbers for each member and initialize 
         #TODO: move this to the point that the beam is added to the frame?
         self.num_dofs_global=0
+        self.global_offsets=[0]
         for i,member in enumerate(self.Members):
             member.num_local_dofs=member.beam_element.W.dofmap.index_map.size_global
             #initialize number of global dofs corresponding to each member
@@ -88,12 +89,18 @@ class Frame():
             print(member.local_to_global)
             #increment the total number of global dofs
             self.num_dofs_global += member.num_local_dofs
+            if i==0:
+                self.global_offsets.append(member.num_local_dofs+self.global_offsets[i])
             #build local to global dof map
         
+        print('global offsets:')
+        print(self.global_offsets)
         #next, we modify the above maps by building a map from global space to a reduced global space
         #   and using the individual maps from the local space to the global space, we can build the local to the reduced global space 
         self.num_dofs_global_reduced = self.num_dofs_global
         self.reduced_dofs = []
+        self.GtR = np.eye((self.num_dofs_global)) #trim this array later
+        
         for cxn in self.Connections:
             #get number of dofs in this 
             # num_cxn_dofs = (len(cxn)-1)*len(cxn[list(cxn.keys())[0]])
@@ -110,20 +117,30 @@ class Frame():
                 self.Members[child].parent_dofs[parent]= parent_dofs
                 #reduce number of unique global dofs for the assembled system by the number of child dofs
                 self.num_dofs_global_reduced -= child_dofs.shape[0]
-                # self.Members[child].num_global_dofs -= num_cxn_dofs
+                #add map of local member dofs to the global dofs
                 self.Members[child].local_to_global[child_dofs] = self.Members[parent].local_to_global[parent_dofs]
-                self.reduced_dofs.extend(child_dofs)
-        
+                #keep track of which global dofs don't exist in reduced global system
+                self.reduced_dofs.extend(child_dofs+self.global_offsets[child])
+                print("parent dofs:")
+                print(parent_dofs)
+                print("child dofs:")
+                print(child_dofs)
+                self.GtR[self.global_offsets[child]+child_dofs,self.global_offsets[parent]+parent_dofs] = 1
+                # self.GtR[child_dofs,child_dofs] = 0
+        #trim global to local incidence matrix
+        self.GtR = np.delete(self.GtR,self.reduced_dofs,axis=0)
+
         print(self.num_dofs_global)
         print(self.num_dofs_global_reduced)
+        print('reduced dofs:')
         print(self.reduced_dofs)
+        # print(self.global_to_global_reduced)
 
         print('after modification:')
         for i,member in enumerate(self.Members):
             print('member %i:' % i)
             print(member.local_to_global)
-
-
+        
         #TODO: NOTHING BELOW HERE CAN BE TRUSTED
         # print()
         # print("check yourself!")
@@ -185,7 +202,7 @@ class Frame():
             member.uh = Function(member.beam_element.W)
             # beam.uvec = beam.uh.vector #petsc vector
             # beam.uvec.setUp()
-            member.Adense = csr_matrix(member.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size).toarray()
+            member.Adense = csr_matrix(member.A_mat.getValuesCSR()[::-1], shape=member.A_mat.size).toarray()
             # beam.Acsr = csr_matrix(beam.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size)
             member.b_vec = member.b.array
 

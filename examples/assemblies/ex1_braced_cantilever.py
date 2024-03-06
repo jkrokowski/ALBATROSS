@@ -63,8 +63,8 @@ axial_pos_mesh2 = utils.beam_interval_mesh_3D([p3,p4],[ne_2D],meshname_axial_pos
 
 #1D mesh used for 1D analysis
 meshname_axial = 'main_axial_mesh'
-ne_1D = 4 #number of elements for 1D mesh
-axial_mesh = utils.beam_interval_mesh_3D([p1,p4,p2],[ne_1D/2,ne_1D],meshname_axial)
+ne_1D = 1 #number of elements for 1D mesh
+axial_mesh = utils.beam_interval_mesh_3D([p1,p4,p2],[ne_1D,ne_1D],meshname_axial)
 meshname_axial = 'strut_axial_mesh'
 axial_mesh2 = utils.beam_interval_mesh_3D([p3,p4],[ne_1D],meshname_axial)
 #define orientation of each xs with a vector
