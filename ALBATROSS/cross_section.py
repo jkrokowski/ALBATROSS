@@ -678,7 +678,6 @@ class CrossSectionAnalytical:
         else:
             print("busy doing nothing...")
         
-        
     def compute_stiffness(self):
 
         #### SQUARE XS ####
