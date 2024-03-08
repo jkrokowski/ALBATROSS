@@ -638,40 +638,258 @@ class CrossSection:
 class CrossSectionAnalytical:
     def __init__(self,params):
         #process params based on shape
+        self.shape = params['shape']
+        self.E = params['E']
+        self.nu = params['nu']
 
-        if params['shape']=='rectangle':
+        if self.shape=='rectangle':
             self.h = params['h']
             self.w = params['w']
-            self.E = params['E']
-            self.nu = params['nu']
 
-        elif params['shape'] =='box':
+        elif self.shape =='box':
             self.h = params['h']
             self.w = params['w']
             self.t_h = params['t_h']
             self.t_w = params['t_w']
-            self.E = params['E']
-            self.nu = params['nu']
+
+        elif self.shape == 'circle':
+            self.r = params['r']
+
+        elif self.shape == 'hollow circle':
+            self.r = params['r']
+            self.t = params['t']
+
+        elif self.shape == 'ellipse':
+            self.r_x = params['radius_x']
+            self.r_y = params['radius_y']
+
+        elif self.shape == 'hollow ellipse':
+            self.r_x = params['radius_x']
+            self.r_y = params['radius_y']
+            self.r_x = params['t_x']
+            self.r_y = params['t_y']
+
+        elif self.shape == 'I':
+            self.h = params['h']
+            self.w = params['w']
+            self.t_h = params['t_h'] #flange thickness
+            self.t_w = params['t_w'] #web thickness
 
         else:
             print("busy doing nothing...")
         
         
     def compute_stiffness(self):
-        A = (self.h*self.w)-((self.h-2*self.t_h)*(self.w-self.t_w))
-        G = self.E / (2*(1+self.nu))
-        if self.h>=self.w:
-            J = (self.h * self.w ** 3) * (2 / 9) * (1 / (1 + (self.w / self.h) ** 2))
-        else:
-            J = (self.w * self.h ** 3) * (2 / 9) * (1 / (1 + (self.h / self.w) ** 2))
 
-        kappa = 5/6
+        #### SQUARE XS ####
+
+        ########
+        ########
+        ########
+        ########
+        if self.shape == 'rectangle':
+            A = (self.h*self.w)
+            G = self.E / (2*(1+self.nu))
+            if self.h>=self.w:
+                J = (self.h * self.w ** 3) * (2 / 9) * (1 / (1 + (self.w / self.h) ** 2))
+            else:
+                J = (self.w * self.h ** 3) * (2 / 9) * (1 / (1 + (self.h / self.w) ** 2))
+
+            kappa = 5/6
+            
+            EA = self.E*A
+            kGA1=kappa*G*A
+            kGA2=kappa*G*A
+            GJ = G*J
+            EI1 = self.E*(self.w*self.h**3 /12 )
+            EI2 = self.E*(self.h*self.w**3 /12 )
+            
+            self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2]))
         
-        EA = self.E*A
-        kGA1=kappa*G*A
-        kGA2=kappa*G*A
-        GJ = G*J
-        EI1 = self.E*(self.w*self.h**3 /12 - ((self.w-2*self.t_w)*(self.h-2*self.t_h)**3) /12)
-        EI2 = self.E*(self.h*self.w**3 /12 - ((self.h-2*self.t_h)*(self.w-2*self.t_w)**3) /12)
         
-        self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2,]))
+        #### BOX XS ####
+        ########
+        #      #
+        #      #
+        #      #
+        ########
+
+        elif self.shape =='box':
+            #this torsional model assumes a wall thickness that is less than 10% of the width or height
+            A = (self.h*self.w)-((self.h-2*self.t_h)*(self.w-self.t_w))
+            G = self.E / (2*(1+self.nu))
+            
+            #from wikipedia page on Timoshenko theory: https://en.wikipedia.org/wiki/Timoshenko%E2%80%93Ehrenfest_beam_theory
+            m = ( (self.w*self.t_h) / ((self.h*self.t_w)) )
+            n = ( self.w/self.h )
+            kappa = ( (10*(1+self.nu)*(1+3*m)**2) /
+                      ((12 + 72*m + 150*m**2 + 90*m**3)
+                       +self.nu*(11+66*m + 135*m**2 + 90*m**3)
+                       +10*n**2*((3+self.nu)*m + 3*m**2)) )
+            
+            EA = self.E*A
+            kGA1=kappa*G*A
+            kGA2=kappa*G*A
+            EI1 = self.E*(self.w*self.h**3 /12 - ((self.w-2*self.t_w)*(self.h-2*self.t_h)**3) /12)
+            EI2 = self.E*(self.h*self.w**3 /12 - ((self.h-2*self.t_h)*(self.w-2*self.t_w)**3) /12)
+            
+            J = (2*self.t_w*self.t_h*(self.w-self.t_w)**2 * (self.h-self.t_h)**2) / (self.h*self.t_h + self.w*self.t_w - self.t_w**2 - self.t_h**2)
+            GJ = G*J
+
+            self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2]))
+
+        #### CIRCULAR XS ######
+           #######
+         ###########
+        #############
+        #############
+         ###########
+           #######
+        elif self.shape == 'circle':
+            A = np.pi*self.r**2
+            G = self.E / (2*(1+self.nu))
+
+            #from wikipedia page on Timoshenko theory: https://en.wikipedia.org/wiki/Timoshenko%E2%80%93Ehrenfest_beam_theory
+            kappa = (6*(1+self.nu)) / (7+6*self.nu)
+            
+            EA = self.E*A
+            kGA1=kappa*G*A
+            kGA2=kappa*G*A
+            EI1 = self.E*((np.pi/4)*(self.r**4))
+            EI2 = self.E*((np.pi/4)*(self.r**4))
+            
+            J = EI1 + EI2
+            GJ = G*J
+
+            self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2]))
+
+        #### HOLLOW CIRCULAR XS ######
+           #######
+         ##       ##
+        ##         ##
+        ##         ##
+         ##       ##
+           #######        
+
+        elif self.shape == 'hollow circle':
+            A = np.pi*(self.r**2-(self.r-self.t)**2)
+            G = self.E / (2*(1+self.nu))
+
+            #from wikipedia page on Timoshenko theory
+            m = self.r-self.t / self.r
+            kappa = ( (6*(1+self.nu) *(1+m**2)**2 )
+                        / ((7+6*self.nu) * (1+m**2)**2 + (20+12*self.nu)*m**2))
+            
+            EA = self.E*A
+            kGA1=kappa*G*A
+            kGA2=kappa*G*A
+            EI1 = self.E*(np.pi/4)*(self.r**4-(self.r-self.t)**4)
+            EI2 = self.E*(np.pi/4)*(self.r**4-(self.r-self.t)**4)
+            
+            J = EI1 + EI2
+            GJ = G*J
+
+            self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2]))
+        
+        #### ELLIPSE XS ####
+            #############
+         ###################
+        #####################
+        #####################
+         ###################
+            #############        
+
+        elif self.shape == 'ellipse':
+            A = np.pi*self.r_x* self.r_y
+            G = self.E / (2*(1+self.nu))
+
+            #from wikipedia page on Timoshenko theory: https://en.wikipedia.org/wiki/Timoshenko%E2%80%93Ehrenfest_beam_theory
+            kappa1 = ( (12*(1+self.nu)*self.r_y**2*(3*self.r_y**2 + self.r_x**2))
+                    / ( ( (40+ 37*self.nu)*self.r_y**4) + ((16 + 10*self.nu)*self.r_y**2 * self.r_x**2) + self.nu*self.r_x**4) ) 
+            kappa2 = ( (12*(1+self.nu)*self.r_x**2*(3*self.r_x**2 + self.r_y**2))
+                        / ( ( (40+ 37*self.nu)*self.r_x**4) + ((16 + 10*self.nu)*self.r_x**2 * self.r_y**2) + self.nu*self.r_y**4) ) 
+            
+            EA = self.E*A
+            kGA1=kappa1*G*A
+            kGA2=kappa2*G*A
+            EI1 = self.E*(np.pi/4)*(self.r_x * self.r_y**3 )
+            EI2 = self.E*(np.pi/4)*(self.r_x**3 * self.r_y )
+            
+            #from https://roymech.org/Useful_Tables/Torsion.html
+            J = (np.pi * self.r_x**3 * self.r_y**3) / (self.r_x**2 + self.r_y**2)
+            GJ = G*J
+
+            self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2]))
+
+        #### HOLLOW ELLIPSE XS ####
+            #############
+         ###################
+        #####################
+        #####################
+         ###################
+            #############  
+        elif self.shape == 'hollow ellipse':
+            # inner and outer ellipse are assumed to be similar
+            A = np.pi*((self.r_x*self.r_y) - ((self.r_x-self.t_x)* (self.r_y-self.t_y)) )
+            G = self.E / (2*(1+self.nu))
+
+            #TODO: fix these kappas
+            #from wikipedia page on Timoshenko theory: https://en.wikipedia.org/wiki/Timoshenko%E2%80%93Ehrenfest_beam_theory
+            kappa1 = ( (12*(1+self.nu)*self.r_y**2*(3*self.r_y**2 + self.r_x**2))
+                    / ( ( (40+ 37*self.nu)*self.r_y**4) + ((16 + 10*self.nu)*self.r_y**2 * self.r_x**2) + self.nu*self.r_x**4) ) 
+            kappa2 = ( (12*(1+self.nu)*self.r_x**2*(3*self.r_x**2 + self.r_y**2))
+                        / ( ( (40+ 37*self.nu)*self.r_x**4) + ((16 + 10*self.nu)*self.r_x**2 * self.r_y**2) + self.nu*self.r_y**4) ) 
+            
+            EA = self.E*A
+            kGA1=kappa1*G*A
+            kGA2=kappa2*G*A
+            EI1 = self.E*(np.pi/4)*( (self.r_x * self.r_y**3 ) - ((self.r_x-self.t_x) * (self.r_y-self.t_y)**3 ) )
+            EI2 = self.E*(np.pi/4)*( (self.r_x**3 * self.r_y ) - ((self.r_x-self.t_x)**3 * (self.r_y-self.t_y) ) )
+            
+            #from Roark's Table 10.1
+            q = (self.r_x-self.t_w)/self.r_x
+            J = ( (np.pi * self.r_x**3 * self.r_y**3) / (self.r_x**2 + self.r_y**2) ) * (1- q )
+            GJ = G*J
+
+            self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2]))
+
+        #### I XS #####
+        #################
+                #
+                #
+                #
+                #
+                #
+                #
+                #
+        #################
+            
+        elif self.shape == 'I':
+            A = self.w*self.h - (self.h - 2*self.t_h)*(self.w-self.t_w)
+            G = self.E / (2*(1+self.nu))
+            
+            #from cowper (wikipedia list)
+            m = 2*self.w*self.t_h / self.h*self.t_w
+            n = self.w/self.h
+            kappa1 = ( (10*(1+self.nu)*(1+3*m)**2) / 
+                        ((12+72*m+150*m**2+90*m**3) 
+                         + self.nu*(11+66*m+135*m**2+90*m**3) 
+                         + 30*n**2*(m+m**2) 
+                         + 5*self.nu*n*2*(8*m+9*m**2)) )
+            kappa2 = 5/6 #lacking an accurate answer, we just use the rectangular one
+
+            EA = self.E*A
+            kGA1=kappa*G*A
+            kGA2=kappa*G*A
+
+            #from roark's table 10.2
+            J = 1/3 * (2*self.t_h**3*self.w + self.t_w**3*self.h)
+            GJ = G*J
+            EI1 = self.E*(self.w*self.h**3 /12 ) - (((self.h - 2*self.t_h)**3*(self.w-self.t_w)) /12 )
+            EI2 = self.E*((self.h-self.t_h)*self.t_w**3 /12 ) + (2*self.t_h*self.w**3 / 12)
+            
+            self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2]))            
+        
+        else:
+            print('busy doing nothing')
+        
