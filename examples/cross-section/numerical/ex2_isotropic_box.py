@@ -1,3 +1,4 @@
+#simple example of cross-sectional analysis of an isotropic symmetric box:
 import ALBATROSS
 
 from dolfinx import mesh,plot

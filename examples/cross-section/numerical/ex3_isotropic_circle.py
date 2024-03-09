@@ -1,4 +1,4 @@
-#simple example of cross-sectional analysis of an isotropic square:
+#simple example of cross-sectional analysis of an isotropic circle:
 import ALBATROSS
 
 from dolfinx import mesh
@@ -39,7 +39,7 @@ print("Analytical axial stiffness (EA):")
 E = mats['Unobtainium']['MECH_PROPS']['E']
 A = np.pi*radius**2
 print(E*A)
-print("Computed Axial StiALBATROSS/examples/cross-section/ex4_isotropic_hollow_disk.pyffness:")
+print("Computed Axial Stiffness:")
 print(circleXS.K[0,0])
 
 print("Analytical Bending stiffness (EI):")

@@ -49,7 +49,7 @@ def get_vtx_to_dofs(domain,V):
 
      return vtx_to_dof
 
-def plot_xdmf_mesh(msh,add_nodes=False):
+def plot_xdmf_mesh(msh,surface=True,add_nodes=False):
      pyvista.global_theme.background = [255, 255, 255, 255]
      pyvista.global_theme.font.color = 'black'
      plotter = pyvista.Plotter()
@@ -58,8 +58,10 @@ def plot_xdmf_mesh(msh,add_nodes=False):
           tdim = msh.topology.dim
           topology, cell_types, geom = plot.create_vtk_mesh(msh, tdim)
           grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-          # plotter.add_mesh(grid,show_edges=True,opacity=0.25)
-          plotter.add_mesh(grid,color='k',show_edges=True)
+          if surface ==True:
+               plotter.add_mesh(grid,show_edges=True,opacity=0.25)
+          if surface == False:
+               plotter.add_mesh(grid,color='k',show_edges=True)
           if add_nodes==True:
                plotter.add_mesh(grid, style='points',color='k')
           plotter.view_isometric()
@@ -272,7 +274,7 @@ def create_2D_box(pts,thicknesses,num_el,meshname):
      
 def create_circle(radius,num_el,meshname):
      '''
-     radius = outer radius of disk
+     radius = outer radius of circle
      num_el = number of elements along radial direction 
      meshname = name of mesh
      '''
@@ -332,9 +334,9 @@ def create_circle(radius,num_el,meshname):
           domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
           # print("Finished meshing 2D with %i elements" % (domain.num_cells))
           return domain
-def create_hollow_disk(radius,thickness,num_el,meshname):
+def create_hollow_circle(radius,thickness,num_el,meshname):
      '''
-     radius = outer radius of disk
+     radius = outer radius of circle
      thicknesses = wall thickness
      num_el = number of elements through thickness
      meshname = name of mesh
