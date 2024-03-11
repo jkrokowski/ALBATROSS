@@ -271,6 +271,137 @@ def create_2D_box(pts,thicknesses,num_el,meshname):
           domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
           # print("Finished meshing 2D with %i elements" % (domain.num_cells))
           return domain
+def create_I_section(pts,thicknesses,num_el,meshname):
+     #TODO: UPDATE THIS
+     '''
+     pts = list of 4 corners of hollow box in (x,y) locations 
+          provide in clockwise order starting from upper left:
+               [(pt1=upper left x,y), (pt2 = upper right x,y), 
+               (pt3=bottom right x,y), (pt4=bottom left x,y) ]
+     thicknesses = list of wall thicknesses for walls:
+                    [(pt1 to pt2 thickness),(pt2 to pt3 thickness),
+                    (pt3 to pt4 thickness),(pt4 to pt1 thickness)]
+     num_el = list of number of elements through thickness for 
+                    each specified thickness
+     meshname = name of mesh
+     '''
+
+     #unpack input 
+     # t: top, b:bottom, l:left, r:right, i: inside
+     # e.g. tlicx is the top left inside corner's x coordinate)
+     [(tlcx,tlcy),(trcx,trcy),(brcx,brcy),(blcx,blcy)]=pts
+     [t1,t2,t3,t4]=thicknesses
+     [n1,n2,n3,n4]=num_el
+     filename = 'output/'+meshname+'.xdmf'
+
+     #get inside corners ()
+     (tlicx,tlicy)=(tlcx+t4,tlcy-t1)
+     (tricx,tricy)=(trcx-t2,trcy-t1)
+     (bricx,bricy)=(brcx-t2,brcy+t3)
+     (blicx,blicy)=(blcx+t4,blcy+t3)
+     
+     #choose number of elements between corners for height and width:
+     width = trcx-tlcx
+     height = tlcy-blcy
+     avg_cell_size = np.average(np.array(thicknesses)/np.array(num_el))
+
+     nw = int(np.ceil((width-t2-t4)/avg_cell_size))
+     nh = int(np.ceil((height-t1-t3)/avg_cell_size))
+     
+     #for 2 xs mesh, gdim=tdim=2
+     gdim = 2
+     tdim = 2
+
+     #initialize, add model and activate
+     print("Generating 2D box xs mesh...")
+     gmsh.initialize()
+     gmsh.option.setNumber("General.Terminal",0) #suppress gmsh output
+     gmsh.model.add(meshname)
+     gmsh.model.setCurrent(meshname)
+     
+     #list of coordinates for each sub-section of box xs
+     box_nodes = [[tlcx,tlicy,tlicx,tlcy],
+                  [tlicx,tlicy,tricx,trcy],
+                  [tricx,tricy,trcx,trcy],
+                  [bricx,bricy,trcx,tricy],
+                  [bricx,brcy,brcx,bricy],
+                  [blicx,blcy,bricx,bricy],
+                  [blcx,blcy,blicx,blicy],
+                  [blcx,blicy,tlicx,tlicy]]
+     
+     #number of elements in x and y directions for each sub-section
+     box_el_num = [[n4,n1],
+               [nw,n1],
+               [n2,n1],
+               [n2,nh],
+               [n2,n3],
+               [nw,n3],
+               [n4,n3],
+               [n4,nh]]
+     
+     #loop to build all 8 subsections of the hollow box
+     for box,el_num in zip(box_nodes,box_el_num):
+          x1,y1,x2,y2 = box
+          num_el_x, num_el_y = el_num
+
+          p1 = gmsh.model.geo.addPoint(x1,y1,0)
+          p2 = gmsh.model.geo.addPoint(x1,y2,0)
+          p3 = gmsh.model.geo.addPoint(x2,y2,0)
+          p4 = gmsh.model.geo.addPoint(x2,y1,0)
+          l1 = gmsh.model.geo.addLine(p1, p2)
+          l2 = gmsh.model.geo.addLine(p2, p3)
+          l3 = gmsh.model.geo.addLine(p3, p4)
+          l4 = gmsh.model.geo.addLine(p4, p1)
+
+          gmsh.model.geo.mesh.setTransfiniteCurve(l1, int(num_el_y + 1))
+          gmsh.model.geo.mesh.setTransfiniteCurve(l2, int(num_el_x + 1))
+          gmsh.model.geo.mesh.setTransfiniteCurve(l3, int(num_el_y + 1))
+          gmsh.model.geo.mesh.setTransfiniteCurve(l4, int(num_el_x + 1))
+
+          cl1 = gmsh.model.geo.addCurveLoop([p1, p2, p3, p4])
+          rect =gmsh.model.geo.addPlaneSurface([cl1])
+
+          gmsh.model.geo.mesh.setTransfiniteSurface(rect)
+          gmsh.model.geo.mesh.setRecombine(2, rect)
+     
+     #get list of tags of all box nodes
+     tags = list(range(1,len(box_nodes)+1))
+
+     #remove duplicate points to ensure closed section 
+     # (not guaranteed to be closed otherwise!)
+     gmsh.model.geo.remove_all_duplicates()
+     gmsh.model.geo.synchronize()
+     gmsh.model.add_physical_group(tdim,tags,0,"rect")
+
+     #generate the mesh and optionally write the gmsh mesh file
+     gmsh.model.mesh.generate(gdim)
+     gmsh.write("output/" +meshname + ".msh")
+
+     #uncomment this below if you want to run gmsh window for debug, etc
+     # gmsh.fltk.run()
+
+     # close gmsh API
+     gmsh.finalize()
+
+     #read gmsh file and write and xdmf
+     if MPI.COMM_WORLD.rank == 0:
+          # Read in mesh
+          msh = meshio.read("output/" +meshname + ".msh")
+
+          # Create and save one file for the mesh, and one file for the facets 
+          mesh = gmsh_to_xdmf(msh, "quad", prune_z=True)
+          meshio.write(f"output/"+meshname+".xdmf", mesh)
+
+     fileName = "output/"+ meshname + ".xdmf"
+
+     #read xdmf and return dolfinx mesh object
+     with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
+          #mesh generation with meshio seems to have difficulty renaming the mesh name
+          # (but not the file, hence the "Grid" name property)
+          domain = xdmf.read_mesh(name="Grid")
+          domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
+          # print("Finished meshing 2D with %i elements" % (domain.num_cells))
+          return domain
      
 def create_circle(radius,num_el,meshname):
      '''
