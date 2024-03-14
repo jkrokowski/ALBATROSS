@@ -42,22 +42,26 @@ def curves2d_from_offset(event=None):
 
     spline_1 = Geom2dAPI_PointsToBSpline(pnt2d_array).Curve()
 
-    pnt2d_array = TColgp_Array1OfPnt2d(1, 5)
-    pnt2d_array.SetValue(1, gp_Pnt2d(-1,0))
-    pnt2d_array.SetValue(2, gp_Pnt2d(0, 1))
-    pnt2d_array.SetValue(3, gp_Pnt2d(1, 1.1))
-    pnt2d_array.SetValue(4, gp_Pnt2d(3, .6))
-    pnt2d_array.SetValue(5, gp_Pnt2d(5, 0))
+    pnt2d_array1 = TColgp_Array1OfPnt2d(1, 5)
+    pnt2d_array1.SetValue(1, gp_Pnt2d(-1,0))
+    pnt2d_array1.SetValue(2, gp_Pnt2d(0, -1))
+    pnt2d_array1.SetValue(3, gp_Pnt2d(1, -1.1))
+    pnt2d_array1.SetValue(4, gp_Pnt2d(3, -.6))
+    pnt2d_array1.SetValue(5, gp_Pnt2d(5, 0))
 
-    spline_2 = Geom2dAPI_PointsToBSpline(pnt2d_array).Curve()
+    spline_2 = Geom2dAPI_PointsToBSpline(pnt2d_array1).Curve()
 
     dist = .1
     offset_curve1 = Geom2d_OffsetCurve(spline_1, dist)
+    offset_curve2 = Geom2d_OffsetCurve(spline_2, -dist)
     result = offset_curve1.IsCN(2)
     print("Offset curve yellow is C2: %r" % result)
     
     display.DisplayShape(spline_1)
     display.DisplayShape(offset_curve1, color="YELLOW")
+    
+    display.DisplayShape(spline_2)
+    display.DisplayShape(offset_curve2, color="BLUE")
 
 
 if __name__ == "__main__":

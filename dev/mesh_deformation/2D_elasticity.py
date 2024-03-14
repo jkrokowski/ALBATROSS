@@ -13,7 +13,7 @@ Nx = 250
 Ny = 10
 delta = 0.05
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[L, H]]),[Nx,Ny], cell_type=mesh.CellType.quadrilateral)
-domain2 = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[L-H-delta,0+delta],[L-delta, L+delta]]),[Ny,Nx], cell_type=mesh.CellType.quadrilateral)
+# domain2 = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[L-H-delta,0+delta],[L-delta, L+delta]]),[Ny,Nx], cell_type=mesh.CellType.quadrilateral)
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
 if True:
@@ -23,9 +23,9 @@ if True:
     plotter = pyvista.Plotter()
     plotter.add_mesh(grid, show_edges=True,opacity=0.25)
 
-    topology, cell_types, geometry = plot.create_vtk_mesh(domain2, tdim)
-    grid2 = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-    plotter.add_mesh(grid2, show_edges=True,opacity=0.25)
+    # topology, cell_types, geometry = plot.create_vtk_mesh(domain2, tdim)
+    # grid2 = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+    # plotter.add_mesh(grid2, show_edges=True,opacity=0.25)
 
     plotter.view_xy()
     if not pyvista.OFF_SCREEN:

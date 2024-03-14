@@ -19,7 +19,7 @@ mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
                         'DENSITY':2.7e3}
         }
 
-#initialize cross-seciton object
+#initialize cross-section object
 squareXS = ALBATROSS.cross_section.CrossSection(domain,mats)
 squareXS2 = ALBATROSS.cross_section.CrossSection(domain2,mats)
 
