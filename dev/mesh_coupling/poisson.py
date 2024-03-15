@@ -269,6 +269,10 @@ linAlgHelp.transferToForeground(u2, x, M2)
 L2_error = fem.form(ufl.inner(u1 - u_ex1 ,u1 - u_ex1) * dx_1)
 error_local = fem.assemble_scalar(L2_error)
 error_L2_1  = np.sqrt(mesh_f1.comm.allreduce(error_local, op=MPI.SUM))
+sum_error = fem.form(ufl.inner(u_ex1 ,u_ex1) * dx_1)
+error_local = fem.assemble_scalar(sum_error)
+error_sum= mesh_f1.comm.allreduce(error_local, op=MPI.SUM)
+error_L2_normalized_1 = np.sqrt(error_L2_1/error_sum)
 
 H10_error = fem.form(ufl.inner(ufl.grad(u1 - u_ex1), ufl.grad(u1 - u_ex1)) *dx_1 )
 error_local = fem.assemble_scalar(H10_error)
@@ -277,6 +281,10 @@ error_H10_1  = np.sqrt(mesh_f1.comm.allreduce(error_local, op=MPI.SUM))
 L2_error = fem.form(ufl.inner(u2 - u_ex2, u2 - u_ex2) * dx_2)
 error_local = fem.assemble_scalar(L2_error)
 error_L2_2  = np.sqrt(mesh_f2.comm.allreduce(error_local, op=MPI.SUM))
+sum_error = fem.form(ufl.inner(u_ex2 ,u_ex2) * dx_2)
+error_local = fem.assemble_scalar(sum_error)
+error_sum= mesh_f2.comm.allreduce(error_local, op=MPI.SUM)
+error_L2_normalized_2 = np.sqrt(error_L2_2/error_sum)
 
 H10_error = fem.form(ufl.inner(ufl.grad(u2 - u_ex2), ufl.grad(u2 - u_ex2)) *dx_2)
 error_local = fem.assemble_scalar(H10_error)
@@ -293,6 +301,8 @@ if mesh_f1.comm.rank == 0:
     print(f"Error_H10 (fg mesh 1): {error_H10_1}")
     print(f"Error_L2 (fg mesh 2): {error_L2_2}")
     print(f"Error_H10 (fg mesh 2): {error_H10_2}")
+    print(f"normalized error (fg mesh 1): {error_L2_normalized_1}")
+    print(f"normalized error (fg mesh 2): {error_L2_normalized_2}")
 
 def outputXDMF(f,V,folder,name):
     ''' 

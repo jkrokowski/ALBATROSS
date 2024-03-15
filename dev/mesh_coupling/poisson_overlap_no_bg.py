@@ -90,8 +90,8 @@ def boundaryResidual(u,v,u_exact,ds_,domain,
 
 print(">>> Generating mesh...")
 N_b=20
-N_f1=10
-N_f2=12
+N_f1=5
+N_f2=5
 
 h1 = 2/N_f1
 h2 = 2/N_f2
@@ -170,7 +170,7 @@ res2_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORW
 
 
 # define bg space:
-Vb = fem.FunctionSpace(mesh_b,('CG',k))
+# Vb = fem.FunctionSpace(mesh_b,('CG',k))
 
 
 # make extraction operators- not supported by this method anymore
@@ -238,24 +238,60 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
 
     return I 
 
-M1 = interpolation_matrix_nonmatching_meshes(V1,Vb)
-M2 = interpolation_matrix_nonmatching_meshes(V2,Vb)
+M1 = interpolation_matrix_nonmatching_meshes(V1,V2)
+M2 = interpolation_matrix_nonmatching_meshes(V2,V1)
 M1.assemble()
 M2.assemble()
 
-A1,b1 = linAlgHelp.assembleLinearSystemBackground(J1_petsc,-res1_petsc,M1)
-A2,b2 = linAlgHelp.assembleLinearSystemBackground(J2_petsc,-res2_petsc,M2)
+def petsc2array(v):
+    s=v.getValues(range(0, v.getSize()[0]), range(0,  v.getSize()[1]))
+    return s
+# def m2p(A):
+#     return as_backend_type(A).mat()
+# def v2p(b):
+#     return as_backend_type(b).vec()
+# #check that M1^t = M2
+# Mdiff= np.linalg.pinv(petsc2array(M1)) - petsc2array(M2)
 
+A1= J1_petsc
+A2 = J2_petsc
 
-# add the two matrices
-A1.axpy(1.0,A2)
-b1.axpy(1.0,b2)
+A = PETSc.Mat()
+A.createNest([[A1,M1],
+              [M2,A2]])
+A.setUp()
+A.assemble()
 
-x = A1.createVecLeft()
+b = PETSc.Vec()
+b.createNest([-res1_petsc,-res2_petsc])
+b.setUp()
+
+# u = PETSc.Vec()
+# u.createNest([v2p(u1.vector()),v2p(u2.vector())])
+# u.setUp()
+
+# A1,b1 = linAlgHelp.assembleLinearSystemBackground(J1_petsc,-res1_petsc,M1)
+# A2,b2 = linAlgHelp.assembleLinearSystemBackground(J2_petsc,-res2_petsc,M2)
+
+# # add the two matrices
+# A1.axpy(1.0,A2)
+# b1.axpy(1.0,b2)
+
+# x = A.createVecLeft()
+x = PETSc.Vec()
+x.createNest([u1.vector,u2.vector])
+x.setUp()
 
 # solve on bg mesh
-# note: cannot use direct solver w/ dense matrices 
-linAlgHelp.solveKSP(A1,b1,x,monitor=False,method='mumps')
+# note: cannot use direct solver w/ dense matrices
+ksp = PETSc.KSP().create()
+ksp.setType(PETSc.KSP.Type.CG)
+ksp.setTolerances(rtol=1e-15)
+ksp.setOperators(A)
+ksp.setFromOptions()
+ksp.solve(b,x)
+
+# linAlgHelp.solveKSP(A,b,x,monitor=False,method='mumps')
 #linAlgHelp.solveKSP(A1,b1,x,rtol=1E-18, atol=1E-19)
 
 #for i in range(x.getSize()):
@@ -263,8 +299,8 @@ linAlgHelp.solveKSP(A1,b1,x,monitor=False,method='mumps')
 #        print(x.getValue(i))
 
 
-linAlgHelp.transferToForeground(u1, x, M1)
-linAlgHelp.transferToForeground(u2, x, M2)
+# linAlgHelp.transferToForeground(u1, x, M1)
+# linAlgHelp.transferToForeground(u2, x, M2)
 
 
 

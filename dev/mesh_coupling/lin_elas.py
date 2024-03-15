@@ -18,8 +18,8 @@ import linAlgHelp
 comm = MPI.COMM_WORLD
 
 from dolfinx.fem.petsc import LinearProblem
-from dolfinx.fem import locate_dofs_topological,dirichletbc,VectorFunctionSpace,Function,TensorFunctionSpace
-from ufl import tr,sym,grad,Constant,Identity,TrialFunction,TestFunction,inner,dx
+from dolfinx.fem import Constant,locate_dofs_topological,dirichletbc,VectorFunctionSpace,Function,TensorFunctionSpace
+from ufl import tr,sym,grad,Identity,TrialFunction,TestFunction,inner,dx
 from dolfinx import geometry,mesh,plot
 from mpi4py import MPI
 import numpy as np
@@ -128,28 +128,35 @@ mesh_b, mesh_f1, mesh_f2= generateUnfittedMeshes(N_b=N_b, N_f1=N_f1, N_f2=N_f2)
 # define polynomial order
 k = 1
 # define exact solutions 
-def u_exact_fun(x): 
-    return  np.sin(0.1*(x[1] + x[0]+ 0.1))*np.cos(0.1*(x[1] + x[0]- 0.1))
-def u_exact_ufl(x): 
-    return ufl.sin(0.1*(x[1] + x[0]+ 0.1))*ufl.cos(0.1*(x[1] + x[0]- 0.1))
+# def u_exact_fun(x): 
+    # return  np.sin(0.1*(x[1] + x[0]+ 0.1))*np.cos(0.1*(x[1] + x[0]- 0.1))
+def u_exact_ufl_1(x): 
+    # return ufl.sin(0.1*(x[1] + x[0]+ 0.1))*ufl.cos(0.1*(x[1] + x[0]- 0.1))
+    return Constant(mesh_f1,ScalarType((0, 0)))
+def u_exact_ufl_2(x): 
+    # return ufl.sin(0.1*(x[1] + x[0]+ 0.1))*ufl.cos(0.1*(x[1] + x[0]- 0.1))
+    return Constant(mesh_f2,ScalarType((0, 0)))
+###################
+#### MESH 1 #######
+###################
 
-#first mesh 
 V1 = VectorFunctionSpace(mesh_f1, ("CG", k))
 u1 = fem.Function(V1)
 v1 = ufl.TestFunction(V1)
 u_ex_disp1 = fem.Function(V1)
 
-u_ex_disp1.interpolate(u_exact_fun)
+# u_ex_disp1.interpolate(u_exact_fun)
 
 x1 = ufl.SpatialCoordinate(mesh_f1)
-u_ex1 = u_exact_ufl(x1)
+u_ex1 = u_exact_ufl_1(x1)
 rho_g = 1e-3
 f1 = Constant(mesh_f1,ScalarType((0, -rho_g)))
 dx_1 = ufl.Measure('dx',domain=mesh_f1, metadata={'quadrature_degree': 2*k})
 ds_1 = ufl.Measure('ds',domain=mesh_f1, metadata={'quadrature_degree': 2*k})
 res_interior1 = interiorResidual(u1, v1, f1, dx_1)
-res_boundary1 = boundaryResidual(u1, v1, u_ex1,ds_1, mesh_f1,h=h1)
-res1 = res_interior1+ res_boundary1
+# res_boundary1 = boundaryResidual(u1, v1, u_ex1,ds_1, mesh_f1,h=h1)
+# res1 = res_interior1+ res_boundary1
+res1 = res_interior1
 J1 = ufl.derivative(res1,u1)
 
 res1_form = fem.form(res1)
@@ -159,32 +166,40 @@ res1_petsc = fem.petsc.assemble_vector(res1_form)
 
 
 J1_form = fem.form(J1)
+# J1_petsc = fem.petsc.assemble_matrix(J1_form)
+def clamped_boundary(x):
+    return np.isclose(x[0], 1.1)
+
+fdim = mesh_f1.topology.dim - 1
+left_edge_facets = mesh.locate_entities_boundary(mesh_f1, fdim, clamped_boundary)
+u_D = np.array([0,0], dtype=ScalarType)
+bc = dirichletbc(u_D, locate_dofs_topological(V1, fdim, left_edge_facets), V1)
 J1_petsc = fem.petsc.assemble_matrix(J1_form)
 J1_petsc.assemble()
 res1_petsc.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 res1_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
-
-#for i in range(J1_petsc.getSize()[0]):
-#    for j in range(J1_petsc.getSize()[1]):
-#        print(J1_petsc.getValue(i,j))
-
-#second mesh 
-V2 = fem.FunctionSpace(mesh_f2,('CG',k))
+###################
+#### MESH 2 #######
+###################
+ 
+V2 = VectorFunctionSpace(mesh_f2, ("CG", k))
 u2 = fem.Function(V2)
 v2 = ufl.TestFunction(V2)
 u_ex_disp2 = fem.Function(V2)
 
-u_ex_disp2.interpolate(u_exact_fun)
+# u_ex_disp2.interpolate(u_exact_fun)
 
 x2 = ufl.SpatialCoordinate(mesh_f2)
-u_ex2 = u_exact_ufl(x2) 
-f2 = -ufl.div(ufl.grad(u_ex2))
+u_ex2 = u_exact_ufl_2(x2) 
+rho_g = 1e-3
+f2 = Constant(mesh_f1,ScalarType((0, -rho_g)))
 dx_2 = ufl.Measure('dx',domain=mesh_f2, metadata={'quadrature_degree': 2*k})
 ds_2 = ufl.Measure('ds',domain=mesh_f2, metadata={'quadrature_degree': 2*k})
 res_interior2 = interiorResidual(u2, v2, f2, dx_2)
-res_boundary2 = boundaryResidual(u2, v2, u_ex2,ds_2, mesh_f2,h=h2)
-res2 = res_interior2+ res_boundary2
+# res_boundary2 = boundaryResidual(u2, v2, u_ex2,ds_2, mesh_f2,h=h2)
+# res2 = res_interior2+ res_boundary2
+res2 = res_interior2
 J2 = ufl.derivative(res2,u2)
 
 res2_form = fem.form(res2)
@@ -197,7 +212,7 @@ res2_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORW
 
 
 # define bg space:
-Vb = fem.FunctionSpace(mesh_b,('CG',k))
+Vb = VectorFunctionSpace(mesh_b,('CG',k))
 
 
 # make extraction operators- not supported by this method anymore
@@ -210,8 +225,12 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     msh_0 = V_0.mesh
     msh_0.topology.dim
     msh_1 = V_1.mesh
+    n_0 = V_0.num_subspaces
+    n_1 = V_1.num_sub_spaces
     x_0   = V_0.tabulate_dof_coordinates()
     x_1   = V_1.tabulate_dof_coordinates()
+    d_0 = len(x_0)*n_0 #number of total dofs in background space
+    d_1 = len(x_1)*n_1 #number of total dofs in foreground space
 
     bb_tree         = geometry.BoundingBoxTree(msh_0, msh_0.topology.dim)
     cell_candidates = geometry.compute_collisions(bb_tree, x_1)
@@ -256,9 +275,9 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     # make a petsc matrix here instead of np- 
     # for Josh: probably more efficient ways to do this 
     I = PETSc.Mat().create(comm=MPI.COMM_WORLD)
-    I.setSizes((len(x_1), len(x_0)))
+    I.setSizes((d_1, d_0))
     I.setUp()
-    for i in range(0,len(x_1)):
+    for i in range(0,d_1)):
         for j in range(0,len(basis_matrix[0,:])):
             # [JEF] I[i,cell_dofs_[i,j]] = basis_matrix_full[i,j]
             I.setValue(i,cell_dofs_[i,j],basis_matrix_full[i,j])
@@ -289,11 +308,8 @@ linAlgHelp.solveKSP(A1,b1,x,monitor=False,method='mumps')
 #    if x.getValue(i) > 0:
 #        print(x.getValue(i))
 
-
 linAlgHelp.transferToForeground(u1, x, M1)
 linAlgHelp.transferToForeground(u2, x, M2)
-
-
 
 L2_error = fem.form(ufl.inner(u1 - u_ex1 ,u1 - u_ex1) * dx_1)
 error_local = fem.assemble_scalar(L2_error)

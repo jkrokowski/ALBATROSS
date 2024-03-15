@@ -1,6 +1,6 @@
 from dolfinx.fem.petsc import LinearProblem
-from dolfinx.fem import locate_dofs_topological,dirichletbc,VectorFunctionSpace,Function,TensorFunctionSpace
-from ufl import tr,sym,grad,Constant,Identity,TrialFunction,TestFunction,inner,dx
+from dolfinx.fem import Constant,locate_dofs_topological,dirichletbc,VectorFunctionSpace,Function,TensorFunctionSpace
+from ufl import tr,sym,grad,Identity,TrialFunction,TestFunction,inner,dx
 from dolfinx import geometry,mesh,plot
 from mpi4py import MPI
 import numpy as np
@@ -55,8 +55,10 @@ V = VectorFunctionSpace(domain, ("CG", 1))
 du = TrialFunction(V)
 u_ = TestFunction(V)
 a = inner(sigma(du), eps(u_))*dx
-# l = inner(f, u_)*dx
-l = -rho_g*u_[1]*dx
+print(f.ufl_shape)
+print(u_.ufl_shape)
+l = inner(f, u_)*dx
+# l = -rho_g*u_[1]*dx
 
 def clamped_boundary(x):
     return np.isclose(x[0], 0)
