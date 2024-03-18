@@ -90,8 +90,8 @@ def boundaryResidual(u,v,u_exact,ds_,domain,
 
 print(">>> Generating mesh...")
 N_b=20
-N_f1=5
-N_f2=5
+N_f1=10
+N_f2=12
 
 h1 = 2/N_f1
 h2 = 2/N_f2
@@ -151,13 +151,14 @@ u_ex_disp2.interpolate(u_exact_fun)
 
 x2 = ufl.SpatialCoordinate(mesh_f2)
 u_ex2 = u_exact_ufl(x2) 
-f2 = -ufl.div(ufl.grad(u_ex2))
+# f2 = -ufl.div(ufl.grad(u_ex2))
+f2 = 0
 dx_2 = ufl.Measure('dx',domain=mesh_f2, metadata={'quadrature_degree': 2*k})
 ds_2 = ufl.Measure('ds',domain=mesh_f2, metadata={'quadrature_degree': 2*k})
 res_interior2 = interiorResidual(u2, v2, f2, dx_2)
-res_boundary2 = boundaryResidual(u2, v2, u_ex2,ds_2, mesh_f2,h=h2)
-res2 = res_interior2+ res_boundary2
-# res2 = res_interior2
+# res_boundary2 = boundaryResidual(u2, v2, u_ex2,ds_2, mesh_f2,h=h2)
+# res2 = res_interior2+ res_boundary2
+res2 = res_interior2
 J2 = ufl.derivative(res2,u2)
 
 res2_form = fem.form(res2)
@@ -243,6 +244,14 @@ M2 = interpolation_matrix_nonmatching_meshes(V2,V1)
 M1.assemble()
 M2.assemble()
 
+# M0 = PETSc.Mat().create(comm=MPI.COMM_WORLD)
+# M0.setSizes((M1.getSize()[0], M2.getSize()[1]))
+# M0.setUp()
+
+# M0T = PETSc.Mat().create(comm=MPI.COMM_WORLD)
+# M0T.setSizes((M2.getSize()[0], M1.getSize()[1]))
+# M0T.setUp()
+
 def petsc2array(v):
     s=v.getValues(range(0, v.getSize()[0]), range(0,  v.getSize()[1]))
     return s
@@ -253,17 +262,131 @@ def petsc2array(v):
 # #check that M1^t = M2
 # Mdiff= np.linalg.pinv(petsc2array(M1)) - petsc2array(M2)
 
-A1= J1_petsc
-A2 = J2_petsc
+# _A1_2 = M1.matMult(J2_petsc)
+# A1_2 = _A1_2.matMult(M1.transpose())
+# A1= J1_petsc.axpy(1.0,A1_2)
+
+#OPTION 1
+#KSP 1
+# A1= J1_petsc
+# A1_2 = M1.matMult(J2_petsc).matMult(M1.transpose())
+# A1.axpy(1.0,A1_2)
+# A1.assemble()
+
+# ksp1 = PETSc.KSP().create()
+# ksp1.setOperators(A1)
+# ksp1.setType('preonly')
+# pc=ksp1.getPC()
+# pc.setType('lu')
+# pc.setFactorSolverType('mumps')
+# ksp1.setUp()
+
+# b1_2 = A1.createVecRight()
+# M1.multTranspose(-res2_petsc, b1_2)
+# b1 = -res1_petsc
+# b1.axpy(1.0,b1_2)
+
+# ksp1.solve(b1,u1.vector)
+
+# #KSP 2
+# A2= J2_petsc
+# A2_1 = M2.matMult(J1_petsc).matMult(M2.transpose())
+# A2.axpy(-1.0,A2_1)
+# A2.assemble()
+
+# ksp2 = PETSc.KSP().create()
+# ksp2.setOperators(A2)
+# ksp2.setType('preonly')
+# pc=ksp2.getPC()
+# pc.setType('lu')
+# pc.setFactorSolverType('mumps')
+# ksp2.setUp()
+
+# b2_1 = A2.createVecRight()
+# M2.multTranspose(-res1_petsc, b2_1)
+# b2 = -res2_petsc
+# b2.axpy(-1.0,b2_1)
+
+# ksp2.solve(b2,u2.vector)
+
+#OPTION 2
+# #KSP 1
+# A1= J1_petsc
+# A1_2 = M2.transpose().matMult(J2_petsc).matMult(M2.transpose())
+# A1.axpy(1.0,A1_2)
+# # A1.assemble()
+
+# ksp1 = PETSc.KSP().create()
+# ksp1.setOperators(A1)
+# ksp1.setType('preonly')
+# pc=ksp1.getPC()
+# pc.setType('lu')
+# pc.setFactorSolverType('mumps')
+# ksp1.setUp()
+
+# ksp1.solve(-res1_petsc,u1.vector)
+
+# #KSP 2
+# A2= J2_petsc
+# A2_1 = M1.transpose().matMult(J1_petsc).matMult(M1.transpose())
+# A2.axpy(1.0,A2_1)
+# # A2.assemble()
+
+# ksp2 = PETSc.KSP().create()
+# ksp2.setOperators(A2)
+# ksp2.setType('preonly')
+# pc=ksp2.getPC()
+# pc.setType('lu')
+# pc.setFactorSolverType('mumps')
+# ksp2.setUp()
+
+# ksp2.solve(-res2_petsc,u2.vector)
+
+#OPTION 3
+# A1= J1_petsc
+# A1_2 = M2.transpose().matMult(J2_petsc).matMult(M2.transpose())
+# A1.axpy(1.0,A1_2)
+
+# #KSP 2
+# A2= J2_petsc
+# A2_1 = M1.transpose().matMult(J1_petsc).matMult(M1.transpose())
+# A2.axpy(1.0,A2_1)
+
+
+
+# old solve below.....
+
+A1 = J1_petsc
+A2 = J2_petsc 
+M1A2 = M1.matMult(A2)
+M2A1 = M2.matMult(A1)
+M2TA2 = M2.transpose().matMult(A2)
+M1TA1 = M1.transpose().matMult(A1)
 
 A = PETSc.Mat()
-A.createNest([[A1,M1],
-              [M2,A2]])
+# A.createNest([[A1,M1],
+#               [M2,A2]])
+A.createNest([[A1,M1A2],
+              [M2A1,A2]])
+# A.createNest([[A1,M2TA2],
+#               [M1TA1,A2]])
+# A.createNest([[A1,M0],
+#               [M0T,A2]])
 A.setUp()
 A.assemble()
+b1 = -res1_petsc
+b2 = -res2_petsc
+
+# b1_2 = A1.createVecRight()
+# M1.multTranspose(-res2_petsc, b1_2)
+# b1.axpy(1.0,b1_2)
+
+# b2_1 = A2.createVecRight()
+# M2.multTranspose(-res1_petsc, b2_1)
+# b2.axpy(1.0,b2_1)
 
 b = PETSc.Vec()
-b.createNest([-res1_petsc,-res2_petsc])
+b.createNest([b1,b2])
 b.setUp()
 
 # u = PETSc.Vec()
@@ -286,10 +409,15 @@ x.setUp()
 # note: cannot use direct solver w/ dense matrices
 ksp = PETSc.KSP().create()
 ksp.setType(PETSc.KSP.Type.CG)
-ksp.setTolerances(rtol=1e-15)
+ksp.setTolerances(rtol=1e-18)
 ksp.setOperators(A)
 ksp.setFromOptions()
 ksp.solve(b,x)
+
+
+u1.vector.ghostUpdate()
+u2.vector.ghostUpdate()
+
 
 # linAlgHelp.solveKSP(A,b,x,monitor=False,method='mumps')
 #linAlgHelp.solveKSP(A1,b1,x,rtol=1E-18, atol=1E-19)

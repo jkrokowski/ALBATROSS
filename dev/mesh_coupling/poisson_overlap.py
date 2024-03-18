@@ -116,6 +116,8 @@ u_ex_disp1.interpolate(u_exact_fun)
 x1 = ufl.SpatialCoordinate(mesh_f1)
 u_ex1 = u_exact_ufl(x1) 
 f1 = -ufl.div(ufl.grad(u_ex1))
+# f1 =1
+
 dx_1 = ufl.Measure('dx',domain=mesh_f1, metadata={'quadrature_degree': 2*k})
 ds_1 = ufl.Measure('ds',domain=mesh_f1, metadata={'quadrature_degree': 2*k})
 res_interior1 = interiorResidual(u1, v1, f1, dx_1)
@@ -151,13 +153,14 @@ u_ex_disp2.interpolate(u_exact_fun)
 
 x2 = ufl.SpatialCoordinate(mesh_f2)
 u_ex2 = u_exact_ufl(x2) 
-f2 = -ufl.div(ufl.grad(u_ex2))
+# f2 = -ufl.div(ufl.grad(u_ex2))
+f2 =0
 dx_2 = ufl.Measure('dx',domain=mesh_f2, metadata={'quadrature_degree': 2*k})
 ds_2 = ufl.Measure('ds',domain=mesh_f2, metadata={'quadrature_degree': 2*k})
 res_interior2 = interiorResidual(u2, v2, f2, dx_2)
-res_boundary2 = boundaryResidual(u2, v2, u_ex2,ds_2, mesh_f2,h=h2)
-res2 = res_interior2+ res_boundary2
-# res2 = res_interior2
+# res_boundary2 = boundaryResidual(u2, v2, u_ex2,ds_2, mesh_f2,h=h2)
+# res2 = res_interior2+ res_boundary2
+res2 = res_interior2
 J2 = ufl.derivative(res2,u2)
 
 res2_form = fem.form(res2)

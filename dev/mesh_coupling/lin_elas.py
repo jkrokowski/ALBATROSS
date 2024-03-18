@@ -174,7 +174,7 @@ fdim = mesh_f1.topology.dim - 1
 left_edge_facets = mesh.locate_entities_boundary(mesh_f1, fdim, clamped_boundary)
 u_D = np.array([0,0], dtype=ScalarType)
 bc = dirichletbc(u_D, locate_dofs_topological(V1, fdim, left_edge_facets), V1)
-J1_petsc = fem.petsc.assemble_matrix(J1_form)
+J1_petsc = fem.petsc.assemble_matrix(J1_form,bcs=[bc])
 J1_petsc.assemble()
 res1_petsc.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 res1_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
@@ -225,7 +225,7 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     msh_0 = V_0.mesh
     msh_0.topology.dim
     msh_1 = V_1.mesh
-    n_0 = V_0.num_subspaces
+    n_0 = V_0.num_sub_spaces
     n_1 = V_1.num_sub_spaces
     x_0   = V_0.tabulate_dof_coordinates()
     x_1   = V_1.tabulate_dof_coordinates()
@@ -277,7 +277,7 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     I = PETSc.Mat().create(comm=MPI.COMM_WORLD)
     I.setSizes((d_1, d_0))
     I.setUp()
-    for i in range(0,d_1)):
+    for i in range(0,d_1):
         for j in range(0,len(basis_matrix[0,:])):
             # [JEF] I[i,cell_dofs_[i,j]] = basis_matrix_full[i,j]
             I.setValue(i,cell_dofs_[i,j],basis_matrix_full[i,j])
