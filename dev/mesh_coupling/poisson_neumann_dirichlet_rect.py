@@ -11,7 +11,6 @@ try:
     from dolfinx.plot import vtk_mesh
 except:
     from dolfinx.plot import create_vtk_mesh as vtk_mesh
-  
 
 from mpi4py import MPI
 from ufl import SpatialCoordinate, TestFunction, TrialFunction, dot, ds, dx, grad
@@ -20,7 +19,7 @@ import numpy as np
 import pyvista
 w=1
 h=0.1
-mesh = create_rectangle(MPI.COMM_WORLD,((0,-h/2),(w, h/2)), [100, 10])
+mesh1 = create_rectangle(MPI.COMM_WORLD,((0,-h/2),(w, h/2)), [100, 10])
 
 V = FunctionSpace(mesh, ("Lagrange", 1))
 u = TrialFunction(V)
@@ -29,26 +28,26 @@ a = dot(grad(u), grad(v)) * dx
 
 def u_exact(x):
     print(x[0].shape)
-    return np.ones_like(x[0])
+    return np.zeros_like(x[0])
     # return 1+x[0] 
 def boundary_D(x):
-    return np.logical_or(np.isclose(x[0], 0), np.isclose(x[0], w))
-
+    # return np.logical_or(np.isclose(x[0], 0), np.isclose(x[0], w))
+    return np.isclose(x[0], 0)
 
 dofs_D = locate_dofs_geometrical(V, boundary_D)
 u_bc = Function(V)
 u_bc.interpolate(u_exact)
 bc = dirichletbc(u_bc, dofs_D)
 
-x = SpatialCoordinate(mesh)
-g = -4
-f = Constant(mesh, default_scalar_type(-6))
+x = SpatialCoordinate(mesh1)
+g = -1
+f = Constant(mesh1, default_scalar_type(-6))
 L = f * v * dx - g * v * ds
 
 problem = LinearProblem(a, L, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 uh = problem.solve()
 
-V2 = FunctionSpace(mesh, ("Lagrange", 2))
+V2 = FunctionSpace(mesh1, ("Lagrange", 2))
 uex = Function(V2)
 uex.interpolate(u_exact)
 error_L2 = assemble_scalar(form((uh - uex)**2 * dx))
