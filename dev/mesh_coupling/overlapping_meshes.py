@@ -15,9 +15,9 @@ def mark_cells(msh, cell_index):
     return cell_tag
 
 
-mesh_big = mesh.create_unit_square(MPI.COMM_WORLD, 64, 64)
+mesh_big = mesh.create_unit_square(MPI.COMM_WORLD, 100, 100)
 # mesh_big.geometry.x[:, :2] -= 0.51
-# mesh_big.geometry.x[:, :2] *= 4
+mesh_big.geometry.x[:, :2] *= 4
 num_big_cells = mesh_big.topology.index_map(mesh_big.topology.dim).size_local + \
     mesh_big.topology.index_map(mesh_big.topology.dim).num_ghosts
 
@@ -25,7 +25,7 @@ num_big_cells = mesh_big.topology.index_map(mesh_big.topology.dim).size_local + 
 mesh_small = mesh.create_unit_square(MPI.COMM_WORLD, 1, 1)
 # mesh_small.geometry.x[:, :2] -= 0.5
 # mesh_small.geometry.x[:, 0] *= 10
-# mesh_small.geometry.x[:, 0:1] *=.99
+mesh_small.geometry.x[:, :2] *= .99 #  by slightly shrinking, we don't find the cells that share nodes, but no volume
 
 num_small_cells = mesh_small.topology.index_map(mesh_small.topology.dim).size_local + \
     mesh_small.topology.index_map(mesh_small.topology.dim).num_ghosts
@@ -42,7 +42,6 @@ def extract_cell_geometry(input_mesh, cell: int):
         input_mesh._cpp_object, input_mesh.topology.dim, np.array([cell], dtype=np.int32), False)[0]
 
     return input_mesh.geometry.x[mesh_nodes]
-
 
 tol = 1e-13
 big_cells = []

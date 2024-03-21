@@ -19,7 +19,7 @@ params={'shape': 'I',
             'E':E,
             'nu':0.2}
 
-#initialize cross-seciton object
+#initialize cross-section object
 boxXS = ALBATROSS.cross_section.CrossSectionAnalytical(params)
 
 #compute the stiffness matrix
