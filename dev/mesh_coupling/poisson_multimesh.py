@@ -27,13 +27,13 @@ h=0.1
 offset = .15
 
 #define first mesh 
-mesh1 = create_rectangle(MPI.COMM_WORLD,((0,-h/2),(w, h/2)), [50, 5])
+mesh1 = create_rectangle(MPI.COMM_WORLD,((0,-h/2),(w+offset/2, h/2)), [40, 4])
 V1 = FunctionSpace(mesh1, ("Lagrange", 1))
 u1 = TrialFunction(V1)
 v1 = TestFunction(V1)
 
 #define second mesh
-mesh2 = create_rectangle(MPI.COMM_WORLD,((w-offset,-h/2),(2*w, h/2)), [50, 5])
+mesh2 = create_rectangle(MPI.COMM_WORLD,((w-offset/2,-h/2),(2*w, h/2)), [50, 5])
 V2 = FunctionSpace(mesh2, ("Lagrange", 1))
 u2 = TrialFunction(V2)
 v2 = TestFunction(V2)
@@ -55,7 +55,7 @@ ds1 = Measure("ds", domain=mesh1)
 x1 = SpatialCoordinate(mesh1)
 a1 = dot(grad(u1), grad(v1)) * dx1
 g1 = -1
-f1 = Constant(mesh1, default_scalar_type(-6))
+f1 = Constant(mesh1, default_scalar_type(100))
 L1 = f1 * v1 * dx1 #- g1 * v1 * ds1
 
 #mesh 2 problem
@@ -76,7 +76,7 @@ x2 = SpatialCoordinate(mesh2)
 a2 = dot(grad(u2), grad(v2)) * dx2
 # x1 = SpatialCoordinate(mesh2)
 g2 = -1
-f2 = Constant(mesh2, default_scalar_type(-6.0))
+f2 = Constant(mesh2, default_scalar_type(0))
 L2 = f2 * v2 * dx2 #- g2 * v2 * ds2
 
 # simple linear solve here:
@@ -99,15 +99,15 @@ fem.set_bc(b1,[bc1])
 
 uh1 = Function(V1)
 
-ksp1 = PETSc.KSP().create()
-ksp1.setOperators(A1)
-ksp1.setType('preonly')
-pc=ksp1.getPC()
-pc.setType('lu')
-pc.setFactorSolverType('mumps')
-ksp1.setUp()
+# ksp1 = PETSc.KSP().create()
+# ksp1.setOperators(A1)
+# ksp1.setType('preonly')
+# pc=ksp1.getPC()
+# pc.setType('lu')
+# pc.setFactorSolverType('mumps')
+# ksp1.setUp()
 
-ksp1.solve(b1,uh1.vector)
+# ksp1.solve(b1,uh1.vector)
 
 #KSP 2
 A2 = assemble_matrix(form(a2),bcs=[bc2])
@@ -122,15 +122,15 @@ fem.set_bc(b2,[bc2])
 
 uh2 = Function(V2)
 
-ksp2 = PETSc.KSP().create()
-ksp2.setOperators(A2)
-ksp2.setType('preonly')
-pc=ksp2.getPC()
-pc.setType('lu')
-pc.setFactorSolverType('mumps')
-ksp2.setUp()
+# ksp2 = PETSc.KSP().create()
+# ksp2.setOperators(A2)
+# ksp2.setType('preonly')
+# pc=ksp2.getPC()
+# pc.setType('lu')
+# pc.setFactorSolverType('mumps')
+# ksp2.setUp()
 
-ksp2.solve(b2,uh2.vector)
+# ksp2.solve(b2,uh2.vector)
 # found this code from online that does somthing similar (i think)
 #https://fenicsproject.discourse.group/t/interpolation-matrix-with-non-matching-meshes/12204/13
 def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from nonmatching meshes
@@ -197,38 +197,63 @@ M2 = interpolation_matrix_nonmatching_meshes(V2,V1)
 M1.assemble()
 M2.assemble()
 
-M1A2 = M1.matMult(A2)
-M2A1 = M2.matMult(A1)
+def petsc2array(v):
+    s=v.getValues(range(0, v.getSize()[0]), range(0,  v.getSize()[1]))
+    return s
+
+# M1A2 = M1.matMult(A2)
+# M2A1 = M2.matMult(A1)
+
+# M2TA2 = M2.transpose().matMult(A2)
+# M1TA1 = M1.transpose().matMult(A1)
+
+# b1_2 = A1.createVecRight()
+# M2.multTranspose(b2, b1_2)
+# b1.axpy(1.0,b1_2)
+
+b2_1 = A2.createVecRight()
+M1.multTranspose(b1, b2_1)
+b2.axpy(1.0,b2_1)
+
+# b1_int = A2.createVecRight()
+# b1_1 = A2.createVecRight()
+# M1.mult(b1, b1_int)
+# M2.mult(b1_int,b1_1)
+# b1.axpy(-1.0,b1_1)
+
+
+# b2_1 = A2.createVecRight()
+# M1.mult(b1, b2_1)
+# b2.axpy(1.0,b2_1)
+
+# A1_2 = M1.matMult(A2).matMult(M1.transpose())
+# A1.axpy(1.0,A1_2)
+
+# A2_1 = M2.matMult(A1).matMult(M2.transpose())
+# A2.axpy(1.0,A2_1)
+# M2T = M2.transpose()
+# M2TA2 = M2T.matMult(A2)
+# M2TT = M2.transpose()
+# A1_2 = M2TA2.matMult(M2TT)
+# A1.axpy(1.0,A1_2)
+
+M1T = M1.transpose()
+M1TA1 = M1T.matMult(A1)
+M1TT = M1.transpose()
+A2_1 = M1TA1.matMult(M1TT)
+# A2_1 = M1.transpose().matMult(A1).matMult(M1.transpose())
+A2.axpy(1.0,A2_1)
+
 
 M2TA2 = M2.transpose().matMult(A2)
 M1TA1 = M1.transpose().matMult(A1)
 
-# b1_2 = A2.createVecRight()
-# M2.multTranspose(b2, b1_2)
-# b1.axpy(-1.0,b1_2)
-
-# b2_1 = A2.createVecRight()
-# M2.multTranspose(b1, b2_1)
-# b2.axpy(-1.0,b2_1)
-
-A1_2 = M1.matMult(A2).matMult(M1.transpose())
-A1.axpy(1.0,A1_2)
-
-A2_1 = M2.matMult(A1).matMult(M2.transpose())
-A2.axpy(1.0,A2_1)
-
-# A1_2 = M2.transpose().matMult(A2).matMult(M2.transpose())
-# A1.axpy(1.0,A1_2)
-
-# A2_1 = M1.transpose().matMult(A1).matMult(M1.transpose())
-# A2.axpy(1.0,A2_1)
-
 M0 = PETSc.Mat().create(comm=MPI.COMM_WORLD)
-M0.setSizes((M1.getSize()[0], M2.getSize()[1]))
+M0.setSizes((A1.getSize()[0], A2.getSize()[1]))
 M0.setUp()
 
 M0T = PETSc.Mat().create(comm=MPI.COMM_WORLD)
-M0T.setSizes((M2.getSize()[0], M1.getSize()[1]))
+M0T.setSizes((A2.getSize()[0], A1.getSize()[1]))
 M0T.setUp()
 
 A = PETSc.Mat()
@@ -240,7 +265,10 @@ A = PETSc.Mat()
 #               [M1TA1,A2]])
 
 A.createNest([[A1,M0],
-              [M0T,A2]])
+              [M0T,A2_1]])
+
+# A.createNest([[A1,M0],
+#               [M0T,A2]])
 A.setUp()
 A.assemble()
 

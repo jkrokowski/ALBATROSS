@@ -27,13 +27,13 @@ h=0.1
 offset = .15
 
 #define first mesh 
-mesh1 = create_rectangle(MPI.COMM_WORLD,((0,-h/2),(w, h/2)), [50, 5])
+mesh1 = create_rectangle(MPI.COMM_WORLD,((0,-h/2),(w+offset/2, h/2)), [40, 4])
 V1 = FunctionSpace(mesh1, ("Lagrange", 1))
 u1 = TrialFunction(V1)
 v1 = TestFunction(V1)
 
 #define second mesh
-mesh2 = create_rectangle(MPI.COMM_WORLD,((w-offset,-h/2),(2*w, h/2)), [50, 5])
+mesh2 = create_rectangle(MPI.COMM_WORLD,((w-offset/2,-h/2),(2*w, h/2)), [50, 5])
 V2 = FunctionSpace(mesh2, ("Lagrange", 1))
 u2 = TrialFunction(V2)
 v2 = TestFunction(V2)
@@ -55,7 +55,7 @@ ds1 = Measure("ds", domain=mesh1)
 x1 = SpatialCoordinate(mesh1)
 a1 = dot(grad(u1), grad(v1)) * dx1
 g = -1
-f1 = Constant(mesh1, default_scalar_type(-6))
+f1 = Constant(mesh1, default_scalar_type(100))
 L1 = f1 * v1 * dx1 #- g * v1 * ds1
 
 #mesh 2 problem
@@ -76,7 +76,7 @@ x2 = SpatialCoordinate(mesh2)
 a2 = dot(grad(u2), grad(v2)) * dx2
 # x1 = SpatialCoordinate(mesh2)
 # g = -1
-f2 = Constant(mesh2, default_scalar_type(0.0))
+f2 = Constant(mesh2, default_scalar_type(0))
 L2 = f2 * v2 * dx2 #- g * v1 * ds
 
 # simple linear solve here:
