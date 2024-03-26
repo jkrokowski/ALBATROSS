@@ -15,17 +15,17 @@ def mark_cells(msh, cell_index):
     return cell_tag
 
 
-mesh_big = mesh.create_unit_square(MPI.COMM_WORLD, 100, 100)
-# mesh_big.geometry.x[:, :2] -= 0.51
+mesh_big = mesh.create_unit_square(MPI.COMM_WORLD, 10, 10)
+mesh_big.geometry.x[:, :2] -= 0.46
 mesh_big.geometry.x[:, :2] *= 4
 num_big_cells = mesh_big.topology.index_map(mesh_big.topology.dim).size_local + \
     mesh_big.topology.index_map(mesh_big.topology.dim).num_ghosts
 
 
-mesh_small = mesh.create_unit_square(MPI.COMM_WORLD, 1, 1)
+mesh_small = mesh.create_unit_square(MPI.COMM_WORLD, 2, 2)
 # mesh_small.geometry.x[:, :2] -= 0.5
 # mesh_small.geometry.x[:, 0] *= 10
-mesh_small.geometry.x[:, :2] *= .99 #  by slightly shrinking, we don't find the cells that share nodes, but no volume
+# mesh_small.geometry.x[:, :2] *= .99 #  by slightly shrinking, we don't find the cells that share nodes, but no volume
 
 num_small_cells = mesh_small.topology.index_map(mesh_small.topology.dim).size_local + \
     mesh_small.topology.index_map(mesh_small.topology.dim).num_ghosts
