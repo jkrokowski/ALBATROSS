@@ -26,6 +26,12 @@ import numpy as np
 import pyvista
 from petsc4py.PETSc import ScalarType
 
+try:
+    from dolfinx.plot import vtk_mesh
+except:
+    from dolfinx.plot import create_vtk_mesh as vtk_mesh
+
+
 def generateUnfittedMeshes(corner_b = [[0,0],[20,5]], corner_f1 = [[1.1,1.1],[10.1,3.1]],corner_f2 = [[9.15,2.15],[19.15,4.15]],\
                         N_b = 20, N_f1=10, N_f2 = 10,\
                         angle_1 =10, angle_2 = 10):
@@ -117,9 +123,9 @@ def boundaryResidual(u,v,u_exact,ds_,domain,
     
 
 print(">>> Generating mesh...")
-N_b=20
-N_f1=10
-N_f2=12
+N_b=5
+N_f1=3
+N_f2=2
 
 h1 = 2/N_f1
 h2 = 2/N_f2
@@ -213,7 +219,34 @@ res2_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORW
 
 # define bg space:
 Vb = VectorFunctionSpace(mesh_b,('CG',k))
+# ub = Function(Vb)
 
+#visualize
+pyvista_cells1, cell_types1, geometry1 = vtk_mesh(V1)
+grid1 = pyvista.UnstructuredGrid(pyvista_cells1, cell_types1, geometry1)
+# grid1.point_data["u1"] = uh1.x.array
+# grid1.set_active_scalars("u1")
+
+pyvista_cells2, cell_types2, geometry2 = vtk_mesh(V2)
+grid2 = pyvista.UnstructuredGrid(pyvista_cells2, cell_types2, geometry2)
+# grid2.point_data["u2"] = uh2.x.array
+# grid2.set_active_scalars("u")
+
+pyvista_cells3, cell_types3, geometry3 = vtk_mesh(Vb)
+grid3 = pyvista.UnstructuredGrid(pyvista_cells3, cell_types3, geometry3)
+
+plotter = pyvista.Plotter()
+plotter.add_text("uh", position="upper_edge", font_size=14, color="black")
+plotter.add_mesh(grid2, show_edges=True,opacity=.75)
+plotter.add_mesh(grid1, show_edges=True,opacity=.75)
+plotter.add_mesh(grid3, show_edges=True,opacity=.5)
+
+plotter.view_xy()
+
+if not pyvista.OFF_SCREEN:
+    plotter.show()
+else:
+    figure = plotter.screenshot("neumann_dirichlet.png")
 
 # make extraction operators- not supported by this method anymore
 #M1 = c_fem.PETScDMCollection.create_transfer_matrix(Vb, V1)
@@ -284,9 +317,9 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
 
     return I 
 
-M1 = interpolation_matrix_nonmatching_meshes(V1,Vb)
+# M1 = interpolation_matrix_nonmatching_meshes(V1,Vb)
 M2 = interpolation_matrix_nonmatching_meshes(V2,Vb)
-M1.assemble()
+# M1.assemble()
 M2.assemble()
 
 A1,b1 = linAlgHelp.assembleLinearSystemBackground(J1_petsc,-res1_petsc,M1)

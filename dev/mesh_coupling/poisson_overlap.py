@@ -89,9 +89,9 @@ def boundaryResidual(u,v,u_exact,ds_,domain,
     
 
 print(">>> Generating mesh...")
-N_b=20
-N_f1=10
-N_f2=12
+N_b=100
+N_f1=50
+N_f2=40
 
 h1 = 2/N_f1
 h2 = 2/N_f2
@@ -104,6 +104,12 @@ def u_exact_fun(x):
     return  np.sin(0.1*(x[1] + x[0]+ 0.1))*np.cos(0.1*(x[1] + x[0]- 0.1))
 def u_exact_ufl(x): 
     return ufl.sin(0.1*(x[1] + x[0]+ 0.1))*ufl.cos(0.1*(x[1] + x[0]- 0.1))
+def u_exact_ufl_le(x): 
+    # return np.zeros_like(x[0])
+    return np.ones_like(x[0])
+def u_exact_ufl_re(x): 
+    # return np.zeros_like(x[0])
+    return np.ones_like(x[0])
 
 #first mesh 
 V1 = fem.FunctionSpace(mesh_f1,('CG',k))
@@ -114,16 +120,33 @@ u_ex_disp1 = fem.Function(V1)
 u_ex_disp1.interpolate(u_exact_fun)
 
 x1 = ufl.SpatialCoordinate(mesh_f1)
-u_ex1 = u_exact_ufl(x1) 
-f1 = -ufl.div(ufl.grad(u_ex1))
-# f1 =1
+u_ex1 = u_exact_ufl(x1)
+u_ex1_le = u_exact_ufl_le(x1)
+# f1 = -ufl.div(ufl.grad(u_ex1))
+f1 = 1
+
+#restrict neumann boundary
+facet_indices, facet_markers = [], []
+fdim = mesh_f1.topology.dim - 1
+marker = 1
+def left_edge(x):
+    return np.isclose(x[0], 1.1)
+facets = mesh.locate_entities(mesh_f1, fdim, left_edge)
+facet_indices.append(facets)
+facet_markers.append(np.full_like(facets, marker))
+facet_indices = np.hstack(facet_indices).astype(np.int32)
+facet_markers = np.hstack(facet_markers).astype(np.int32)
+sorted_facets = np.argsort(facet_indices)
+facet_tag = mesh.meshtags(mesh_f1, fdim, facet_indices[sorted_facets], facet_markers[sorted_facets])
 
 dx_1 = ufl.Measure('dx',domain=mesh_f1, metadata={'quadrature_degree': 2*k})
 ds_1 = ufl.Measure('ds',domain=mesh_f1, metadata={'quadrature_degree': 2*k})
+ds_1le = ufl.Measure("ds", domain=mesh_f1,subdomain_data=facet_tag)
 res_interior1 = interiorResidual(u1, v1, f1, dx_1)
 # res_boundary1 = boundaryResidual(u1, v1, u_ex1,ds_1, mesh_f1,h=h1)
-# res1 = res_interior1+ res_boundary1
-res1 = res_interior1
+res_boundary1 = boundaryResidual(u1, v1, u_ex1_le,ds_1le, mesh_f1,h=h1)
+res1 = res_interior1+ res_boundary1
+# res1 = res_interior1
 J1 = ufl.derivative(res1,u1)
 
 res1_form = fem.form(res1)
@@ -153,14 +176,32 @@ u_ex_disp2.interpolate(u_exact_fun)
 
 x2 = ufl.SpatialCoordinate(mesh_f2)
 u_ex2 = u_exact_ufl(x2) 
+u_ex2_re = u_exact_ufl_re(x2) 
 # f2 = -ufl.div(ufl.grad(u_ex2))
-f2 =0
+f2 = 1
+
+#restrict neumann boundary
+facet_indices, facet_markers = [], []
+fdim = mesh_f2.topology.dim - 1
+marker = 2
+def right_edge(x):
+    return np.isclose(x[0], 4.15)
+facets = mesh.locate_entities(mesh_f1, fdim, right_edge)
+facet_indices.append(facets)
+facet_markers.append(np.full_like(facets, marker))
+facet_indices = np.hstack(facet_indices).astype(np.int32)
+facet_markers = np.hstack(facet_markers).astype(np.int32)
+sorted_facets = np.argsort(facet_indices)
+facet_tag = mesh.meshtags(mesh_f1, fdim, facet_indices[sorted_facets], facet_markers[sorted_facets])
+
 dx_2 = ufl.Measure('dx',domain=mesh_f2, metadata={'quadrature_degree': 2*k})
 ds_2 = ufl.Measure('ds',domain=mesh_f2, metadata={'quadrature_degree': 2*k})
+ds_2re = ufl.Measure('ds',domain=mesh_f2,subdomain_data=facet_tag, metadata={'quadrature_degree': 2*k})
 res_interior2 = interiorResidual(u2, v2, f2, dx_2)
 # res_boundary2 = boundaryResidual(u2, v2, u_ex2,ds_2, mesh_f2,h=h2)
-# res2 = res_interior2+ res_boundary2
-res2 = res_interior2
+res_boundary2 = boundaryResidual(u2, v2, u_ex2_re,ds_2re, mesh_f2,h=h2)
+res2 = res_interior2+ res_boundary2
+# res2 = res_interior2
 J2 = ufl.derivative(res2,u2)
 
 res2_form = fem.form(res2)
@@ -174,7 +215,6 @@ res2_petsc.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORW
 
 # define bg space:
 Vb = fem.FunctionSpace(mesh_b,('CG',k))
-
 
 # make extraction operators- not supported by this method anymore
 #M1 = c_fem.PETScDMCollection.create_transfer_matrix(Vb, V1)
