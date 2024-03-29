@@ -12,19 +12,29 @@ from petsc4py import PETSc
 domain=mesh.create_unit_square(MPI.COMM_WORLD,3,3)
 # cell = interval
 cell = domain.ufl_cell()
-c = variable(Constant(cell,shape=(6,)))
-n = variable(Constant(cell,shape=(6,)))
-c7 = variable(Constant(cell))
+# c = variable(Constant(cell,shape=(6,)))
+# n = variable(Constant(cell,shape=(6,)))
+# c7 = variable(Constant(cell))
+# c = variable(fem.Constant(domain,PETSc.ScalarType((1.0,1.0,1.0,1.0,1.0,1.0))))
+# n = variable(fem.Constant(domain,PETSc.ScalarType((1.0,1.0,1.0,1.0,1.0,1.0))))
+n = variable(fem.Constant(domain,PETSc.ScalarType(((1.0,2.0,3.0),(4.0,5.0,6.0),(7.0,8.0,9.0)))))
+c7 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
+c8 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
+c9 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
+c = as_tensor([c7,c8,c9])
 # c7 = variable(fem.Constant(domain,PETSc.ScalarType((1.0))))
-# c7 = fem.Constant(domain,PETSc.ScalarType((1.0)))
 x = SpatialCoordinate(domain)
-print(c.ufl_shape)
-print(x[0].ufl_shape)
 dx = Measure('dx',domain=domain)
 V = fem.FunctionSpace(domain,('CG',1))
+V2 =fem.VectorFunctionSpace(domain,('CG',1),dim=3)
 u = fem.Function(V)
 v = TestFunction(V)
+
+u2 = fem.Function(V2)
+v2 = TestFunction(V2)
+
 # u = dot(c,x)
+
 # mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
 #                         'MECH_PROPS':{'E':100.,'nu':.2} ,
 #                         'DENSITY':2.7e3}
@@ -36,12 +46,17 @@ v = TestFunction(V)
 #                             [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])sigma = as_tensor(C_mat[i,j,k,l]*eps[k,l],(i,j))
 # sigma11 = sigma[0,0]
 # P1 = fem.assemble_scalar(fem.form(c[0]*x[0]*x[1]*dx))
-P1 = dot(c,n)*u*dx
+P1 = dot(dot(n,c),u2)*dx
 # P1 = c7*u*dx
 
-K11= diff(P1,c7)
-Kx1= diff(P1,c)
-
+K11 = diff(P1,c7)
+K12 = diff(P1,c8)
+K13 = diff(P1,c9)
+# Kx1= diff(P1,c)
+K11 = fem.assemble_scalar(fem.form(K11))
+K12 = fem.assemble_scalar(fem.form(K12))
+K13 = fem.assemble_scalar(fem.form(K13))
+# Kx1_assembled = fem.petsc.assemble_vector(fem.form(Kx1))
 # K11 = derivative(P1,u)
 
 print(K11)
