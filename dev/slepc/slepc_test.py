@@ -18,8 +18,8 @@ from dolfinx import geometry
 t0 = time.time()
 # Create 2d mesh and define function space
 N = 10
-W = 1
-H = 1
+W = .1
+H = .1
 # domain = mesh.create_unit_square(MPI.COMM_WORLD,N,N, mesh.CellType.quadrilateral)
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[-W/2,-H/2],[W/2, H/2]]),[N,N], cell_type=mesh.CellType.quadrilateral)
 # domain2 = mesh.create_interval( MPI.COMM_WORLD,np.array([[0,0],[W, H]]),[N,N])
@@ -128,7 +128,7 @@ Tbreve = CiakB[i,a,k,B]*ubreve_B[k,B]*n[a]*vbreve[i]*ds
 # Ttilde = 3*Ciak1[i,a,k]*ubreve[k]*n[a]*vtilde[i]*ds \
 #           + CiakB[i,a,k,B]*utilde_B[k,B]*vtilde_a[i,a]*ds 
 # Tbreve = CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*ds 
-
+   
 # equation 1,2,3
 L1= 2*Ci1k1[i,k]*utilde[k]*vbar[i]*dx\
      + Ci1kB[i,k,B]*uhat_B[k,B]*vbar[i]*dx \
@@ -183,103 +183,151 @@ t1 = time.time()
 # # Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)
 # Prob.solve()
 # #========
-Prob = SLEPc.SVD().create()
-Prob.setOperators(A)
-# Prob.setProblemType(slepc4py.SLEPc.SVD.ProblemType.STANDARD)
-# Prob.setType(slepc4py.SLEPc.SVD.ProblemType.LAPACK)
-Prob.setType("trlanczos")
-Prob.setDimensions(12,200,PETSc.DECIDE)
-Prob.setTRLanczosExplicitMatrix(False)
-Prob.setTRLanczosOneSide(True)
-Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)
-Prob.setTolerances(1e-8, 1000)
-Prob.setTRLanczosLocking(False)
-# Prob.setImplicitTranspose(True)
-Prob.setFromOptions()
-Prob.solve()     
+# Prob = SLEPc.SVD().create()
+# Prob.setOperators(A)
+# # Prob.setProblemType(slepc4py.SLEPc.SVD.ProblemType.STANDARD)
+# # Prob.setType(slepc4py.SLEPc.SVD.ProblemType.LAPACK)
+# Prob.setType("trlanczos")
+# Prob.setDimensions(12,200,PETSc.DECIDE)
+# Prob.setTRLanczosExplicitMatrix(False)
+# Prob.setTRLanczosOneSide(True)
+# Prob.setWhichSingularTriplets(Prob.Which.SMALLEST)
+# Prob.setTolerances(1e-10, 1000)
+# Prob.setTRLanczosLocking(False)
+# # Prob.setImplicitTranspose(True)
+# Prob.setFromOptions()
+# Prob.solve()     
 
-uvec = PETSc.Vec()
-uvec.create(comm=PETSc.COMM_WORLD)
-uvec.setSizes(12*(N+1)**2)
-uvec.setUp()
-# vvec = PETSc.Vec()
-# vvec.create(comm=PETSc.COMM_WORLD)
+# uvec = PETSc.Vec()
+# uvec.create(comm=PETSc.COMM_WORLD)
+# uvec.setSizes(12*(N+1)**2)
+# uvec.setUp()
+# # vvec = PETSc.Vec()
+# # vvec.create(comm=PETSc.COMM_WORLD)
 
-# vvec = PETSc.Vec.create()
-print("square of %ix%i" % (N,N))
-print(Prob.getConverged())
-print(Prob.getIterationNumber())
-Prob.getSingularTriplet(0,uvec)
-# nconv = Prob.getConverged()
-# niters = Prob.getIterationNumber()
-# print("Number of eigenvalues successfully computed: ", nconv)
-# print("Iterations used", niters)
+# # vvec = PETSc.Vec.create()
+# print("square of %ix%i" % (N,N))
+# print(Prob.getConverged())
+# print(Prob.getIterationNumber())
+# Prob.getSingularTriplet(0,uvec)
+# # nconv = Prob.getConverged()
+# # niters = Prob.getIterationNumber()
+# # print("Number of eigenvalues successfully computed: ", nconv)
+# # print("Iterations used", niters)
 # #========
 t2 = time.time()
-print("SLEPc time:")
-print(t2-t1)
-print()
-# nullspace = null_space(Anp)
-# print(nullspace.shape)
-# print("stiffness matrix:")
-# print(Anp)
-# print(A.getSize())
-# print(b.getSize())
+
 m,n1=A.getSize()
-Anp = A.getValues(range(m),range(n1))
-Usvd,sv,Vsvd = np.linalg.svd(Anp)
+# Anp = A.getValues(range(m),range(n1))
+# Usvd,sv,Vsvd = np.linalg.svd(Anp)
 
 t3 = time.time()
+#THIS WON'T WORK BECAUSE EIGENVALUE PAIRS ARE NOT ORDERED BY SIZE
+# evalsA,evecs_A=np.linalg.eig(Anp)
 
-# from scipy.linalg import null_space
-
-# m,n1=A.getSize()
-# Anp = A.getValues(range(m),range(n1))
-# sols_scipy = null_space(Anp)
+# eigsols = evecs_A[:,-12:]
 
 t4 = time.time()
 
-# from scipy.sparse.linalg import svds
-# from scipy.sparse import csr_matrix
+# AT = A.transpose()
+# ATA = AT.matMult(A)
 
-# # m,n1=A.getSize()
-# # Anp = A.getValues(range(m),range(n1))
-# # Amat =as_backend_type(A.mat()
-# # assert isinstance(A, PETSc.Mat)
-# # ai,aj,av =A.getValuesCSR()
-# # Acsr = csr_matrix((av,ai,aj),A.size)
-# Acsr = csr_matrix(A.getValuesCSR()[::-1], shape=A.size)
+eps = SLEPc.EPS().create()
+eps.setOperators(A)
+eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
+eps.setType(SLEPc.EPS.Type.KRYLOVSCHUR)
+# eps.setType('jd')
+# eps.setType('gd')
 
-# sols_sps= svds(Acsr,k=12,which='SM',maxiter=100,solver='lobpcg')
-# sols_sps= svds(Acsr,k=12,which='SM',solver='arpack')
+eps.setDimensions(12, PETSc.DECIDE, PETSc.DECIDE)
+# eps.setWhichEigenpairs(SLEPc.EPS.Which.SMALLEST_REAL) #this gives the smallest values (e.g. most negative)
+eps.setWhichEigenpairs(SLEPc.EPS.Which.SMALLEST_MAGNITUDE)
+eps.setTolerances(1e-8, 1000)
+eps.setFromOptions()
+
+# eps.getST().getKSP().setType("preonly")
+# eps.getST().getKSP().getPC().setType("lu")
+# eps.getST().getKSP().getPC().setFactorSolverType("mumps")
+eps.solve()
+nconv = eps.getConverged()
+
+Print = PETSc.Sys.Print
+
+Print()
+Print("******************************")
+Print("*** SLEPc Solution Results ***")
+Print("******************************")
+Print()
+
+its = eps.getIterationNumber()
+Print("Number of iterations of the method: %d" % its)
+
+eps_type = eps.getType()
+Print("Solution method: %s" % eps_type)
+
+Print("Number of Converged Eigenvalues: %d" % nconv)
+
+nev, ncv, mpd = eps.getDimensions()
+Print("Number of requested eigenvalues: %d" % nev)
+
+tol, maxit = eps.getTolerances()
+Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
+# if nconv > 0:
+#      # Create the results vectors
+#      vr, wr = A.getVecs()
+#      vi, wi = A.getVecs()
+
+#      for _i in range(nconv):
+#           _k = eps.getEigenpair(_i, vr, vi)
+#           eps.getEigenvector(_i,vr,vi)
+#           if _i<12:
+#                vec= vr.getArray()
+#                Nslepc[:,_i] = vec      
+#                # Nslepc[:,_i] = vec/np.linalg.norm(vec)
+#                # print(np.linalg.norm(vec))       
+#           error = eps.computeError(_i)
+#           if _k.imag != 0.0:
+#                print(" %9f%+9f j %12g" % (_k.real, _k.imag, error))
+#           else:
+#                print(" %12f      %12g" % (_k.real, error))
 
 t5 = time.time()
 
-m,n1=A.getSize()
-Anp = A.getValues(range(m),range(n1))
-q,r = np.linalg.qr(Anp.T,mode='complete')
+# m,n1=A.getSize()
+# Anp = A.getValues(range(m),range(n1))
+# from scipy.linalg import qr
+# q,r,p = qr(Anp,pivoting=True)
+
+
 
 t6 = time.time()
 
 print('problem setup')
 print(t1-t0)
-print('slepc solve')
+print('slepc svd')
 print(t2-t1)
 print('numpy solve')
 print(t3-t2)
-print('scipy nullspace')
+print('numpy eig')
 print(t4-t3)
-print('scipy sparse')
+print('slepc hermetian eig')
 print(t5-t4)
 print('numpy qr')
 print(t6-t5)
+Nslepc = np.zeros((m,12))
 
-# sols = Vsvd[:,-12:]
+sols = Nslepc
+
 # sols = Vsvd[-12:,:].T
-sols = q[:,-12:]
+# sols = q[:,-12:]
+
+#==========
+# sols = Vsvd[:,-12:]
+# sols = (Vsvd.T)[:,-12:]
+# sols = q[-12:,p].T
 # sols = Usvd[:,-12:]
 # sols = Usvd[-12:,:].T
-
+#==========
 # plt.spy(Anp)
 # plt.show()
 
@@ -536,7 +584,7 @@ for idx,c in enumerate(Ctotal.T):
      #      plotter.show()
 #compute Flexibility matrix
 K1_inv = np.linalg.inv(K1)
-
+np.set_printoptions(precision=4)
 S = K1_inv.T@K2@K1_inv
 print(S)
 print(np.linalg.inv(S))

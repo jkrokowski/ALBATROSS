@@ -17,11 +17,18 @@ cell = domain.ufl_cell()
 # c7 = variable(Constant(cell))
 # c = variable(fem.Constant(domain,PETSc.ScalarType((1.0,1.0,1.0,1.0,1.0,1.0))))
 # n = variable(fem.Constant(domain,PETSc.ScalarType((1.0,1.0,1.0,1.0,1.0,1.0))))
-n = variable(fem.Constant(domain,PETSc.ScalarType(((1.0,2.0,3.0),(4.0,5.0,6.0),(7.0,8.0,9.0)))))
+# n = variable(fem.Constant(domain,PETSc.ScalarType(((1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+#                                                    (7.0, 8.0, 9.0, 10.0,11.0,12.0),
+#                                                    (13.0,14.0,15.0,16.0,17.0,18.0)))))
+n = variable(fem.Constant(domain,PETSc.ScalarType(((1.0, 2.0, 3.0, 4.0, 5.0, 6.0)))))
 c7 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
 c8 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
 c9 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
-c = as_tensor([c7,c8,c9])
+c10 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
+c11 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
+c12 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
+c = as_tensor([c7,c8,c9,c10,c11,c12])
+c_var = variable(c)
 # c7 = variable(fem.Constant(domain,PETSc.ScalarType((1.0))))
 x = SpatialCoordinate(domain)
 dx = Measure('dx',domain=domain)
@@ -46,27 +53,30 @@ v2 = TestFunction(V2)
 #                             [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])sigma = as_tensor(C_mat[i,j,k,l]*eps[k,l],(i,j))
 # sigma11 = sigma[0,0]
 # P1 = fem.assemble_scalar(fem.form(c[0]*x[0]*x[1]*dx))
-P1 = dot(dot(n,c),u2)*dx
+# P1 = dot(dot(n,c),u2[0])*dx
+u2[0].ufl_shape
+P1 = dot(n,c)*u2[0]*dx
+P2 = dot(n,c)*u2[1]*dx
+P3 = dot(n,c)*u2[2]*dx
+P = P1 + P2 + P3
 # P1 = c7*u*dx
 
-K11 = diff(P1,c7)
-K12 = diff(P1,c8)
-K13 = diff(P1,c9)
+K11 = diff(P,c7)
+K12 = diff(P,c8)
+K13 = diff(P,c9)
 # Kx1= diff(P1,c)
-K11 = fem.assemble_scalar(fem.form(K11))
-K12 = fem.assemble_scalar(fem.form(K12))
-K13 = fem.assemble_scalar(fem.form(K13))
+K11_scalar = fem.assemble_scalar(fem.form(K11))
+K12_scalar = fem.assemble_scalar(fem.form(K12))
+K13_scalar = fem.assemble_scalar(fem.form(K13))
 # Kx1_assembled = fem.petsc.assemble_vector(fem.form(Kx1))
 # K11 = derivative(P1,u)
 
 print(K11)
 
-u = c*x[0]
-print(u.ufl_shape)
-
-dudc = diff(P1,c)
-print(dudc)
-print(dudc.ufl_shape)
+dKdc = diff(P,c_var)
+print(dKdc.ufl_shape)
+K_vec = fem.assemble_vector(fem.form(dKdc))
+# print(dKdc.ufl_shape)
 
 V = fem.FunctionSpace(domain,('CG',1))
 # Uc = fem.TensorFunctionSpace(domain,('CG',1),shape=(3,6))
@@ -86,52 +96,3 @@ N = np.random.random((12*domain.geometry.x.shape[0],6))
 ubar_c_vtx_to_dof = get_vtx_to_dofs(domain,Uc.sub(0)) #this works for sub.sub as well
 
 u_c.vector.array[ubar_c_vtx_to_dof.flatten()] = N.flatten()[ubar_c_vtx_to_dof.flatten()].flatten()
-
-# d2udc2 = dot(dudc.T,dudc)
-# print(d2udc2.ufl_shape)
-
-d2udc2 = diff(dudc,c)
-print(d2udc2.ufl_shape)
-
-#sum along last axis to get complementary potential energy function
-K2 = sum([d2udc2[:,:,i] for i in range(c.ufl_shape[0])])
-print(K2.ufl_shape)
-
-if True:
-    #cross-product notes
-    x_vec = as_vector([x[0],x[1],0])
-    u_vec = as_vector([ubar,ubar,ubar])
-    # udisp = some_fxn
-    #udisp.ufl_shape = (3,)
-    moments = cross(x_vec,u_vec)
-
-
-print()
-
-# #take derivative of expression with respect to a variable:
-# dudc1 = diff(u_exp,c1) #diff() takes partial derivatives
-# print(dudc1)
-# print(dudc1.ufl_shape)
-# dudc1 = replace(dudc1,{ubar:fem.Function(V,name='ubar')})
-# print(dudc)
-# print(dudc.ufl_shape)
-# dudc2 = diff(u_exp,c2)
-# print(dudc2)
-# dudc2 = replace(dudc2,{ubar:fem.Function(V,name='ubar')})
-# print(dudc2)
-
-# dudc1dc2 = diff(diff(u_exp,c1),c2)
-# print(dudc1dc2)
-# print(dudc1dc2.ufl_shape)
-
-# #construct Jacobian matrix of expression:
-# J = as_matrix([list(diff(u_exp,var)) for var in vars])
-# # J = as_matrix([diff(u_exp,var) for var in vars])
-# print(J.ufl_shape)
-
-
-
-
-
-
-
