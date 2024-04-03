@@ -80,12 +80,6 @@ g2 = -1
 f2 = Constant(mesh2, default_scalar_type(0))
 L2 = f2 * v2 * dx2 #- g2 * v2 * ds2
 
-# simple linear solve here:
-# problem1 = LinearProblem(a1, L1, bcs=[bc1], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-# uh1 = problem1.solve()
-# problem2 = LinearProblem(a2, L2, bcs=[bc2], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-# uh2 = problem2.solve()
-
 #PETSc version of simple separate solves
 #assemble system
 A1 = assemble_matrix(form(a1),bcs=[bc1])
@@ -100,15 +94,6 @@ fem.set_bc(b1,[bc1])
 
 uh1 = Function(V1)
 
-# ksp1 = PETSc.KSP().create()
-# ksp1.setOperators(A1)
-# ksp1.setType('preonly')
-# pc=ksp1.getPC()
-# pc.setType('lu')
-# pc.setFactorSolverType('mumps')
-# ksp1.setUp()
-
-# ksp1.solve(b1,uh1.vector)
 
 #KSP 2
 A2 = assemble_matrix(form(a2),bcs=[bc2])
@@ -123,16 +108,7 @@ fem.set_bc(b2,[bc2])
 
 uh2 = Function(V2)
 
-# ksp2 = PETSc.KSP().create()
-# ksp2.setOperators(A2)
-# ksp2.setType('preonly')
-# pc=ksp2.getPC()
-# pc.setType('lu')
-# pc.setFactorSolverType('mumps')
-# ksp2.setUp()
 
-# ksp2.solve(b2,uh2.vector)
-# found this code from online that does somthing similar (i think)
 #https://fenicsproject.discourse.group/t/interpolation-matrix-with-non-matching-meshes/12204/13
 def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from nonmatching meshes
     msh_0 = V_0.mesh
@@ -242,7 +218,6 @@ M1T = M1.transpose()
 M1TA1 = M1T.matMult(A1)
 M1TT = M1.transpose()
 A2_1 = M1TA1.matMult(M1TT)
-# A2_1 = M1.transpose().matMult(A1).matMult(M1.transpose())
 A2.axpy(1.0,A2_1)
 
 
@@ -258,24 +233,24 @@ M0T.setSizes((A2.getSize()[0], A1.getSize()[1]))
 M0T.setUp()
 
 A = PETSc.Mat()
-# A.createNest([[A1,M1],
-#               [M2,A2]])
-# A.createNest([[A1,M1A2],
-#               [M2A1,A2]])
-# A.createNest([[A1,M2TA2],
-#               [M1TA1,A2]])
+b1_mat = PETSc.Mat().create(comm=MPI.COMM_WORLD)
+b1_mat.setSizes((b1.getSize(),1))
+b1_mat.setUp()
+b1_mat.setValues(range(b1.getSize()),0,b1.getValues(range(b1.getSize())))
+b0_mat = PETSc.Mat().create(comm=MPI.COMM_WORLD)
+b1_mat.setSizes((1,1))
+b0_mat.setUp()
+b1T = b1.transpose()
+A.createNest([[A1,b1],
+              [b1T,b0_mat]])
 
-A.createNest([[A1,M0],
-              [M0T,A2_1]])
-
-# A.createNest([[A1,M0],
-#               [M0T,A2]])
 A.setUp()
 A.assemble()
 
-b = PETSc.Vec()
-b.createNest([b1,b2])
-b.setUp()
+new_b = PETSc.Vec()
+
+new_b.createNest([b1,b0])
+new_b.setUp()
 
 x = PETSc.Vec()
 x.createNest([uh1.vector,uh2.vector])
