@@ -266,7 +266,6 @@ class Axial:
         with ubc.vector.localForm() as uloc:
             uloc.set(0.)
         locate_BC = locate_dofs_topological(self.beam_element.W,0,dof)
-        print(locate_BC)
         self.bcs.append(dirichletbc(ubc,locate_BC))
         ubc.vector.destroy()
 

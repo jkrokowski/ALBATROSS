@@ -20,7 +20,7 @@ cell = domain.ufl_cell()
 # n = variable(fem.Constant(domain,PETSc.ScalarType(((1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
 #                                                    (7.0, 8.0, 9.0, 10.0,11.0,12.0),
 #                                                    (13.0,14.0,15.0,16.0,17.0,18.0)))))
-n = variable(fem.Constant(domain,PETSc.ScalarType(((1.0, 2.0, 3.0, 4.0, 5.0, 6.0)))))
+n = fem.Constant(domain,PETSc.ScalarType(((1.0, 2.0, 3.0, 4.0, 5.0, 6.0))))
 c7 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
 c8 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
 c9 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))

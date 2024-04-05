@@ -8,9 +8,9 @@ import numpy as np
 this_file = sys.argv[0]
 dirpath = os.path.dirname(this_file)
 
-xsName = "beam_crosssection_rib_221_quad"
+# xsName = "beam_crosssection_rib_221_quad"
 # xsName = "square_2iso_quads"
-
+xsName = "beam_crosssection_2_95_quad"
 fileName =  xsName + ".xdmf"
 filePath=os.path.join(dirpath,fileName)
 print(filePath)
@@ -21,7 +21,6 @@ with XDMFFile(MPI.COMM_WORLD, filePath, "r") as xdmf:
     domain = xdmf.read_mesh(name="Grid")
     ct = xdmf.read_meshtags(domain,name="Grid")
 
-    
 domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
 
 #plot mesh:

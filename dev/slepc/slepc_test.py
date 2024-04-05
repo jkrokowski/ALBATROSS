@@ -218,8 +218,8 @@ t1 = time.time()
 t2 = time.time()
 
 m,n1=A.getSize()
-# Anp = A.getValues(range(m),range(n1))
-# Usvd,sv,Vsvd = np.linalg.svd(Anp)
+Anp = A.getValues(range(m),range(n1))
+Usvd,sv,Vsvd = np.linalg.svd(Anp)
 
 t3 = time.time()
 #THIS WON'T WORK BECAUSE EIGENVALUE PAIRS ARE NOT ORDERED BY SIZE
@@ -234,7 +234,7 @@ t4 = time.time()
 
 eps = SLEPc.EPS().create()
 eps.setOperators(A)
-eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
+eps.setProblemType(SLEPc.EPS.ProblemType.NHEP)
 eps.setType(SLEPc.EPS.Type.KRYLOVSCHUR)
 # eps.setType('jd')
 # eps.setType('gd')
@@ -242,7 +242,7 @@ eps.setType(SLEPc.EPS.Type.KRYLOVSCHUR)
 eps.setDimensions(12, PETSc.DECIDE, PETSc.DECIDE)
 # eps.setWhichEigenpairs(SLEPc.EPS.Which.SMALLEST_REAL) #this gives the smallest values (e.g. most negative)
 eps.setWhichEigenpairs(SLEPc.EPS.Which.SMALLEST_MAGNITUDE)
-eps.setTolerances(1e-8, 1000)
+eps.setTolerances(1e-18, 1000)
 eps.setFromOptions()
 
 # eps.getST().getKSP().setType("preonly")
@@ -272,33 +272,33 @@ Print("Number of requested eigenvalues: %d" % nev)
 
 tol, maxit = eps.getTolerances()
 Print("Stopping condition: tol=%.4g, maxit=%d" % (tol, maxit))
-# if nconv > 0:
-#      # Create the results vectors
-#      vr, wr = A.getVecs()
-#      vi, wi = A.getVecs()
+Nslepc = np.zeros((m,12))
 
-#      for _i in range(nconv):
-#           _k = eps.getEigenpair(_i, vr, vi)
-#           eps.getEigenvector(_i,vr,vi)
-#           if _i<12:
-#                vec= vr.getArray()
-#                Nslepc[:,_i] = vec      
-#                # Nslepc[:,_i] = vec/np.linalg.norm(vec)
-#                # print(np.linalg.norm(vec))       
-#           error = eps.computeError(_i)
-#           if _k.imag != 0.0:
-#                print(" %9f%+9f j %12g" % (_k.real, _k.imag, error))
-#           else:
-#                print(" %12f      %12g" % (_k.real, error))
+if nconv > 0:
+     # Create the results vectors
+     vr, wr = A.getVecs()
+     vi, wi = A.getVecs()
+
+     for _i in range(nconv):
+          _k = eps.getEigenpair(_i, vr, vi)
+          eps.getEigenvector(_i,vr,vi)
+          if _i<12:
+               vec= vr.getArray()
+               Nslepc[:,_i] = vec      
+               # Nslepc[:,_i] = vec/np.linalg.norm(vec)
+               # print(np.linalg.norm(vec))       
+          error = eps.computeError(_i)
+          if _k.imag != 0.0:
+               print(" %9f%+9f j %12g" % (_k.real, _k.imag, error))
+          else:
+               print(" %12f      %12g" % (_k.real, error))
 
 t5 = time.time()
 
-# m,n1=A.getSize()
-# Anp = A.getValues(range(m),range(n1))
-# from scipy.linalg import qr
-# q,r,p = qr(Anp,pivoting=True)
-
-
+m,n1=A.getSize()
+Anp = A.getValues(range(m),range(n1))
+from scipy.linalg import qr
+q,r,p = qr(Anp,pivoting=True)
 
 t6 = time.time()
 
@@ -314,7 +314,6 @@ print('slepc hermetian eig')
 print(t5-t4)
 print('numpy qr')
 print(t6-t5)
-Nslepc = np.zeros((m,12))
 
 sols = Nslepc
 

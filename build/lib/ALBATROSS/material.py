@@ -1,6 +1,17 @@
 from dolfinx.fem import Constant
 from ufl import Identity,as_tensor,indices,diag,as_vector,as_matrix
 
+class Material:
+    def __init__(self,name=None,mat_type='ISOTROPIC',mech_props=None,density=None):
+        self.name = name
+        self.type = mat_type
+        if mech_props == None:
+            raise Exception("No mechanical properties provided.")
+        if mat_type == 'ISOTROPIC':
+            self.E = mech_props['E']
+            self.nu = mech_props['nu']
+        if density!=None:
+            self.density=density
 
 def getMatConstitutive(mesh,mat_data):
     if mat_data['TYPE'] == 'ISOTROPIC':

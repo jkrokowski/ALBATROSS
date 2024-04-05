@@ -6,60 +6,67 @@ from dolfinx.fem import Constant as femConstant
 import numpy as np
 from petsc4py import PETSc
 
-from scipy.sparse.linalg import svds,inv
+from scipy.sparse.linalg import inv
 import sparseqr
 from scipy.sparse import csr_matrix,csc_matrix
 
 from dolfinx.plot import create_vtk_mesh
 import pyvista
 
-from ALBATROSS.material import getMatConstitutive
+from ALBATROSS.material import getMatConstitutive,Material
 from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,get_pts_and_cells,sparseify
 
 #TODO: allow user to specify a point to find xs props about
 #TODO: provide a method to translate between different xs values?
 
 class CrossSection:
-    def __init__(self, msh, material ,celltags=None):
+    def __init__(self, msh, materials ,celltags=None):
         #analysis domain
         self.msh = msh
+        '''
+        TODO: example for four elements (include type/size checks)
+        assert(len(celltags['mat_id'])==len(msh))
+        assert(len(celltags['orientation'])==len(msh))
+        units for orientation?
+        celltags = {'mat_id': [0, 0, 1,0], 'orientation': {0, 90, 90, 0}}
+        '''
         self.ct = celltags
-        #dictionary of material properties 
-        self.material = material
-        '''
-        dictionary defined in the following manner:
-        {MATERIAL:{
-            TYPE: 'ISOTROPIC', 'ORTHOTROPIC', etc
-            MECH_PROPS: {}
-            DENSITY: float } }
-        ....
-        '''
+        #list of material objects 
+        #TODO: make this a list of material objects generated from a material class
+        self.materials = materials
         
         #geometric dimension
         self.d = 3
         #number of materials
         self.num_mat = len(self.material)
         #tuple of material names and ids
-        self.mat_ids = list(zip(list(self.material.keys()),list(range(self.num_mat))))
+        # self.mat_ids = list(zip(list(self.material.keys()),list(range(self.num_mat))))
+
         #indices
         self.i,self.j,self.k,self.l=indices(4)
         self.p,self.q,self.r,self.s=indices(4)
         self.a,self.B = indices(2)
         
-        #need to think a bit furth about mutlimaterial xs's here
-        #TODO: rn, hard coded to just use the first material density
-        self.rho = self.material[self.mat_ids[0][0]]['DENSITY']
+        self.mat_ids = list(zip(list(self.material.keys()),list(set(self.ct.values))))
 
         #integration measures (subdomain data accounts for different materials)
         if celltags==None:
             self.dx = Measure("dx",domain=self.msh)
         else:
             self.dx = Measure("dx",domain=self.msh,subdomain_data=self.ct)
+        
+        print("mat ids:")
+        print(self.mat_ids)
+
         self.ds = Measure("ds",domain=self.msh)
+        
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
         self.n = FacetNormal(self.msh)
         
+        #need to think a bit furth about mutlimaterial xs's here
+        #TODO: rn, hard coded to just use the first material density
+        self.rho = self.material[self.mat_ids[0][0]]['DENSITY']
         #compute area
         self.A = assemble_scalar(form(1.0*self.dx))
         #compute average y and z locations 
@@ -121,7 +128,7 @@ class CrossSection:
         return Cprime
     
     def constructMatOrientation(self,orientation):
-        #orientation is a 
+        #orientation is a list of angles
         self.Q = VectorFunctionSpace(self.msh,("DG",0),dim=3)
         self.theta = Function(self.Q)
 
@@ -137,8 +144,8 @@ class CrossSection:
         ubar,uhat,utilde,ubreve=self.ubar,self.uhat,self.utilde,self.ubreve
         vbar,vhat,vtilde,vbreve=self.vbar,self.vhat,self.vtilde,self.vbreve
         #restricted integration domain
-        # dx = self.dx(mat_id[1])
-        dx = self.dx      
+        dx = self.dx(mat_id[1])
+        # dx = self.dx      
         
         C_mat = getMatConstitutive(self.msh,self.material[mat_id[0]])
 

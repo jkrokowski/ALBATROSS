@@ -1,6 +1,6 @@
 from dolfin import *
 
-mesh = UnitSquareMesh(32, 32)
+mesh = UnitSquareMesh(3, 3)
 
 V = VectorFunctionSpace(mesh, "CG", 1)
 u = Function(V)
