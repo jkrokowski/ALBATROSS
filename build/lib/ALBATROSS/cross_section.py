@@ -1,8 +1,9 @@
 from ufl import (dot,as_vector,variable,cross,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement)
-from ufl import Constant as uflConstant
+# from ufl import Constant as uflConstant
 from dolfinx.fem import (Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
-from dolfinx.fem import Constant as femConstant
+# from dolfinx.fem import Constant as femConstant
+from dolfinx.mesh import meshtags
 import numpy as np
 from petsc4py import PETSc
 
@@ -20,7 +21,7 @@ from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,get_pts_and_cells,spa
 #TODO: provide a method to translate between different xs values?
 
 class CrossSection:
-    def __init__(self, msh, material ,celltags=None):
+    def __init__(self, msh, materials ,celltags=None):
         #analysis domain
         self.msh = msh
         '''
@@ -31,40 +32,39 @@ class CrossSection:
         celltags = {'mat_id': [0, 0, 1,0], 'orientation': {0, 90, 90, 0}}
         '''
         self.ct = celltags
-        #dictionary of material properties 
-        #TODO: make this a list of material objects generated from a material class
-        self.material = material
-        '''
-        dictionary defined in the following manner:
-        {MATERIAL:{
-            TYPE: 'ISOTROPIC', 'ORTHOTROPIC', etc
-            MECH_PROPS: {}
-            DENSITY: float } }
-        ....
-        '''
+        #list of material objects 
+        self.materials = materials
         
         #geometric dimension
         self.d = 3
+        self.tdim = 2
+
         #number of materials
-        self.num_mat = len(self.material)
+        self.num_mat = len(self.materials)
         #tuple of material names and ids
         # self.mat_ids = list(zip(list(self.material.keys()),list(range(self.num_mat))))
+        # mat_names = [self.materials[i].name for i in range(self.num_mat)]
+        #check that the number and values of celltags match those specified in the material objects
+        if self.ct != None or len(self.ct.values) > 1:
+            mesh_ct = np.unique(self.ct.values)
+            mat_ct = np.unique([self.materials[i].id for i in range(self.num_mat)] )
+            assert(np.logical_and.reduce(mesh_ct==mat_ct))
+        
+        # print("mat ids:")
+        # print(self.mat_ids)
 
         #indices
         self.i,self.j,self.k,self.l=indices(4)
         self.p,self.q,self.r,self.s=indices(4)
         self.a,self.B = indices(2)
         
-        self.mat_ids = list(zip(list(self.material.keys()),list(set(self.ct.values))))
-
         #integration measures (subdomain data accounts for different materials)
-        if celltags==None:
-            self.dx = Measure("dx",domain=self.msh)
-        else:
-            self.dx = Measure("dx",domain=self.msh,subdomain_data=self.ct)
-        
-        print("mat ids:")
-        print(self.mat_ids)
+        self.dx = Measure("dx",domain=self.msh)
+        if self.ct!=None:
+            for material in self.materials:
+                print(self.ct.find(material.id))
+                material_facets=meshtags(self.msh,self.tdim,self.ct.find(material.id),material.id)
+                material.dx = Measure("dx",domain=self.msh,subdomain_data=material_facets)
 
         self.ds = Measure("ds",domain=self.msh)
         
@@ -72,11 +72,10 @@ class CrossSection:
         self.x = SpatialCoordinate(self.msh)
         self.n = FacetNormal(self.msh)
         
-        #need to think a bit furth about mutlimaterial xs's here
-        #TODO: rn, hard coded to just use the first material density
-        self.rho = self.material[self.mat_ids[0][0]]['DENSITY']
-        #compute area
+        #compute area over the cross-section
         self.A = assemble_scalar(form(1.0*self.dx))
+        #TODO: compute density weight areas and areas of each subdomain?
+
         #compute average y and z locations 
         self.yavg = assemble_scalar(form(self.x[0]*self.dx))/self.A
         self.zavg = assemble_scalar(form(self.x[1]*self.dx))/self.A
@@ -100,8 +99,9 @@ class CrossSection:
         #construct residual by looping through materials
         print('Constructing Residual...')
         self.Residual = 0
-        for mat_id in self.mat_ids:
-            self.Residual += self.constructMatResidual(mat_id)
+        for material in self.materials:
+            self.Residual += self.constructMatResidual(material)
+        # self.Residual += self.constructMatResidual(self.materials[0])
 
         print('Computing non-trivial solutions....')
         self.getModes()
@@ -142,7 +142,7 @@ class CrossSection:
 
         self.theta.interpolate(orientation)
 
-    def constructMatResidual(self,mat_id):
+    def constructMatResidual(self,material):
         #geometric dimension
         d = self.d
         #indices
@@ -152,18 +152,24 @@ class CrossSection:
         ubar,uhat,utilde,ubreve=self.ubar,self.uhat,self.utilde,self.ubreve
         vbar,vhat,vtilde,vbreve=self.vbar,self.vhat,self.vtilde,self.vbreve
         #restricted integration domain
-        dx = self.dx(mat_id[1])
+        print(material.id)
+        if self.ct == None:
+            dx = self.dx
+        else:
+            dx = material.dx
         # dx = self.dx      
         
-        C_mat = getMatConstitutive(self.msh,self.material[mat_id[0]])
+        material.C = getMatConstitutive(self.msh,material)
 
         #if an orthotropic material is used, the constructMatOrientation method
         #must be called prior to applying rotations
-        if self.material[mat_id[0]]['TYPE'] == 'ORTHOTROPIC':
-            C = self.applyRotation(C_mat,self.theta[0],self.theta[1],self.theta[2])
-        elif self.material[mat_id[0]]['TYPE'] == 'ISOTROPIC':
-            self.C = C_mat
-            C = self.C
+        if material.type == 'ORTHOTROPIC':
+            #TODO: need to think about how to store these tensors? 
+            #We can't store potentially thousands of these, so we need to store the constitutive tensor (per material)
+            # the rotation angles for each element associated with each cell as a DG0 fxn? 
+            C = self.applyRotation(material.C,self.theta[0],self.theta[1],self.theta[2])
+        elif material.type == 'ISOTROPIC':
+            C = material.C
 
         #sub-tensors of stiffness tensor
         Ci1k1 = as_tensor(C[i,0,k,0],(i,k))
@@ -211,6 +217,7 @@ class CrossSection:
 
     def getModes(self):
         print('assembling stiffesss matrix....')   
+        print(";(")
         self.A_mat = assemble_matrix(form(self.Residual))
         self.A_mat.assemble()
 
@@ -227,7 +234,6 @@ class CrossSection:
         X = np.zeros((m,12))
         for i in range(12):
             X[m-1-i,11-i]=1
-        # print(X)
         #perform matrix multiplication implicitly to construct orthogonal nullspace basis
         self.sols = sparseqr.qmult(QR,X)
         # print(self.sols)
@@ -235,6 +241,8 @@ class CrossSection:
         print("QR factorization time = %f" % (time.time()-t0))
 
     def decoupleModes(self):
+        # We need to handle this operation on a per material basis, so we can't just store C one time
+
         #this is a change of basis operation from the originally computed basis to one
         # using our knowledge of what the solution should look like
         x = self.x

@@ -11,13 +11,17 @@ points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
 domain = ALBATROSS.utils.create_rectangle(points,[N,N])
 
-mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':100.,'nu':.2} ,
-                        'DENSITY':2.7e3}
-        }
+# mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
+#                         'MECH_PROPS':{'E':100.,'nu':.2} ,
+#                         'DENSITY':2.7e3}
+#         }
+unobtainium = ALBATROSS.material.Material(name='Aluminium7075',
+                                           mat_type='ISOTROPIC',
+                                           mech_props={'E':100,'nu':0.2},
+                                           density=2700)
 
 #initialize cross-seciton object
-squareXS = ALBATROSS.cross_section.CrossSection(domain,mats)
+squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
 squareXS.plot_mesh()

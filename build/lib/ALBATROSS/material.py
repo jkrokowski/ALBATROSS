@@ -2,7 +2,7 @@ from dolfinx.fem import Constant
 from ufl import Identity,as_tensor,indices,diag,as_vector,as_matrix
 
 class Material:
-    def __init__(self,name=None,mat_type='ISOTROPIC',mech_props=None,density=None):
+    def __init__(self,name=None,mat_type='ISOTROPIC',mech_props=None,density=None,celltag=None):
         self.name = name
         self.type = mat_type
         if mech_props == None:
@@ -12,20 +12,25 @@ class Material:
             self.nu = mech_props['nu']
         if density!=None:
             self.density=density
+        if celltag !=None:
+            self.id = celltag
+        elif celltag == None:
+            #default to 0
+            self.id = 0
 
-def getMatConstitutive(mesh,mat_data):
-    if mat_data['TYPE'] == 'ISOTROPIC':
-        return getMatConstitutiveIsotropic(mesh,mat_data['MECH_PROPS']['E'],mat_data['MECH_PROPS']['nu'])
-    elif mat_data['TYPE'] == 'ORTHOTROPIC':
-        mat_consts = [mat_data['E1'],
-                      mat_data['E2'],
-                      mat_data['E3'],
-                      mat_data['G12'],
-                      mat_data['G13'],
-                      mat_data['G23'],
-                      mat_data['nu12'],
-                      mat_data['nu13'],
-                      mat_data['nu23']]
+def getMatConstitutive(mesh,material):
+    if material.type == 'ISOTROPIC':
+        return getMatConstitutiveIsotropic(mesh,material.E,material.nu)
+    elif material.type == 'ORTHOTROPIC':
+        mat_consts = [material.E1,
+                      material.E2,
+                      material.E3,
+                      material.G12,
+                      material.G13,
+                      material.G23,
+                      material.nu12,
+                      material.nu13,
+                      material.nu23]
         return getMatConstitutiveOrthotropic(mesh,mat_consts)
     else:
         return 'ERROR: please use existing material model'

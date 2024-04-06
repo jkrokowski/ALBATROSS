@@ -30,13 +30,15 @@ domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
 aluminum7075 = ALBATROSS.material.Material(name='Aluminium7075',
                                            mat_type='ISOTROPIC',
                                            mech_props={'E':71e9,'nu':0.33},
-                                           density=2795)
+                                           density=2795,
+                                           celltag=38)
 nylon_pa12 = ALBATROSS.material.Material(name='Aluminium7075',
                                            mat_type='ISOTROPIC',
                                            mech_props={'E':1.7e9,'nu':0.394},
-                                           density=930)
+                                           density=930,
+                                           celltag=37)
 mats = [aluminum7075,nylon_pa12]
-#initialize cross-seciton object
+#initialize cross-section object
 ribXS = ALBATROSS.cross_section.CrossSection(domain,mats,celltags=ct)
 
 #show me what you got
@@ -45,15 +47,15 @@ ribXS.plot_mesh()
 #compute the stiffness matrix
 ribXS.getXSStiffnessMatrix()
 
-# np.set_printoptions(precision=3)
+np.set_printoptions(precision=3)
 
-# #output flexibility matrix
-# print('Flexibility matrix:')
-# print(squareXS.S)
+#output flexibility matrix
+print('Flexibility matrix:')
+print(ribXS.S)
 
-# #output stiffness matrix
-# print('Stiffness matrix:')
-# print(squareXS.K)
+#output stiffness matrix
+print('Stiffness matrix:')
+print(ribXS.K)
 
 # print("Analytical axial stiffness (EA):")
 # E = mats['Unobtainium']['MECH_PROPS']['E']
