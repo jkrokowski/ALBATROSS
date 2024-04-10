@@ -7,6 +7,8 @@ from dolfinx.mesh import meshtags
 import numpy as np
 from petsc4py import PETSc
 
+default_scalar_type = PETSc.ScalarType    
+
 from scipy.sparse.linalg import inv
 import sparseqr
 from scipy.sparse import csr_matrix,csc_matrix
@@ -14,7 +16,7 @@ from scipy.sparse import csr_matrix,csc_matrix
 from dolfinx.plot import create_vtk_mesh
 import pyvista
 
-from ALBATROSS.material import getMatConstitutive,Material
+from ALBATROSS.material import getMatConstitutive,Material,getMatConstitutiveIsotropic
 from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,get_pts_and_cells,sparseify
 
 #TODO: allow user to specify a point to find xs props about
@@ -44,28 +46,54 @@ class CrossSection:
         #tuple of material names and ids
         # self.mat_ids = list(zip(list(self.material.keys()),list(range(self.num_mat))))
         # mat_names = [self.materials[i].name for i in range(self.num_mat)]
-        #check that the number and values of celltags match those specified in the material objects
-        if self.ct != None or len(self.ct.values) > 1:
-            mesh_ct = np.unique(self.ct.values)
-            mat_ct = np.unique([self.materials[i].id for i in range(self.num_mat)] )
-            assert(np.logical_and.reduce(mesh_ct==mat_ct))
+          
         
         # print("mat ids:")
         # print(self.mat_ids)
 
         #indices
         self.i,self.j,self.k,self.l=indices(4)
-        self.p,self.q,self.r,self.s=indices(4)
+        # self.p,self.q,self.r,self.s=indices(4)
         self.a,self.B = indices(2)
         
         #integration measures (subdomain data accounts for different materials)
-        self.dx = Measure("dx",domain=self.msh)
         if self.ct!=None:
+            #check that the number and values of celltags match those specified in the material objects
+            mesh_ct = np.unique(self.ct.values)
+            mat_ct = np.unique([self.materials[_i].id for _i in range(self.num_mat)] )
+            assert(np.logical_and.reduce(mesh_ct==mat_ct))
+            
+            #material property functions
+            self.Q = FunctionSpace(self.msh,('DG',0))
+            # self.C = TensorFunctionSpace(self.msh,('DG',0),shape=(3,3,3,3))
+            self.E = Function(self.Q)
+            self.nu = Function(self.Q)
             for material in self.materials:
-                print(self.ct.find(material.id))
-                material_facets=meshtags(self.msh,self.tdim,self.ct.find(material.id),material.id)
-                material.dx = Measure("dx",domain=self.msh,subdomain_data=material_facets)
+                if material.type == "ISOTROPIC":
+                    cells = self.ct.find(material.id)
+                    print(cells)
+                    print('=========')
+                    print(self.E.x.array[cells])
+                    self.E.x.array[cells] = np.full_like(cells,material.E,dtype=default_scalar_type)
+                    self.nu.x.array[cells] = np.full_like(cells,material.nu,dtype=default_scalar_type)
+                elif material.type == "ORTHOROPIC":
+                    print("forthcoming")
+                else:
+                    print("unsupported material type")
 
+            self.C = getMatConstitutiveIsotropic(self.msh,self.E,self.nu)
+            
+            #construct measure for subdomains using celltag info
+            # self.dx = Measure("dx",domain=self.msh,subdomain_data=self.ct)
+            self.dx = Measure("dx",domain=self.msh,subdomain_data=self.ct)
+
+        elif self.ct == None:
+            self.dx = Measure("dx",domain=self.msh)
+        #     for material in self.materials:
+        #         print(self.ct.find(material.id))
+        #         material_facets=meshtags(self.msh,self.tdim,self.ct.find(material.id),material.id)
+        #         material.dx = Measure("dx",domain=self.msh,subdomain_data=material_facets)
+            self.C = getMatConstitutiveIsotropic(self.msh,self.materials[0].E,self.materials[0].nu)
         self.ds = Measure("ds",domain=self.msh)
         
         #spatial coordinate and facet normals
@@ -74,8 +102,11 @@ class CrossSection:
         
         #compute area over the cross-section
         self.A = assemble_scalar(form(1.0*self.dx))
+        if self.num_mat >1:
+            for material in self.materials:
+                material.A = assemble_scalar(form(1.0*self.dx(material.id)))
         #TODO: compute density weight areas and areas of each subdomain?
-
+        
         #compute average y and z locations 
         self.yavg = assemble_scalar(form(self.x[0]*self.dx))/self.A
         self.zavg = assemble_scalar(form(self.x[1]*self.dx))/self.A
@@ -95,12 +126,25 @@ class CrossSection:
 
         #displacement coefficient test functions
         self.vbar,self.vhat,self.vtilde,self.vbreve=split(self.v)
+
+        #partial derivatives of displacement:
+        self.ubar_B = grad(self.ubar)
+        self.uhat_B = grad(self.uhat)
+        self.utilde_B = grad(self.utilde)
+        self.ubreve_B = grad(self.ubreve)
+
+        #partial derivatives of shape fxn:
+        self.vbar_a = grad(self.vbar)
+        self.vhat_a = grad(self.vhat)
+        self.vtilde_a = grad(self.vtilde)
+        self.vbreve_a = grad(self.vbreve)
         
-        #construct residual by looping through materials
+        #construct material constitutive tensor field
+        # self.constructConstitutiveField()
+
+        #assemble matrix
         print('Constructing Residual...')
-        self.Residual = 0
-        for material in self.materials:
-            self.Residual += self.constructMatResidual(material)
+        self.constructResidual()
         # self.Residual += self.constructMatResidual(self.materials[0])
 
         print('Computing non-trivial solutions....')
@@ -110,7 +154,7 @@ class CrossSection:
         print('Computing Beam Constitutive Matrix....')
         self.computeXSStiffnessMat()
         # PETSc.garbage_cleanup()
-   
+       
     def applyRotation(self,C,alpha,beta,gamma):
         #indices
         i,j,k,l=self.i,self.j,self.k,self.l
@@ -142,7 +186,7 @@ class CrossSection:
 
         self.theta.interpolate(orientation)
 
-    def constructMatResidual(self,material):
+    def constructResidual(self):
         #geometric dimension
         d = self.d
         #indices
@@ -151,48 +195,78 @@ class CrossSection:
         #trial and test functions
         ubar,uhat,utilde,ubreve=self.ubar,self.uhat,self.utilde,self.ubreve
         vbar,vhat,vtilde,vbreve=self.vbar,self.vhat,self.vtilde,self.vbreve
-        #restricted integration domain
-        print(material.id)
-        if self.ct == None:
-            dx = self.dx
-        else:
-            dx = material.dx
-        # dx = self.dx      
+        #partial derivatives of trial and test functions
+        ubar_B,uhat_B,utilde_B,ubreve_B=self.ubar_B,self.uhat_B,self.utilde_B,self.ubreve_B
+        vbar_a,vhat_a,vtilde_a,vbreve_a=self.vbar_a,self.vhat_a,self.vtilde_a,self.vbreve_a
+
+        C = self.C
+        # #restricted integration domain
+        # if self.ct == None:
+        #     dx = self.dx
+        # else:
+        #     print("material id:")
+        #     # print(material.id)
+        #     # subdomain_indices = self.ct.find(material.id)
+        #     # print(subdomain_indices)
+        #     # subdomain_values  = np.full_like(subdomain_indices, material.id, dtype=np.int32)
+        #     # print(subdomain_values)
+        #     # subdomain = meshtags(self.msh, 2, subdomain_indices, subdomain_values)
+        #     # dx = Measure('dx', domain=self.msh, subdomain_data=subdomain,subdomain_id=material.id)
+        #     dx = self.dx
+        #     # dx = self.dx
+        dx = self.dx      
         
-        material.C = getMatConstitutive(self.msh,material)
 
         #if an orthotropic material is used, the constructMatOrientation method
         #must be called prior to applying rotations
-        if material.type == 'ORTHOTROPIC':
-            #TODO: need to think about how to store these tensors? 
-            #We can't store potentially thousands of these, so we need to store the constitutive tensor (per material)
-            # the rotation angles for each element associated with each cell as a DG0 fxn? 
-            C = self.applyRotation(material.C,self.theta[0],self.theta[1],self.theta[2])
-        elif material.type == 'ISOTROPIC':
-            C = material.C
+        # if material.type == 'ORTHOTROPIC':
+        #     #TODO: need to think about how to store these tensors? 
+        #     #We can't store potentially thousands of these, so we need to store the constitutive tensor (per material)
+        #     # the rotation angles for each element associated with each cell as a DG0 fxn? 
+        #     C = self.applyRotation(material.C,self.theta[0],self.theta[1],self.theta[2])
+        # elif material.type == 'ISOTROPIC':
+        #     C = material.C
+            # C = getMatConstitutive(self.msh,material)
 
         #sub-tensors of stiffness tensor
         Ci1k1 = as_tensor(C[i,0,k,0],(i,k))
-        Ci1kB = as_tensor([[[C[i, 0, k, l] for l in [1,2]]
-                    for k in range(d)] for i in range(d)])
-        Ciak1 = as_tensor([[[C[i, j, k, 0] for k in range(d)]
-                    for j in [1,2]] for i in range(d)])
-        CiakB = as_tensor([[[[C[i, j, k, l] for l in [1,2]]
-                    for k in range(d)] for j in [1,2]] 
-                    for i in range(d)])
+        Ci1kB = as_tensor([[[C[i_, 0, k_, l_] for l_ in [1,2]]
+                    for k_ in range(d)] for i_ in range(d)])
+        Ciak1 = as_tensor([[[C[i_, j_, k_, 0] for k_ in range(d)]
+                    for j_ in [1,2]] for i_ in range(d)])
+        CiakB = as_tensor([[[[C[i_, j_, k_, l_] for l_ in [1,2]]
+                    for k_ in range(d)] for j_ in [1,2]] 
+                    for i_ in range(d)])
         
-        #partial derivatives of displacement:
-        ubar_B = grad(ubar)
-        uhat_B = grad(uhat)
-        utilde_B = grad(utilde)
-        ubreve_B = grad(ubreve)
+        # print(Ci1k1.ufl_shape)
+        # print(Ci1kB.ufl_shape)
+        # print(Ciak1.ufl_shape)
+        # print(CiakB.ufl_shape)
+        # print("--------------")
+        # print(ubar.ufl_shape)
+        # print(uhat.ufl_shape)
+        # print(utilde.ufl_shape)
+        # print(ubreve.ufl_shape)
+        # print("--------------")
+        # print(ubar_B.ufl_shape)
+        # print(uhat_B.ufl_shape)
+        # print(utilde_B.ufl_shape)
+        # print(ubreve_B.ufl_shape)
 
-        #partial derivatives of shape fxn:
-        vbar_a = grad(vbar)
-        vhat_a = grad(vhat)
-        vtilde_a = grad(vtilde)
-        vbreve_a = grad(vbreve)
+        # #partial derivatives of displacement:
+        # ubar_B = grad(ubar)
+        # uhat_B = grad(uhat)
+        # utilde_B = grad(utilde)
+        # ubreve_B = grad(ubreve)
 
+        # #partial derivatives of shape fxn:
+        # vbar_a = grad(vbar)
+        # vhat_a = grad(vhat)
+        # vtilde_a = grad(vtilde)
+        # vbreve_a = grad(vbreve)
+
+        # material.simpleL1=form(2*Ci1k1[i,k]*utilde[k]*vbar[i]*dx)
+        
         # equation 1,2,3
         L1= 2*Ci1k1[i,k]*utilde[k]*vbar[i]*dx\
             + Ci1kB[i,k,B]*uhat_B[k,B]*vbar[i]*dx \
@@ -213,7 +287,8 @@ class CrossSection:
         #equation 10,11,12
         L4= -CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*dx\
         
-        return L1+L2+L3+L4
+        self.Residual =  L1+L2+L3+L4
+        # return L4
 
     def getModes(self):
         print('assembling stiffesss matrix....')   

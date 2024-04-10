@@ -37,8 +37,8 @@ def getMatConstitutive(mesh,material):
     
 def getMatConstitutiveIsotropic(mesh,E,nu):
     #lame parameters from Young's Modulus and Poisson Ratio
-    _lam = Constant(mesh,((E*nu)/((1+nu)*(1-2*nu))))
-    mu = Constant(mesh,(E/(2*(1+nu))))
+    _lam = (E*nu)/((1+nu)*(1-2*nu))
+    mu = (E/(2*(1+nu)))
 
     #elasticity tensor construction
     delta = Identity(3)

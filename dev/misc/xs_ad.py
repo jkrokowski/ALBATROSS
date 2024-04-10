@@ -21,7 +21,8 @@ cell = domain.ufl_cell()
 #                                                    (7.0, 8.0, 9.0, 10.0,11.0,12.0),
 #                                                    (13.0,14.0,15.0,16.0,17.0,18.0)))))
 n = fem.Constant(domain,PETSc.ScalarType(((1.0, 2.0, 3.0, 4.0, 5.0, 6.0))))
-c7 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
+# c7 = variable(fem.Constant(cell))
+c7 = variable(fem.Constant(domain,PETSc.ScalarType((1.0))))
 c8 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
 c9 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
 c10 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
@@ -66,11 +67,11 @@ P3 = dot(n,c_test)*u2[2]*dx
 
 # K11_test = diff(P[0],c7)
 
-Kx1_test = diff(P1,c_test)
-K11_assembled = fem.assemble_vector(fem.form(Kx1_test))
+# Kx1_test = diff(P1,c_test)
+# K11_assembled = fem.assemble_vector(fem.form(Kx1_test))
 
-Kx1= diff(P,c_var)
-K11_assembled = fem.assemble_matrix(fem.form(Kx1))
+# Kx1= diff(P,c_var)
+# K11_assembled = fem.assemble_matrix(fem.form(Kx1))
 
 K11 = diff(P1,c7)
 K12 = diff(P1,c8)
