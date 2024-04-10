@@ -9,11 +9,10 @@ import numpy as np
 #create mesh
 N = 10
 H = .1
-W1= .1
-W2= .1
+W= .1
 tf1 = 0.01
 tf2 = 0.01
-tw = 0.01
+t_w = 0.01
 
 points = [(-W/2,H/2),(W/2,H/2),(W/2,-H/2),(-W/2,-H/2)]
 thicknesses = [tf1,tf1,tw]

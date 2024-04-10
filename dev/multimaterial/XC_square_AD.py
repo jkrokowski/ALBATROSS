@@ -25,7 +25,7 @@ H = .1
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
 #read in mesh
-xcName = "square_2iso_quads"
+xcName = "square_iso_quads"
 fileName = "output/"+ xcName + ".xdmf"
 pts = [[-W/2,-H/2],[W/2, H/2]]
 num_el = [N,N]

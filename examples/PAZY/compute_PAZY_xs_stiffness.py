@@ -27,7 +27,7 @@ with XDMFFile(MPI.COMM_WORLD, filePath, "r") as xdmf:
 
 #these mesh coords need to be in xy coords, not xz
 def xz_to_xy(domain):
-    return np.stack([domain.geometry.x[:,0],domain.geometry.x[:,2],domain.geometry.x[:,1]],axis=1)
+    return np.stack([domain.geometry.x[:,0],domain.geometry.x[:,2],np.zeros_like(domain.geometry.x[:,1])],axis=1)
 
 domain.geometry.x[:,:] = xz_to_xy(domain)
 

@@ -1,6 +1,6 @@
 from ufl import (dot,as_vector,variable,cross,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement)
 # from ufl import Constant as uflConstant
-from dolfinx.fem import (Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
+from dolfinx.fem import (Constant,Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
 from dolfinx.fem.petsc import assemble_matrix
 # from dolfinx.fem import Constant as femConstant
 from dolfinx.mesh import meshtags
@@ -71,9 +71,6 @@ class CrossSection:
             for material in self.materials:
                 if material.type == "ISOTROPIC":
                     cells = self.ct.find(material.id)
-                    print(cells)
-                    print('=========')
-                    print(self.E.x.array[cells])
                     self.E.x.array[cells] = np.full_like(cells,material.E,dtype=default_scalar_type)
                     self.nu.x.array[cells] = np.full_like(cells,material.nu,dtype=default_scalar_type)
                 elif material.type == "ORTHOROPIC":
@@ -291,8 +288,7 @@ class CrossSection:
         # return L4
 
     def getModes(self):
-        print('assembling stiffesss matrix....')   
-        print(";(")
+        print('Assembling System Matrix....')   
         self.A_mat = assemble_matrix(form(self.Residual))
         self.A_mat.assemble()
 
@@ -418,7 +414,8 @@ class CrossSection:
         self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
 
-    def computeXSStiffnessMat(self):
+    def computeXSStiffnessMat(self):       
+        #unpacking values
         x = self.x
         dx = self.dx
         yavg = self.yavg
@@ -427,190 +424,91 @@ class CrossSection:
         #indices
         i,j,k,l=self.i,self.j,self.k,self.l
         a,B = self.a,self.B
-        #vtx to dof maps
-        ubar_vtx_to_dof = self.ubar_vtx_to_dof
-        uhat_vtx_to_dof = self.uhat_vtx_to_dof
 
-        #construct coefficient fields over 2D mesh
-        U2d = FunctionSpace(self.msh,self.Ve)
-        ubar_field = Function(U2d)
-        uhat_field = Function(U2d)
-        # utilde_field = Function(U2d)
-        # ubreve_field = Function(U2d)
-
-        #==================================================#
-        #======== LOOP FOR BUILDING LOAD MATRICES =========#
-        #==================================================#
-
-        Cstack = np.vstack((np.zeros((6,6)),np.eye(6)))
-
-        from itertools import combinations
-        idx_ops = [0,1,2,3,4,5]
-        comb_list = list(combinations(idx_ops,2))
-        Ccomb = np.zeros((6,len(comb_list)))
-        for idx,ind in enumerate(comb_list):
-            np.put(Ccomb[:,idx],ind,1)
-        Ccomb = np.vstack((np.zeros_like(Ccomb),Ccomb))
-
-        Ctotal = np.hstack((Cstack,Ccomb))
-
+        #initialize matrices
         K1 = np.zeros((6,6))
         K2 = np.zeros((6,6))
 
-        #START LOOP HERE and loop through unit vectors for K1 and diagonal entries of K2
-        # then combinations of ci=1 where there is more than one nonzero entry
-        for idx,c in enumerate(Ctotal.T):
-            # use right singular vectors (nullspace) to find corresponding
-            # coefficient solutions given arbitrary coefficient vector c
-            c = np.reshape(c,(-1,1))
-            u_coeff=self.sols_decoup@c
+        #should we use a mixed element tensor function space for each of the warping functions?
+        Ne = TensorElement('CG',self.msh.ufl_cell(),1,shape=(3,6))
+        # N_space = TensorFunctionSpace(domain,('CG',1),shape=(12,6))
+        N_space = FunctionSpace(self.msh,MixedElement(4*[Ne]))
+        N = Function(N_space)
 
-            #populate displacement coeff fxns based on coeffcient values
-            self.coeff_to_field(ubar_field,u_coeff,self.ubar_vtx_to_dof)
-            self.coeff_to_field(uhat_field,u_coeff,self.uhat_vtx_to_dof)
+        N_bar, N_hat, N_tilde, N_breve = N.split() 
+        N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,N_space.sub(0))
+        N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,N_space.sub(1))
+        N_tilde_vtx_to_dofs = get_vtx_to_dofs(self.msh,N_space.sub(2))
+        N_breve_vtx_to_dofs = get_vtx_to_dofs(self.msh,N_space.sub(3))
 
-            # #use previous dof maps to populate arrays of the individual dofs that depend on the solution coefficients
-            # ubar_coeff = u_coeff.flatten()[ubar_vtx_to_dof]
-            # uhat_coeff = u_coeff.flatten()[uhat_vtx_to_dof]
+        elastic_sols = self.sols_decoup[:,6:]
+        N_bar_vals = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]
+        N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten(),:]
+        N_tilde_vals = elastic_sols[self.utilde_vtx_to_dof.flatten(),:]
+        N_breve_vals = elastic_sols[self.ubreve_vtx_to_dof.flatten(),:]
 
-            # #populate functions with coefficient function values
-            # ubar_field.vector.array = ubar_coeff.flatten()
-            # uhat_field.vector.array = uhat_coeff.flatten()
+        N_bar.vector.array[N_bar_vtx_to_dofs.flatten()] = N_bar_vals.flatten()
+        N_hat.vector.array[N_hat_vtx_to_dofs.flatten()] = N_hat_vals.flatten()
+        N_tilde.vector.array[N_tilde_vtx_to_dofs.flatten()] = N_tilde_vals.flatten()
+        N_breve.vector.array[N_breve_vtx_to_dofs.flatten()] = N_breve_vals.flatten()
+        
+        c7 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+        c8 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+        c9 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+        c10 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+        c11 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+        c12 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+        c = as_tensor([c7,c8,c9,c10,c11,c12])
+        # c_var = variable(c)
 
-            #map displacement to stress
-            sigma = self.map_disp_to_stress(ubar_field,uhat_field)
-            
-            # #compute strains at x1=0
-            # gradubar=grad(ubar_field)
-            # eps = as_tensor([[uhat_field[0],uhat_field[1],uhat_field[2]],
-            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
-            
-            # # construct strain and stress tensors based on u_sol
-            # sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
+        # x1 = variable(fem.Constant(domain,PETSc.ScalarType((0.0))))
 
-            #relevant components of stress tensor
-            sigma11 = sigma[0,0]
-            sigma12 = sigma[0,1]
-            sigma13 = sigma[0,2]
+        ubar_c = dot(N_bar,c)
+        uhat_c = dot(N_hat,c)
+        utilde_c = dot(N_tilde,c)
+        ubreve_c = dot(N_breve,c)
 
-            #integrate stresses over cross-section at "root" of beam and construct xs load vector
-            P1 = assemble_scalar(form(sigma11*dx))
-            V2 = assemble_scalar(form(sigma12*dx))
-            V3 = assemble_scalar(form(sigma13*dx))
-            # T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
-            # M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
-            # M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
-            T1 = assemble_scalar(form(((x[0])*sigma13 - (x[1])*sigma12)*dx))
-            M2 = assemble_scalar(form((x[1])*sigma11*dx))
-            M3 = assemble_scalar(form(-(x[0])*sigma11*dx))
+        # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
 
+        gradubar_c=grad(ubar_c)
+        eps_c = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
+                            [gradubar_c[0,0],gradubar_c[1,0],gradubar_c[2,0]],
+                            [gradubar_c[0,1],gradubar_c[1,1],gradubar_c[2,1]]])
 
-            #assemble loads into load vector
-            P = np.array([P1,V2,V3,T1,M2,M3])
+        sigma_c = as_tensor(C[i,j,k,l]*eps_c[k,l],(i,j))
 
-            eps = self.get_eps_from_disp_fxns(ubar_field,uhat_field)
+        sigma11_c = sigma_c[0,0]
+        sigma12_c = sigma_c[0,1]
+        sigma13_c = sigma_c[0,2]
 
-            #compute complementary energy given coefficient vector
-            Uc = assemble_scalar(form(sigma[i,j]*eps[i,j]*dx))
-            
-            if idx<=5:
-                K1[:,idx]= P
-                K2[idx,idx] = Uc
-            else:
-                idx1 = comb_list[idx-6][0]
-                idx2 = comb_list[idx-6][1]
-                Kxx = 0.5 * ( Uc - K2[idx1,idx1] - K2[idx2,idx2])
-                K2[idx1,idx2] = Kxx
-                K2[idx2,idx1] = Kxx
+        P1 = sigma11_c*dx
+        V2 = sigma12_c*dx
+        V3 = sigma13_c*dx
+        T1 = -((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
+        M2 = -(x[1])*sigma11_c*dx
+        M3 = (x[0])*sigma11_c*dx
 
-        #see https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        ubar_field.vector.destroy()     #need to add to prevent PETSc memory leak   
-        uhat_field.vector.destroy()     #need to add to prevent PETSc memory leak 
+        Uc = sigma_c[i,j]*eps_c[i,j]*dx
 
-        # K1_sparse = sparseify(K1,sparse_format='csr')
+        P = [P1,V2,V3,T1,M2,M3]
+        for idx1 in range(6):
+            for idx2 in range(6):
+                #build values of K1 matrix using derivatives of load vector w.r.t. elastic solution coefficients
+                K1_xx_form = diff(P[idx1],c[idx2])
+                K1[idx1,idx2] = assemble_scalar(form(K1_xx_form))
+                
+                #build values of K2 matrix using derivatives of internal energy form w.r.t. elastic solution coefficients
+                K2_xx_form = diff(diff(Uc,c[idx1]),c[idx2])
+                K2[idx1,idx2] = 0.5*assemble_scalar(form(K2_xx_form))
 
         #compute Flexibility matrix
         self.K1 = K1
+        self.K2 = K2
         self.K1_inv = np.linalg.inv(K1)
         self.S = self.K1_inv.T@K2@self.K1_inv
         #invert to find stiffness matrix
         self.K = np.linalg.inv(self.S)
-
-        #####################################
-        ##### alternative computation #######
-        #####################################
-        if False:
-            cell = self.msh.ufl_cell() #get cell type
-
-            c = variable(uflConstant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
-            # z = variable(uflConstant(self.msh, PETSc.ScalarType(0.0))) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
-            z = variable(uflConstant(cell))
-
-            #construct mixed tensor function space and functions for specifying warping displacements 
-            Uc_e = TensorElement("CG",self.msh.ufl_cell(),1,shape=(3,6))
-            Uc = FunctionSpace(self.msh,MixedElement(4*[Uc_e]))
-            u_c = Function(Uc)
-
-            #identify individual warping displacment functions
-            ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
-                
-            #populate warping displacement functions with information from orthogonalized solutions
-            self.construct_warping_fxns(u_c,self.sols_decoup)
-
-            # #construct displacment as a fxn of solution coefficients
-            # u = dot(ubar_c,c) + dot(uhat_c,c)*z # + utilde_c*c*pow(z,2)+ ubreve_c*c*pow(z,3)
-            ubar = dot(ubar_c,c)
-            uhat = dot(uhat_c,c)
-
-            eps_xy = grad(ubar)
-            eps_z = uhat
-            eps = as_tensor([[eps_z[0],eps_z[1],eps_z[2]],
-                        [eps_xy[0,0],eps_xy[1,0],eps_xy[2,0]],
-                        [eps_xy[0,1],eps_xy[1,1],eps_xy[2,1]]])
-
-            # #construct strain as a fxn of solution coefficients
-            # eps_xy = grad(u)
-            # eps_z = diff(u,z)
-            # eps = as_tensor([[eps_z[0],eps_z[1],eps_z[2]],
-            #             [eps_xy[0,0],eps_xy[1,0],eps_xy[2,0]],
-            #             [eps_xy[0,1],eps_xy[1,1],eps_xy[2,1]]])
-            # print(eps_xy.ufl_shape)
-            # print(eps_z.ufl_shape)
-            # print(eps.ufl_shape)
-
-            #get relevant stresses through xs as fxn of solution coefficients
-            sigma = as_tensor(self.C[0,j,k,l]*eps[k,l],(j))
-            print(sigma.ufl_shape)
-
-            #construct potential energy functional
-            x_vec = as_vector([x[0],x[1],0]) # vector for cross-product
-            # F = [sigma[i]*dx for i in range(sigma.ufl_shape[0])]
-            F = sigma
-
-            M = cross(x_vec,sigma)
-            print(M.ufl_shape)
-            
-            V = FunctionSpace(self.msh,("CG",1))
-            v = TestFunction(V)
-            L = as_vector([F[0],F[1],F[2],M[0],M[1],M[2]])
-            print(L.ufl_shape)
-            L_int = sum([L[i]*dx for i in range(L.ufl_shape[0])])
-            # print(L_int.ufl_shape)
-            #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
-            self.K1_alt = diff(L,c)
-            print(self.K1_alt.ufl_shape)
-            
-            # print(self.K1_alt.ufl_shape)
-            # self.K1_alt_form = form(self.K1_alt)
-            # self.K1_alt_assembled = assemble_matrix(self.K1_alt)
-            # self.K1_alt_assembled = assemble_matrix(self.K1_alt_form)
-
-            # #construct sum of Hessian matrices of potential energy functional w.r.t. each soltion coefficient
-            # self.K2_alt = sum([diff(self.K1_alt,c)[:,:,i] for i in range(c.ufl_shape)])
-            # self.K2_alt_form = form(self.K2_alt)
-            # self.K2_alt_assembled = assemble_matrix(self.K2_alt_form)
-
+        
 
     def getXSMassMatrix(self):
         return
@@ -733,6 +631,208 @@ class CrossSection:
         # plotter.show_axes()
         # if not pyvista.OFF_SCREEN:
         #     plotter.show()
+
+    def _old_compute_xs_stiffness():
+        print()
+                #OLD METHOD BETWEEN HERE:
+        
+        # x = self.x
+        # dx = self.dx
+        # yavg = self.yavg
+        # zavg = self.zavg
+        # C = self.C
+        # #indices
+        # i,j,k,l=self.i,self.j,self.k,self.l
+        # a,B = self.a,self.B
+        # #vtx to dof maps
+        # ubar_vtx_to_dof = self.ubar_vtx_to_dof
+        # uhat_vtx_to_dof = self.uhat_vtx_to_dof
+
+        # #construct coefficient fields over 2D mesh
+        # U2d = FunctionSpace(self.msh,self.Ve)
+        # ubar_field = Function(U2d)
+        # uhat_field = Function(U2d)
+        # # utilde_field = Function(U2d)
+        # # ubreve_field = Function(U2d)
+
+        # #==================================================#
+        # #======== LOOP FOR BUILDING LOAD MATRICES =========#
+        # #==================================================#
+
+        # Cstack = np.vstack((np.zeros((6,6)),np.eye(6)))
+
+        # from itertools import combinations
+        # idx_ops = [0,1,2,3,4,5]
+        # comb_list = list(combinations(idx_ops,2))
+        # Ccomb = np.zeros((6,len(comb_list)))
+        # for idx,ind in enumerate(comb_list):
+        #     np.put(Ccomb[:,idx],ind,1)
+        # Ccomb = np.vstack((np.zeros_like(Ccomb),Ccomb))
+
+        # Ctotal = np.hstack((Cstack,Ccomb))
+
+        # K1 = np.zeros((6,6))
+        # K2 = np.zeros((6,6))
+
+        # #START LOOP HERE and loop through unit vectors for K1 and diagonal entries of K2
+        # # then combinations of ci=1 where there is more than one nonzero entry
+        # for idx,c in enumerate(Ctotal.T):
+        #     # use right singular vectors (nullspace) to find corresponding
+        #     # coefficient solutions given arbitrary coefficient vector c
+        #     c = np.reshape(c,(-1,1))
+        #     u_coeff=self.sols_decoup@c
+
+        #     #populate displacement coeff fxns based on coeffcient values
+        #     self.coeff_to_field(ubar_field,u_coeff,self.ubar_vtx_to_dof)
+        #     self.coeff_to_field(uhat_field,u_coeff,self.uhat_vtx_to_dof)
+
+        #     # #use previous dof maps to populate arrays of the individual dofs that depend on the solution coefficients
+        #     # ubar_coeff = u_coeff.flatten()[ubar_vtx_to_dof]
+        #     # uhat_coeff = u_coeff.flatten()[uhat_vtx_to_dof]
+
+        #     # #populate functions with coefficient function values
+        #     # ubar_field.vector.array = ubar_coeff.flatten()
+        #     # uhat_field.vector.array = uhat_coeff.flatten()
+
+        #     #map displacement to stress
+        #     sigma = self.map_disp_to_stress(ubar_field,uhat_field)
+            
+        #     # #compute strains at x1=0
+        #     # gradubar=grad(ubar_field)
+        #     # eps = as_tensor([[uhat_field[0],uhat_field[1],uhat_field[2]],
+        #     #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+        #     #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+            
+        #     # # construct strain and stress tensors based on u_sol
+        #     # sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
+
+        #     #relevant components of stress tensor
+        #     sigma11 = sigma[0,0]
+        #     sigma12 = sigma[0,1]
+        #     sigma13 = sigma[0,2]
+
+        #     #integrate stresses over cross-section at "root" of beam and construct xs load vector
+        #     P1 = assemble_scalar(form(sigma11*dx))
+        #     V2 = assemble_scalar(form(sigma12*dx))
+        #     V3 = assemble_scalar(form(sigma13*dx))
+        #     # T1 = assemble_scalar(form(((x[0]-yavg)*sigma13 - (x[1]-zavg)*sigma12)*dx))
+        #     # M2 = assemble_scalar(form((x[1]-zavg)*sigma11*dx))
+        #     # M3 = assemble_scalar(form(-(x[0]-yavg)*sigma11*dx))
+        #     T1 = assemble_scalar(form(((x[0])*sigma13 - (x[1])*sigma12)*dx))
+        #     M2 = assemble_scalar(form((x[1])*sigma11*dx))
+        #     M3 = assemble_scalar(form(-(x[0])*sigma11*dx))
+
+
+        #     #assemble loads into load vector
+        #     P = np.array([P1,V2,V3,T1,M2,M3])
+
+        #     eps = self.get_eps_from_disp_fxns(ubar_field,uhat_field)
+
+        #     #compute complementary energy given coefficient vector
+        #     Uc = assemble_scalar(form(sigma[i,j]*eps[i,j]*dx))
+            
+        #     if idx<=5:
+        #         K1[:,idx]= P
+        #         K2[idx,idx] = Uc
+        #     else:
+        #         idx1 = comb_list[idx-6][0]
+        #         idx2 = comb_list[idx-6][1]
+        #         Kxx = 0.5 * ( Uc - K2[idx1,idx1] - K2[idx2,idx2])
+        #         K2[idx1,idx2] = Kxx
+        #         K2[idx2,idx1] = Kxx
+
+        # #see https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+        # ubar_field.vector.destroy()     #need to add to prevent PETSc memory leak   
+        # uhat_field.vector.destroy()     #need to add to prevent PETSc memory leak 
+
+        # # K1_sparse = sparseify(K1,sparse_format='csr')
+
+        # #compute Flexibility matrix
+        # self.K1 = K1
+        # self.K1_inv = np.linalg.inv(K1)
+        # self.S = self.K1_inv.T@K2@self.K1_inv
+        # #invert to find stiffness matrix
+        # self.K = np.linalg.inv(self.S)
+
+
+        # AND HERE ^^^^
+
+
+        #####################################
+        ##### alternative computation #######
+        #####################################
+        if False:
+            cell = self.msh.ufl_cell() #get cell type
+
+            c = variable(uflConstant(cell,shape=(6,))) #create vector variable for elastic solution coefficients
+            # z = variable(uflConstant(self.msh, PETSc.ScalarType(0.0))) #stand-in variable for axial direction (will not be needed as we take derivative at z=0)
+            z = variable(uflConstant(cell))
+
+            #construct mixed tensor function space and functions for specifying warping displacements 
+            Uc_e = TensorElement("CG",self.msh.ufl_cell(),1,shape=(3,6))
+            Uc = FunctionSpace(self.msh,MixedElement(4*[Uc_e]))
+            u_c = Function(Uc)
+
+            #identify individual warping displacment functions
+            ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
+                
+            #populate warping displacement functions with information from orthogonalized solutions
+            self.construct_warping_fxns(u_c,self.sols_decoup)
+
+            # #construct displacment as a fxn of solution coefficients
+            # u = dot(ubar_c,c) + dot(uhat_c,c)*z # + utilde_c*c*pow(z,2)+ ubreve_c*c*pow(z,3)
+            ubar = dot(ubar_c,c)
+            uhat = dot(uhat_c,c)
+
+            eps_xy = grad(ubar)
+            eps_z = uhat
+            eps = as_tensor([[eps_z[0],eps_z[1],eps_z[2]],
+                        [eps_xy[0,0],eps_xy[1,0],eps_xy[2,0]],
+                        [eps_xy[0,1],eps_xy[1,1],eps_xy[2,1]]])
+
+            # #construct strain as a fxn of solution coefficients
+            # eps_xy = grad(u)
+            # eps_z = diff(u,z)
+            # eps = as_tensor([[eps_z[0],eps_z[1],eps_z[2]],
+            #             [eps_xy[0,0],eps_xy[1,0],eps_xy[2,0]],
+            #             [eps_xy[0,1],eps_xy[1,1],eps_xy[2,1]]])
+            # print(eps_xy.ufl_shape)
+            # print(eps_z.ufl_shape)
+            # print(eps.ufl_shape)
+
+            #get relevant stresses through xs as fxn of solution coefficients
+            sigma = as_tensor(self.C[0,j,k,l]*eps[k,l],(j))
+            print(sigma.ufl_shape)
+
+            #construct potential energy functional
+            x_vec = as_vector([x[0],x[1],0]) # vector for cross-product
+            # F = [sigma[i]*dx for i in range(sigma.ufl_shape[0])]
+            F = sigma
+
+            M = cross(x_vec,sigma)
+            print(M.ufl_shape)
+            
+            V = FunctionSpace(self.msh,("CG",1))
+            v = TestFunction(V)
+            L = as_vector([F[0],F[1],F[2],M[0],M[1],M[2]])
+            print(L.ufl_shape)
+            L_int = sum([L[i]*dx for i in range(L.ufl_shape[0])])
+            # print(L_int.ufl_shape)
+            #construct jacobian matrix of potential energy functional w.r.t. solution coefficients
+            self.K1_alt = diff(L,c)
+            print(self.K1_alt.ufl_shape)
+            
+            # print(self.K1_alt.ufl_shape)
+            # self.K1_alt_form = form(self.K1_alt)
+            # self.K1_alt_assembled = assemble_matrix(self.K1_alt)
+            # self.K1_alt_assembled = assemble_matrix(self.K1_alt_form)
+
+            # #construct sum of Hessian matrices of potential energy functional w.r.t. each soltion coefficient
+            # self.K2_alt = sum([diff(self.K1_alt,c)[:,:,i] for i in range(c.ufl_shape)])
+            # self.K2_alt_form = form(self.K2_alt)
+            # self.K2_alt_assembled = assemble_matrix(self.K2_alt_form)
+
+
 class CrossSectionAnalytical:
     def __init__(self,params):
         #process params based on shape

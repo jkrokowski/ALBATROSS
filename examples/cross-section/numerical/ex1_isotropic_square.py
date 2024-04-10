@@ -4,23 +4,19 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 10 #number of quad elements per side
+N = 100 #number of quad elements per side
 W = 1 #square height  
 H = 1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
 domain = ALBATROSS.utils.create_rectangle(points,[N,N])
 
-# mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-#                         'MECH_PROPS':{'E':100.,'nu':.2} ,
-#                         'DENSITY':2.7e3}
-#         }
-unobtainium = ALBATROSS.material.Material(name='Aluminium7075',
+unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
                                            mech_props={'E':100,'nu':0.2},
                                            density=2700)
 
-#initialize cross-seciton object
+#initialize cross-section object
 squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
@@ -40,7 +36,7 @@ print('Stiffness matrix:')
 print(squareXS.K)
 
 print("Analytical axial stiffness (EA):")
-E = mats['Unobtainium']['MECH_PROPS']['E']
+E = unobtainium.E
 A = W*H
 print(E*A)
 print("Computed Axial Stiffness:")

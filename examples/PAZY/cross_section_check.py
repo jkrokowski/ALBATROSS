@@ -9,8 +9,8 @@ this_file = sys.argv[0]
 dirpath = os.path.dirname(this_file)
 
 # xsName = "beam_crosssection_rib_221_quad"
-# xsName = "square_2iso_quads"
-xsName = "beam_crosssection_2_95_quad"
+xsName = "square_2iso_quads"
+# xsName = "beam_crosssection_2_95_quad"
 fileName =  xsName + ".xdmf"
 filePath=os.path.join(dirpath,fileName)
 print(filePath)
@@ -22,7 +22,7 @@ with XDMFFile(MPI.COMM_WORLD, filePath, "r") as xdmf:
     ct = xdmf.read_meshtags(domain,name="Grid")
 
 domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
-
+print(domain.geometry.dim)
 #plot mesh:
 p = pyvista.Plotter(window_size=[800, 800])
 num_cells_local = domain.topology.index_map(domain.topology.dim).size_local

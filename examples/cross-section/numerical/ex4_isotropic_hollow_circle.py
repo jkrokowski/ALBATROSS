@@ -12,13 +12,13 @@ num_el = 3 #number of elements through wall thickness
 
 domain = ALBATROSS.utils.create_hollow_circle(radius,wall_thickness,num_el,'hollow_circle')
 
-mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':100.,'nu':.2} ,
-                        'DENSITY':2.7e3}
-        }
+unobtainium = ALBATROSS.material.Material(name='unobtainium',
+                                           mat_type='ISOTROPIC',
+                                           mech_props={'E':100,'nu':0.2},
+                                           density=2700)
 
 #initialize cross-seciton object
-hollowCircleXS = ALBATROSS.cross_section.CrossSection(domain,mats)
+hollowCircleXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
 hollowCircleXS.plot_mesh()
@@ -37,7 +37,7 @@ print('Stiffness matrix:')
 print(hollowCircleXS.K)
 
 print("Analytical axial stiffness (EA):")
-E = mats['Unobtainium']['MECH_PROPS']['E']
+E= unobtainium.E
 A = np.pi*(radius**2-(radius-wall_thickness)**2)
 print(E*A)
 print("Computed Axial Stiffness:")
@@ -50,7 +50,7 @@ print("Computed bending stiffness:")
 print(hollowCircleXS.K[4,4])
 
 print("torsional stiffness (GJ):")
-nu = mats['Unobtainium']['MECH_PROPS']['nu']
+nu = unobtainium.nu
 G = E/(2*(1+nu))
 J = 2*I #for rotationally symmetric
 print(G*J)
