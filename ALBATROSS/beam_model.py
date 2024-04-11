@@ -29,16 +29,17 @@ class BeamModel(Axial):
 
     def __init__(self,axial_mesh,xs_info,xs_type='EBPE'):
         '''
-        axial_mesh: mesh used for 1D analysis (often this is a finer
+        axial_mesh: mesh used for 1D analysis (typically this is a finer
             discretization than the 1D mesh used for locating xss)
 
-        xs_info = (xss,mats,axial_pos_mesh,xs_orientations)
-            xss : list of 2D xdmf meshes for each cross-section
-            mats : list of materials used corresponding to each XS
+        xs_info = (xs_list,axial_pos_mesh,xs_orientations)
+            xs_list : list of 2D xdmf meshes for each cross-section
             axial_pos_mesh : the beam axis discretized into the number of
                 elements with nodes at the spanwise locations of the XSs
             xs_orientations: list of vectors defining orientation of 
-                horizontal axis used in xs analysis
+                primary orthogonal axis used in xs analysis
+            xs_adj_list: adjacency list mapping segment[i] of the axial position
+                mesh to xs[j] of xs_list
 
         xs_type: determines if xs analysis is to be run. If false, 
             cross section stiffness matrices can be provided as a list.
@@ -61,8 +62,8 @@ class BeamModel(Axial):
        
         if xs_type == 'EBPE':
             #EBPE: Energy Based Polynomial Expansion
-            [self.xs_meshes, self.mats, self.axial_pos_mesh, self.orientations] = xs_info
-            self.numxs = len(self.xs_meshes)
+            [self.xs_list, self.axial_pos_mesh, self.orientations] = xs_info
+            self.numxs = len(self.xs_list)
             print("Orienting XSs along beam axis....")
             self.get_xs_orientations_for_1D()
 
@@ -118,11 +119,10 @@ class BeamModel(Axial):
         '''
         CORE FUNCTION FOR PROCESSING MULTIPLE 2D XSs TO PREPARE A 1D MODEL
         '''
-        self.xss = []
 
-        def get_flat_sym_stiff(K_mat):
-            K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
-            return K_flat
+        # def get_flat_sym_stiff(K_mat):
+        #     K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
+        #     return K_flat
         
         sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
         T2_66 = TensorFunctionSpace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)

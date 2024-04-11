@@ -19,14 +19,14 @@ this_file = sys.argv[0]
 dirpath = os.path.dirname(this_file)
 
 #read in mesh
-# xsName = "beam_crosssection_rib_221_quad"
+xsName = "beam_crosssection_rib_221_quad"
 # xsName = "square_2iso_quads"
-xsName = "beam_crosssection_2_95_quad"
+# xsName = "beam_crosssection_2_95_quad"
+
 fileName =  xsName + ".xdmf"
 filePath=os.path.join(dirpath,fileName)
 with XDMFFile(MPI.COMM_WORLD, filePath, "r") as xdmf:
-    #mesh generation with meshio seems to have difficulty renaming the mesh name
-    # (but not the file, hence the "Grid" name property)
+    #read in mesh and convert to a topological AND geometrically 2D mesh
     in_mesh = xdmf.read_mesh(name="Grid")
     gdim = 2
     shape = in_mesh.ufl_cell().cellname()
@@ -34,41 +34,26 @@ with XDMFFile(MPI.COMM_WORLD, filePath, "r") as xdmf:
     cell = ufl.Cell(shape)
     adj_list =in_mesh.topology.connectivity(2,0)
     cells = adj_list.array.reshape((adj_list.num_nodes,adj_list.links(0).shape[0]))
-    # points = in_mesh.geometry.x[:,:2]
-    points = np.stack([in_mesh.geometry.x[:,0],in_mesh.geometry.x[:,2]],axis=1)
+    chord = .1 #m
+    x_points = in_mesh.geometry.x[:,0] - .25*chord #adjust x location of mesh
+    print(np.max(x_points))
+    print(np.min(x_points))
+    y_points = in_mesh.geometry.x[:,2]
+    print(np.max(y_points))
+    print(np.min(y_points)) 
+    points = np.stack([x_points,y_points],axis=1)
     domain= create_mesh(MPI.COMM_WORLD,
                         cells,
                         points,
                         ufl.Mesh(ufl.VectorElement("Lagrange",cell,degree)) )
-
+    #read celltags
     ct = xdmf.read_meshtags(in_mesh, name="Grid")   
 
-# domain = create_mesh(MPI.COMM_WORLD,cells)
 domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
-print(domain.topology.dim)
-print(domain.geometry.dim)
-# #these mesh coords need to be in xy coords, not xz
-# def xz_to_xy(domain):
-#     return np.stack([domain.geometry.x[:,0],domain.geometry.x[:,1],np.zeros_like(domain.geometry.x[:,1])],axis=1)
-
-# domain.geometry.x[:,:] = xz_to_xy(domain)
-
-# domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
+# print(domain.topology.dim)
+# print(domain.geometry.dim)
 
 ct.values[:]=ct.values-np.min(ct.values)
-
-# print(domain.topology.dim)
-
-#GET material markers
-tdim = 2
-# #right
-# right_marker=0
-# right_facets = ct.find(right_marker)
-# right_mt = meshtags(domain, tdim, right_facets, right_marker)
-# #left
-# left_marker=1
-# left_facets = ct.find(left_marker)
-# left_mt = meshtags(domain, tdim, left_facets, left_marker)
 
 #plot mesh:
 pyvista.global_theme.background = [255, 255, 255, 255]
@@ -80,35 +65,39 @@ topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange
 grid = pyvista.UnstructuredGrid(topology, cell_types, x)
 grid.cell_data["Marker"] = ct.values
 p.add_mesh(grid, show_edges=True)
+p.show_grid()
+# marker = pyvista.create_axes_marker(ambient=0.1,tip_length=.05)
+# p.add_actor(marker)
+# p.add_axes_at_origin()
 p.view_xy()
 p.show()
 
-unobtainium = ALBATROSS.material.Material(name='unobtainium',
+aluminum7075 = ALBATROSS.material.Material(name='Aluminium7075',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':100,'nu':0.2},
-                                           density=10000,
-                                           celltag=1)
-adamantium = ALBATROSS.material.Material(name='adamantium',
-                                           mat_type='ISOTROPIC',
-                                           mech_props={'E':10,'nu':0.2},
-                                           density=5000,
+                                           mech_props={'E':71e9,'nu':0.33},
+                                           density=2795,
                                            celltag=0)
-
+nylon_pa12 = ALBATROSS.material.Material(name='NylonPA12',
+                                           mat_type='ISOTROPIC',
+                                           mech_props={'E':1.7e9,'nu':0.394},
+                                           density=930,
+                                           celltag=1)
+mats = [aluminum7075,nylon_pa12]
 #initialize cross-section object
-squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium,adamantium],celltags=ct)
+ribXS = ALBATROSS.cross_section.CrossSection(domain,mats,celltags=ct)
 
 #show me what you got
-squareXS.plot_mesh()
+ribXS.plot_mesh()
 
 #compute the stiffness matrix
-squareXS.getXSStiffnessMatrix()
+ribXS.getXSStiffnessMatrix()
 
 np.set_printoptions(precision=5,suppress=True)
 
 #output flexibility matrix
 print('Flexibility matrix:')
-print(squareXS.S)
+print(ribXS.S)
 
 #output stiffness matrix
 print('Stiffness matrix:')
-print(squareXS.K)
+print(ribXS.K)

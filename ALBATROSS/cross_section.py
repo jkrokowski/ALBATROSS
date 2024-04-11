@@ -506,9 +506,9 @@ class CrossSection:
         self.K2 = K2
         self.K1_inv = np.linalg.inv(K1)
         self.S = self.K1_inv.T@K2@self.K1_inv
+        
         #invert to find stiffness matrix
         self.K = np.linalg.inv(self.S)
-        
 
     def getXSMassMatrix(self):
         return
