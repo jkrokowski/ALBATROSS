@@ -16,11 +16,13 @@ import numpy as np
 this_file = sys.argv[0]
 dirpath = os.path.dirname(this_file)
 
-#read in mesh
+#################################################################
+################# IMPORT CROSS-SECTIONAL MESHES #################
+#################################################################
+
+#read in meshes
 ribXSname= "beam_crosssection_rib_221_quad"
 mainXSname = "beam_crosssection_2_95_quad"
-# xsName = "square_2iso_quads"
-
 
 def import_cross_section_mesh(xsName):
     fileName =  xsName + ".xdmf"
@@ -88,7 +90,7 @@ nylon_pa12 = ALBATROSS.material.Material(name='NylonPA12',
                                            density=930,
                                            celltag=0)
 
-#collect materials
+#collect materials in list
 mats = [aluminum7075,nylon_pa12]
 
 #initialize cross-section object
@@ -97,6 +99,7 @@ ribXS = ALBATROSS.cross_section.CrossSection(ribXSmesh,mats,celltags=ribXSct)
 #compute the stiffness matrix
 ribXS.getXSStiffnessMatrix()
 
+#initialize cross-section object
 mainXS =  ALBATROSS.cross_section.CrossSection(mainXSmesh,mats,celltags=mainXSct)
 
 #compute the stiffness matrix
@@ -117,7 +120,7 @@ tdim = 1
 L = .550 
 
 #define tip load magnitude 
-F = .01 
+F = .1
 
 #beam endpoint locations
 p1 = (0,0,0)
@@ -137,21 +140,24 @@ axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axia
 orientations = np.tile([0,1,0],num_segments)
 
 #construct an adjacency list to map xs's to segments
-xs_adjacency_list = [0]
+#   list of lists where each entry is a list of the xs index used in each segment 
+#   (either 1 or 2 xs's per segment typically)
+xs_adjacency_list = [[0,0]]
 
 #collect all xs information
-xs_info = [xs_list,axial_pos_mesh,orientations]
-
+xs_info = [xs_list,axial_pos_mesh,orientations,xs_adjacency_list]
 
 #################################################################
 ######### INITIALIZE BEAM OBJECT, APPLY BCs, & SOLVE ############
 #################################################################
 
 #initialize beam object using 1D mesh and definition of xs's
-PAZYWing = ALBATROSS.beam_model.BeamModel(axial_mesh,xs_info)
+PAZYWing = ALBATROSS.beam_model.BeamModel(axial_mesh,xs_info,segment_type="CONSTANT")
 
 #show the orientation of each xs and the interpolated orientation along the beam
 PAZYWing.plot_xs_orientations()
+
+# PAZYWing.plot_xs_disp_3D
 
 #applied fixed bc to first endpoint
 PAZYWing.add_clamped_point(p1)

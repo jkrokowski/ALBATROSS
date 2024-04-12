@@ -97,11 +97,13 @@ class CrossSection:
         self.x = SpatialCoordinate(self.msh)
         self.n = FacetNormal(self.msh)
         
-        #compute area over the cross-section
+        #compute cross-sectional area and linear density (used for body forces)
         self.A = assemble_scalar(form(1.0*self.dx))
+        self.lin_density = 0
         if self.num_mat >1:
             for material in self.materials:
                 material.A = assemble_scalar(form(1.0*self.dx(material.id)))
+                self.lin_density += material.A*material.density
         #TODO: compute density weight areas and areas of each subdomain?
         
         #compute average y and z locations 
@@ -506,9 +508,9 @@ class CrossSection:
         self.K2 = K2
         self.K1_inv = np.linalg.inv(K1)
         self.S = self.K1_inv.T@K2@self.K1_inv
+        
         #invert to find stiffness matrix
         self.K = np.linalg.inv(self.S)
-        
 
     def getXSMassMatrix(self):
         return
