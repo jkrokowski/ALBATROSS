@@ -1,5 +1,4 @@
 #example of cross-sectional analysis of an multimaterial isotropic square:
-
 from mpi4py import MPI
 from dolfinx.mesh import meshtags,create_mesh
 import pyvista
@@ -10,10 +9,8 @@ import ufl
 
 import ALBATROSS
 
-import os,sys
-import numpy as np
-
-import meshio
+import os
+import sys
 
 this_file = sys.argv[0]
 dirpath = os.path.dirname(this_file)

@@ -1,7 +1,7 @@
+from petsc4py import PETSc
 try:
     from dolfinx import fem, mesh, plot, default_scalar_type
 except:
-    from petsc4py import PETSc
     default_scalar_type = PETSc.ScalarType   
 from dolfinx.fem import (Constant, Function, FunctionSpace,
                          assemble_scalar, dirichletbc, form, locate_dofs_geometrical)

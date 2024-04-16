@@ -10,8 +10,8 @@ import ufl
 
 import ALBATROSS
 
-import os,sys
-import numpy as np
+import os
+import sys
 
 this_file = sys.argv[0]
 dirpath = os.path.dirname(this_file)
@@ -30,7 +30,6 @@ def import_cross_section_mesh(xsName):
     with XDMFFile(MPI.COMM_WORLD, filePath, "r") as xdmf:
         #read in mesh and convert to a topological AND geometrically 2D mesh
         in_mesh = xdmf.read_mesh(name="Grid")
-        gdim = 2
         shape = in_mesh.ufl_cell().cellname()
         degree = 1
         cell = ufl.Cell(shape)
@@ -119,9 +118,15 @@ tdim = 1
 #wing span
 L = .550 
 
+ones = np.ones((8,2))
+ones_from_file=np.save(os.path.join(dirpath,'test_ones'),ones)
 #define tip load magnitude 
 F = .1
+aero_forces_filename = "beam_forces_conservative_7deg_pitch_1825pa_dyn_pres_5x55vlmgrid_50beamnodes.npy"
+aero_forces_file=os.path.join(dirpath,aero_forces_filename)
+# aero_forces = np.load(aero_forces_filename,allow_pickle=True)
 
+aero_forces = np.load(aero_forces_file,allow_pickle=True)
 #beam endpoint locations
 p1 = (0,0,0)
 p2 = (L,0,0)

@@ -1,6 +1,6 @@
 # static 1D Cantilever Beam with a rectangular cross section
 # this example uses Euler-Bernoulli ("classical") beam theory
-import matplotlib.pyplot as plt
+# import basix.ufl_wrapper
 import numpy as np
 from mpi4py import MPI
 import basix
@@ -10,6 +10,7 @@ from dolfinx.io import VTKFile
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import locate_entities_boundary,create_interval
 from ufl import (SpatialCoordinate,inner, TestFunction, TrialFunction, div, grad, dx)
+# import matplotlib.pyplot as plt
 
 ########## GEOMETRIC INPUT ####################
 E = 70e3
@@ -59,7 +60,7 @@ def M(u):
 
 # Create Hermite order 3 on a interval (for more informations see:
 #    https://defelement.com/elements/examples/interval-Hermite-3.html )
-beam_element = basix.ufl_wrapper.create_element(basix.ElementFamily.Hermite, basix.CellType.interval, 3)
+beam_element=basix.ufl.element(basix.ElementFamily.Hermite, basix.CellType.interval, 3)
 
 #finite element function space on domain, with trial and test fxns
 W = FunctionSpace(domain,beam_element)
