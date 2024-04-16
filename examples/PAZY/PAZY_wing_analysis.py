@@ -75,7 +75,9 @@ for domain,ct in zip([ribXSmesh,mainXSmesh],[ribXSct,mainXSct]):
     grid.cell_data["Marker"] = ct.values
     p.add_mesh(grid, show_edges=True)
     p.show_grid()
-    p.view_xy()
+    # p.view_xy()
+    p.view_isometric()
+    p.show_axes()
     p.show()
 
 aluminum7075 = ALBATROSS.material.Material(name='Aluminium7075',
@@ -115,21 +117,27 @@ xs_list = [mainXS]
 gdim = 3
 tdim = 1
 
-#wing span
 L = .550 
 
-ones = np.ones((8,2))
-ones_from_file=np.save(os.path.join(dirpath,'test_ones'),ones)
-#define tip load magnitude 
-F = .1
 aero_forces_filename = "beam_forces_conservative_7deg_pitch_1825pa_dyn_pres_5x55vlmgrid_50beamnodes.npy"
 aero_forces_file=os.path.join(dirpath,aero_forces_filename)
 # aero_forces = np.load(aero_forces_filename,allow_pickle=True)
 
-aero_forces = np.load(aero_forces_file,allow_pickle=True)
+# approximate airspeed
+rho_air = 1.225 #kg/m^3 at STP
+v_air = np.sqrt(2*1825/rho_air)
+print(v_air)
+aero_force_ndarray = np.load(aero_forces_file,allow_pickle=True)
+aero_force_dict = aero_force_ndarray[()] #extract dict from 0d numpy object array 
+aero_forces = aero_force_dict['nodal_forces']
+nodal_coordinates = aero_force_dict['node_coordinates']
+
 #beam endpoint locations
-p1 = (0,0,0)
-p2 = (L,0,0)
+p1 = nodal_coordinates[0,:]
+p2 = nodal_coordinates[-1,:]
+
+#wing span
+L = p2[1]-p1[1]
 
 #1D mesh for locating beam cross-sections along beam axis
 meshname_axial_pos = 'axial_postion_mesh'
@@ -138,11 +146,12 @@ axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D([p1,p2],[num_segments],me
 
 #1D mesh used for 1D analysis
 meshname_axial = 'axial_mesh'
-ne_1D = 100 #number of elements for 1D mesh
-axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
+ne_1D = nodal_coordinates.shape[0] #number of elements for 1D mesh
+num_elements = np.tile([1],ne_1D)
+axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D(nodal_coordinates,np.ones_like(nodal_coordinates[:-1,0]),meshname_axial)
 
 #define orientation of each xs with a vector
-orientations = np.tile([0,1,0],num_segments)
+orientations = np.tile([-1,0,0],num_segments)
 
 #construct an adjacency list to map xs's to segments
 #   list of lists where each entry is a list of the xs index used in each segment 
@@ -162,13 +171,11 @@ PAZYWing = ALBATROSS.beam_model.BeamModel(axial_mesh,xs_info,segment_type="CONST
 #show the orientation of each xs and the interpolated orientation along the beam
 PAZYWing.plot_xs_orientations()
 
-# PAZYWing.plot_xs_disp_3D
+#apply force at free end in the negative z direction
+PAZYWing.add_point_load(aero_forces[1:,:],nodal_coordinates[1:,:])
 
 #applied fixed bc to first endpoint
 PAZYWing.add_clamped_point(p1)
-
-#apply force at free end in the negative z direction
-PAZYWing.add_point_load([(0,0,-F)],[p2])
 
 #solve the linear problem
 PAZYWing.solve()
@@ -178,7 +185,7 @@ PAZYWing.solve()
 #################################################################
 
 #shows plot of 1D displacement solution (recovery doesn't need be executed)
-PAZYWing.plot_axial_displacement(warp_factor=10)
+PAZYWing.plot_axial_displacement(warp_factor=1)
 
 #recovers the 3D displacement field over each xs
 PAZYWing.recover_displacement(plot_xss=True)

@@ -366,7 +366,7 @@ class BeamModel(Axial):
             grid.point_data["u"]= np.concatenate([self.o.x.array.reshape((geom.shape[0]-1,3)),[self.o.x.array[-3:]]],axis=0)
         else:
             grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
-        glyphs = grid.glyph(orient="u",factor=.25)
+        glyphs = grid.glyph(orient="u",factor=.05,scale='u')
         actor_2 = plotter.add_mesh(glyphs,color='b')
 
         #plot xs placement mesh
@@ -380,7 +380,7 @@ class BeamModel(Axial):
         else:
             grid2.point_data["u"]= self.o2.x.array.reshape((geom2.shape[0],3))
 
-        glyphs2 = grid2.glyph(orient="u",factor=0.5)
+        glyphs2 = grid2.glyph(orient="u",factor=0.1,scale='u')
         actor_5 = plotter.add_mesh(glyphs2,color='g')
 
         plotter.view_isometric()

@@ -366,7 +366,7 @@ class BeamModel(Axial):
             grid.point_data["u"]= np.concatenate([self.o.x.array.reshape((geom.shape[0]-1,3)),[self.o.x.array[-3:]]],axis=0)
         else:
             grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
-        glyphs = grid.glyph(orient="u",factor=.25)
+        glyphs = grid.glyph(orient="u",factor=.05,scale='u')
         actor_2 = plotter.add_mesh(glyphs,color='b')
 
         #plot xs placement mesh
@@ -380,7 +380,7 @@ class BeamModel(Axial):
         else:
             grid2.point_data["u"]= self.o2.x.array.reshape((geom2.shape[0],3))
 
-        glyphs2 = grid2.glyph(orient="u",factor=0.5)
+        glyphs2 = grid2.glyph(orient="u",factor=0.1,scale='u')
         actor_5 = plotter.add_mesh(glyphs2,color='g')
 
         plotter.view_isometric()
@@ -481,12 +481,16 @@ class BeamModel(Axial):
         self.uh.vector.destroy()
         # self.plot_axial_displacement()
         
-        grids = []
-        grids2 = []
+        #
+        grids = [] #used for rotated xs
+        grids2 = [] #used for rotated and warping solution disp
+        
         #get rotation matrices from global frame to reference beam frame
         RbA = self.get_local_basis(self.axial_pos_mesh.geometry.x)
         RTb = self.get_deformed_basis(self.axial_pos_mesh.geometry.x)
+        
         #plot xs meshes:
+
         for i,xs in enumerate(self.xs_list):
             #compute translation vector (transform centroid offset to relevant coordinates)
             trans_vec = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@(np.array([[0,xs.yavg,xs.zavg]]).T)
