@@ -182,7 +182,7 @@ class Axial:
         self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
         self.A_mat.assemble()
 
-        if self.L_form == None:
+        if self.L_form is None:
             f0 = Constant(self.domain,ScalarType((0,0,0)))
             self.L_form = -dot(f0,self.u_)*self.dx
             # self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx
@@ -201,7 +201,7 @@ class Axial:
         set_bc(self.b,self.bcs)
         
         #if there are any point forces, apply them to the assembled rhs vector
-        if bool(self.f_pt) == True:
+        if bool(self.f_pt):
             W0, disp_dofs = self.beam_element.W.sub(0).collapse()
             for f_pt in self.f_pt:
                 f = f_pt[0]

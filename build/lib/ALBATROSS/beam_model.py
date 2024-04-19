@@ -8,12 +8,13 @@ stress solution field to be obtained
 
 '''
 
-from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Expression,Function,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
-from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
-                                apply_lifting,set_bc,create_vector)
+from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Expression,Function,FunctionSpace
+#,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
+# from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
+#                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
                 inner,dot,grad,split,cross,Measure,sin,cos)
-from ALBATROSS.elements import *
+# from ALBATROSS.elements import *
 from ALBATROSS.cross_section import CrossSection,CrossSectionAnalytical
 from ALBATROSS.axial import Axial
 from ALBATROSS.utils import get_pts_and_cells
@@ -67,6 +68,9 @@ class BeamModel(Axial):
             [self.xs_list, self.axial_pos_mesh, self.orientations,self.xs_adj_list] = xs_info
             self.numxs = len(self.xs_list)
             self.numsegments = len(self.xs_adj_list)
+
+            #check that all the adjacency list and the xs list contain the same number of xs's
+            assert(set(range(self.numxs))==set(self.xs_adj_list.flatten()))
             
             print("Orienting XSs along beam axis....")
             self.get_xs_orientations_for_1D()
@@ -172,18 +176,19 @@ class BeamModel(Axial):
         linear_density = Function(S2)
         print(num_vals_to_enter)
         #population cross-sectional properties over axial positioning mesh
+        print(k2.vector.array.shape)
         for i in range(num_vals_to_enter):
             #TODO: think a bit more about how to build up the xs properties over the beam
             xs_idx =  self.xs_adj_list[i][0]
             xs=self.xs_list[xs_idx]
             #output stiffess matrix
-            if sym_cond==True:
+            if sym_cond:
                 print("symmetric mode not available yet,try again soon")
                 exit()
                 k2.vector.array[21*i,21*(i+1)] = xs.K.flatten()
-            elif sym_cond==False:
+            elif not sym_cond:
                 k2.vector.array[36*i:36*(i+1)] = xs.K.flatten()
-                linear_density.vector.array[i]
+                linear_density.vector.array[i] = xs.lin_density
                 # a2.vector.array[i] = xs.A
                 # rho2.vector.array[i] = xs.rho
                 # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
@@ -191,9 +196,11 @@ class BeamModel(Axial):
         #interpolate from axial_pos_mesh to axial_mesh 
 
         #initialize fxn spaces
-        self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        self.S = FunctionSpace(self.axial_mesh,('CG',1))
-        
+        # self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+        # self.S = FunctionSpace(self.axial_mesh,('CG',1))
+        self.T_66 = TensorFunctionSpace(self.axial_mesh,element_type,shape=(6,6),symmetry=sym_cond)
+        self.S = FunctionSpace(self.axial_mesh,element_type)
+
         #interpolate beam constitutive matrix
         self.k = Function(self.T_66)
         self.k.interpolate(k2)
@@ -298,12 +305,12 @@ class BeamModel(Axial):
             self.xss.append(CrossSectionAnalytical(xs))
             self.xss[i].compute_stiffness()
             print(self.xss[i].K)
-            if sym_cond==True:
+            if sym_cond:
                 #need to add fxn
                 print("symmetric mode not available yet,try again soon")
                 exit()
                 k2.vector.array[21*i,21*(i+1)] = self.xss[i].K.flatten()
-            elif sym_cond==False:
+            elif not sym_cond:
                 k2.vector.array[36*i:36*(i+1)] = self.xss[i].K.flatten()
                 # a2.vector.array[i] = self.xss[i].A
                 # rho2.vector.array[i] = self.xss[i].rho
@@ -481,12 +488,16 @@ class BeamModel(Axial):
         self.uh.vector.destroy()
         # self.plot_axial_displacement()
         
-        grids = []
-        grids2 = []
+        #
+        grids = [] #used for rotated xs
+        grids2 = [] #used for rotated and warping solution disp
+        
         #get rotation matrices from global frame to reference beam frame
         RbA = self.get_local_basis(self.axial_pos_mesh.geometry.x)
         RTb = self.get_deformed_basis(self.axial_pos_mesh.geometry.x)
+        
         #plot xs meshes:
+
         for i,xs in enumerate(self.xs_list):
             #compute translation vector (transform centroid offset to relevant coordinates)
             trans_vec = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@(np.array([[0,xs.yavg,xs.zavg]]).T)

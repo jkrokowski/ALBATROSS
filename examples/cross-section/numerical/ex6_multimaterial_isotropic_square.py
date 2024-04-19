@@ -9,8 +9,8 @@ from dolfinx.plot import create_vtk_mesh
 
 import ALBATROSS
 
-import os,sys
-import numpy as np
+import os
+import sys
 
 this_file = sys.argv[0]
 dirpath = os.path.dirname(this_file)
