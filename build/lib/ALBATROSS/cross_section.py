@@ -111,6 +111,9 @@ class CrossSection:
         self.yavg = assemble_scalar(form(self.x[0]*self.dx))/self.A
         self.zavg = assemble_scalar(form(self.x[1]*self.dx))/self.A
 
+        #vectorfunctionspace for initializing displacment functions
+        self.recovery_V = VectorFunctionSpace(self.msh,('CG',1),dim=3)
+        
     def getXSStiffnessMatrix(self):
         
         # Construct Displacement Coefficient mixed function space

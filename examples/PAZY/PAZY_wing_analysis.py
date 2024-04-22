@@ -67,18 +67,18 @@ mainXSmesh,mainXSct = import_cross_section_mesh(mainXSname)
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
 
-# for domain,ct in zip([ribXSmesh,mainXSmesh],[ribXSct,mainXSct]):
-#     p = pyvista.Plotter(window_size=[800, 800])
-#     num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-#     topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
-#     grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-#     grid.cell_data["Marker"] = ct.values
-#     p.add_mesh(grid, show_edges=True)
-#     p.show_grid()
-#     # p.view_xy()
-#     p.view_isometric()
-#     p.show_axes()
-#     p.show()
+for domain,ct in zip([ribXSmesh,mainXSmesh],[ribXSct,mainXSct]):
+    p = pyvista.Plotter(window_size=[800, 800])
+    num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
+    topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+    grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+    grid.cell_data["Marker"] = ct.values
+    p.add_mesh(grid, show_edges=True)
+    p.show_grid()
+    # p.view_xy()
+    p.view_xy()
+    p.show_axes()
+    p.show()
 
 aluminum7075 = ALBATROSS.material.Material(name='Aluminium7075',
                                            mat_type='ISOTROPIC',
@@ -227,41 +227,41 @@ PAZYWing.solve()
 ######### POSTPROCESSING, TESTING & VISUALIZATION ############
 #################################################################
 
-from matplotlib import pyplot as plt
-xs_props = PAZYWing.k.vector.array
-row = 0
-EA = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
-row = 3
-GJ = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
-row = 4
-EI_flap = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
-row = 5
-EI_lag = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
-# print(xs_prop)
-# print(xs_prop.shape)
-print(axial_mesh.geometry.x.shape)
+# from matplotlib import pyplot as plt
+# xs_props = PAZYWing.k.vector.array
+# row = 0
+# EA = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
+# row = 3
+# GJ = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
+# row = 4
+# EI_flap = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
+# row = 5
+# EI_lag = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
+# # print(xs_prop)
+# # print(xs_prop.shape)
+# print(axial_mesh.geometry.x.shape)
 
-fig,ax=plt.subplots()
-# ax.scatter(axial_mesh.geometry.x[:-1,1],EA)
-# ax.scatter(axial_mesh.geometry.x[:-1,1],GJ)
-ax.scatter(axial_mesh.geometry.x[:-1,1],EI_flap)
-# ax.scatter(axial_mesh.geometry.x[:-1,1],EI_lag)
+# fig,ax=plt.subplots()
+# # ax.scatter(axial_mesh.geometry.x[:-1,1],EA)
+# # ax.scatter(axial_mesh.geometry.x[:-1,1],GJ)
+# ax.scatter(axial_mesh.geometry.x[:-1,1],EI_flap)
+# # ax.scatter(axial_mesh.geometry.x[:-1,1],EI_lag)
 
-ax.set(xlabel='spanwise', ylabel='axial stiffness')
-ax.grid()
-plt.show()
+# ax.set(xlabel='spanwise', ylabel='axial stiffness')
+# ax.grid()
+# plt.show()
 
-# #shows plot of 1D displacement solution (recovery doesn't need be executed)
-# PAZYWing.plot_axial_displacement(warp_factor=1)
+#shows plot of 1D displacement solution (recovery doesn't need be executed)
+PAZYWing.plot_axial_displacement(warp_factor=1)
 
-# #recovers the 3D displacement field over each xs
-# PAZYWing.recover_displacement(plot_xss=False)
+#recovers the 3D displacement field over each xs
+PAZYWing.recover_displacement(plot_xss=True)
 
-# #plots both 1D and 2D solutions together
-# PAZYWing.plot_xs_disp_3D()
+#plots both 1D and 2D solutions together
+PAZYWing.plot_xs_disp_3D()
 
-# #shows plot of stress over cross-section 
-# PAZYWing.recover_stress() # currently only axial component sigma11 plotted
+#shows plot of stress over cross-section 
+PAZYWing.recover_stress() # currently only axial component sigma11 plotted
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)

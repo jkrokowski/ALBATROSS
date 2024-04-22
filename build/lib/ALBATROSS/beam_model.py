@@ -238,12 +238,12 @@ class BeamModel(Axial):
         for i,K in enumerate(self.K_list):
             print('    reading properties for XS '+str(i+1)+'/'+str(self.numxs)+'...')
             #output stiffess matrix
-            if sym_cond==True:
+            if sym_cond:
                 #need to add fxn
                 print("symmetric mode not available yet,try again soon")
                 exit()
                 k2.vector.array[21*i,21*(i+1)] = self.xss[i].K.flatten()
-            elif sym_cond==False:
+            elif not sym_cond:
                 k2.vector.array[36*i:36*(i+1)] = K.flatten()
                 # a2.vector.array[i] = self.xss[i].A
                 # rho2.vector.array[i] = self.xss[i].rho
@@ -403,14 +403,14 @@ class BeamModel(Axial):
         #get local displacements
         [u_local,theta_local] = self.get_local_disp(self.axial_pos_mesh.geometry.x)
                 
-        def apply_disp_to_xs(xs,u_local):
-            numdofs = int(xs.xsdisp.x.array.shape[0]/3)
-            xs.xsdisp.vector.array += np.tile(self.RGB@u_local,numdofs)
+        def apply_disp_to_xs(xsdisp,u_local):
+            numdofs = int(xsdisp.x.array.shape[0]/3)
+            xsdisp.vector.array += np.tile(self.RGB@u_local,numdofs)
             
             #needed for PETSc garbage collection
-            xs.xsdisp.vector.destroy()
+            xsdisp.vector.destroy()
 
-        def apply_rot_to_xs(xs,theta_local):
+        def apply_rot_to_xs(xsdisp,centroid,theta_local):
             def rotation_to_disp(x):
                 [[alpha],[beta],[gamma]] = self.RGB@theta_local.reshape((3,1))
                 # rotation about X-axis
@@ -431,36 +431,63 @@ class BeamModel(Axial):
                 RGg = Rz@Ry@Rx
 
                 #centroid location in g frame (same as RgB@np.array([0,yavg,zavg]))
-                centroid = np.array([[xs.yavg,xs.zavg,0]]).T
+                # centroid = np.array([[xs.yavg,xs.zavg,0]]).T
 
                 return ((RGg@(centroid-x)+x)-centroid)
                 # return ((RGg@(x-centroid)-x)+centroid)
 
-            xs.xsdisp.interpolate(rotation_to_disp)
+            xsdisp.interpolate(rotation_to_disp)
+        
+        #construct a series of recovery objects in the shape of the xs_adj_list:
+        #these recovery objects include:
+        #       -link to the original xs_id
+        #       -the coordinates of the xs location along the beam
+        #       -the displacement of the cross-section
+        self.recovery = []
+        axial_coords = self.axial_pos_mesh.geometry.x
+        nodal_coords = np.concatenate((axial_coords[:1,:],np.tile(axial_coords[1:-1,:],(2,1)),axial_coords[-1:,:]))
+        xs_ids = self.xs_adj_list.flatten()
+        
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
+        tdim = 2
+        # grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)
+        plotter = pyvista.Plotter()
 
-        #compute xs displacement functions
-        for i,xs in enumerate(self.xs_list):
-            xs.V = VectorFunctionSpace(xs.msh,('CG',1),dim=3)
-            xs.xsdisp = Function(xs.V)
+        
+        for xs_id,nodal_coord in zip(xs_ids,nodal_coords):
+            xs = self.xs_list[xs_id]
+            xsdisp = Function(xs.recovery_V)
+            [u_local,theta_local] = self.get_local_disp([nodal_coord])
+            centroid = np.array([[xs.yavg,xs.zavg,0]]).T
+            apply_rot_to_xs(xsdisp,centroid,theta_local)
+            apply_disp_to_xs(xsdisp,u_local)
+            self.recovery.append([xsdisp,xs_id,nodal_coord])
 
+        # #compute xs displacement functions
+        # for i,xs in enumerate(self.xs_list):
+        #     xs.V = VectorFunctionSpace(xs.msh,('CG',1),dim=3)
+        #     xs.xsdisp = Function(xs.V)
             
-            apply_rot_to_xs(xs,theta_local[i])
-            apply_disp_to_xs(xs,u_local[i])
+        #     apply_rot_to_xs(xs,theta_local[i])
+        #     apply_disp_to_xs(xs,u_local[i])
 
             if plot_xss:
                 pyvista.global_theme.background = [255, 255, 255, 255]
-                pyvista.global_theme.font.color = 'black'
-                tdim = xs.msh.topology.dim
+                # pyvista.global_theme.font.color = 'black'
+                # tdim = xs.msh.topology.dim
+                # topology, cell_types, geom = create_vtk_mesh(xs.msh, tdim)
+                # grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+                # # grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)
+                # plotter = pyvista.Plotter()
                 topology, cell_types, geom = create_vtk_mesh(xs.msh, tdim)
                 grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-                # grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)
-                plotter = pyvista.Plotter()
-
-                plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+                
+                actor0 = plotter.add_mesh(grid, show_edges=True,opacity=0.25)
                 # grid.rotate_z(90).rotate_y(90)
                 # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
                 # have to be careful about how displacement data is populated into grid before or after rotations for visualization
-                grid.point_data["u"] = xs.xsdisp.x.array.reshape((geom.shape[0],3))
+                grid.point_data["u"] = xsdisp.x.array.reshape((geom.shape[0],3))
                 # new_grid = grid.transform(transform_matrix)
 
                 warped = grid.warp_by_vector("u", factor=1)
@@ -534,7 +561,7 @@ class BeamModel(Axial):
             warped = grids[i].warp_by_vector("u", factor=warp_factor)
             actor_3 = plotter.add_mesh(warped, show_edges=True)
             
-        plotter.view_yz()
+        plotter.view_isometric()
         plotter.show_axes()
 
         # if not pyvista.OFF_SCREEN:
