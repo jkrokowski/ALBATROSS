@@ -160,10 +160,10 @@ tip_pt = nodal_coordinates[-1,:]
 assert(np.isclose(L,np.linalg.norm(root_pt-tip_pt)))
 
 #1D mesh for locating beam cross-sections along beam axis
-meshname_axial_pos = 'axial_postion_mesh'
+# meshname_axial_pos = 'axial_postion_mesh'
 num_segments = nodal_coordinates.shape[0]-1 # number of xs's used
-num_ele_pos = np.ones((num_segments))
-axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D(nodal_coordinates,num_ele_pos,meshname_axial_pos)
+# num_ele_pos = np.ones((num_segments))
+# axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D(nodal_coordinates,num_ele_pos,meshname_axial_pos)
 
 # #plot axial position mesh
 # p = pyvista.Plotter(window_size=[800, 800])
@@ -179,17 +179,20 @@ axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D(nodal_coordinates,num_ele
 # p.show()
 
 #1D mesh used for 1D analysis
-meshname_axial = 'axial_mesh'
-ne_1D = nodal_coordinates.shape[0] #number of elements for 1D mesh
+meshname = 'PAZY'
+# ne_1D = nodal_coordinates.shape[0] #number of elements for 1D mesh
 mesh_size = L/100 #approximate minimum mesh element size
 num_ele = np.ceil(axial_coords_offsets[1:]/mesh_size).astype('int')
-axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D(nodal_coordinates,num_ele,meshname_axial)
+# axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D(nodal_coordinates,num_ele,meshname_axial)
+
+beam_axis = ALBATROSS.axial.BeamAxis(nodal_coordinates,num_ele,meshname)
+
 
 #output for aero force generation
 with open(os.path.join(dirpath,'segment_locations.npy'), 'wb') as f:
     np.save(f,nodal_coordinates)
 with open(os.path.join(dirpath,'nodal_coords.npy'), 'wb') as f:
-    np.save(f,axial_mesh.geometry.x)
+    np.save(f,beam_axis.axial_mesh.geometry.x)
 
 #define orientation of each xs with a vector
 orientations = np.tile([-1,0,0],num_segments)
@@ -201,14 +204,14 @@ num_rib_main_sects = int(start.shape[0] / 2) + int(middle.shape[0] / 2) + int(en
 xs_adjacency_list = np.concatenate([np.tile([rib_sect,main_sect],(num_rib_main_sects,1)),[rib_sect]])
 # xs_adjacency_list = np.tile(main_sect,(29,1))
 #collect all xs information
-xs_info = [xs_list,axial_pos_mesh,orientations,xs_adjacency_list]
+xs_info = [xs_list,orientations,xs_adjacency_list]
 
 #################################################################
 ######### INITIALIZE BEAM OBJECT, APPLY BCs, & SOLVE ############
 #################################################################
 
 #initialize beam object using 1D mesh and definition of xs's
-PAZYWing = ALBATROSS.beam_model.BeamModel(axial_mesh,xs_info,segment_type="CONSTANT")
+PAZYWing = ALBATROSS.beam.Beam(beam_axis,xs_info)
 
 # #show the orientation of each xs and the interpolated orientation along the beam
 # PAZYWing.plot_xs_orientations()

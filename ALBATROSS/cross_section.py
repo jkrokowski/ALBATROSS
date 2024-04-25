@@ -114,7 +114,7 @@ class CrossSection:
         #vectorfunctionspace for initializing displacment functions
         self.recovery_V = VectorFunctionSpace(self.msh,('CG',1),dim=3)
         
-    def getXSStiffnessMatrix(self):
+    def get_xs_stiffness_matrix(self):
         
         # Construct Displacement Coefficient mixed function space
         self.Ve = VectorElement("CG",self.msh.ufl_cell(),1,dim=3)
@@ -147,17 +147,17 @@ class CrossSection:
 
         #assemble matrix
         print('Constructing Residual...')
-        self.constructResidual()
+        self._construct_residual()
 
         print('Computing non-trivial solutions....')
-        self.getModes()
+        self._get_modes()
         print('Orthogonalizing w.r.t. elastic modes...')
-        self.decoupleModes()
+        self._decouple_modes()
         print('Computing Beam Constitutive Matrix....')
-        self.computeXSStiffnessMat()
+        self._compute_xs_stiffness_matrix()
         # PETSc.garbage_cleanup()
        
-    def applyRotation(self,C,alpha,beta,gamma):
+    def _apply_rotation(self,C,alpha,beta,gamma):
         #indices
         i,j,k,l=self.i,self.j,self.k,self.l
         p,q,r,s=self.p,self.q,self.r,self.s
@@ -181,14 +181,14 @@ class CrossSection:
 
         return Cprime
     
-    def constructMatOrientation(self,orientation):
+    def _construct_mat_orientation(self,orientation):
         #orientation is a list of angles
         self.Q = VectorFunctionSpace(self.msh,("DG",0),dim=3)
         self.theta = Function(self.Q)
 
         self.theta.interpolate(orientation)
 
-    def constructResidual(self):
+    def _construct_residual(self):
         #geometric dimension
         d = self.d
         #indices
@@ -225,7 +225,7 @@ class CrossSection:
         #     #TODO: need to think about how to store these tensors? 
         #     #We can't store potentially thousands of these, so we need to store the constitutive tensor (per material)
         #     # the rotation angles for each element associated with each cell as a DG0 fxn? 
-        #     C = self.applyRotation(material.C,self.theta[0],self.theta[1],self.theta[2])
+        #     C = self._apply_rotation(material.C,self.theta[0],self.theta[1],self.theta[2])
         # elif material.type == 'ISOTROPIC':
         #     C = material.C
             # C = getMatConstitutive(self.msh,material)
@@ -262,7 +262,7 @@ class CrossSection:
         
         self.Residual =  L1+L2+L3+L4
 
-    def getModes(self):
+    def _get_modes(self):
         print('Assembling System Matrix....')   
         self.A_mat = assemble_matrix(form(self.Residual))
         self.A_mat.assemble()
@@ -286,7 +286,7 @@ class CrossSection:
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
         print("QR factorization time = %f" % (time.time()-t0))
 
-    def decoupleModes(self):
+    def _decouple_modes(self):
         # We need to handle this operation on a per material basis, so we can't just store C one time
 
         #this is a change of basis operation from the originally computed basis to one
@@ -381,7 +381,7 @@ class CrossSection:
         self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
 
-    def computeXSStiffnessMat(self):       
+    def _compute_xs_stiffness_matrix(self):       
         #unpacking values
         x = self.x
         dx = self.dx
@@ -544,7 +544,7 @@ class CrossSection:
     #                     [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
     #                     [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
     
-    def recover_stress_xs(self,loads,plot_stress=True):
+    def recover_stress(self,loads,plot_stress=True):
         '''
         loads: 6x1 vector of the loads over the xs
         '''
@@ -610,6 +610,7 @@ class CrossSection:
 
             # if not pyvista.OFF_SCREEN:
             plotter.show()
+    
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
         # #plots mesh o

@@ -18,7 +18,7 @@ t4 = 0.01
 points = [(-W/2,H/2),(W/2,H/2),(W/2,-H/2),(-W/2,-H/2)]
 thicknesses = [t1,t2,t3,t4]
 num_el = 4*[4] #number of elements through each wall thickness
-domain = ALBATROSS.utils.create_2D_box(points,thicknesses,num_el,'box_xs')
+domain = ALBATROSS.mesh.create_hollow_box(points,thicknesses,num_el,'box_xs')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -32,7 +32,7 @@ boxXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 boxXS.plot_mesh()
 
 #compute the stiffness matrix
-boxXS.getXSStiffnessMatrix()
+boxXS.get_xs_stiffness_matrix()
 
 np.set_printoptions(precision=3)
 

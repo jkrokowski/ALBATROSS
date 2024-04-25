@@ -7,13 +7,13 @@ Defines the finite element spaces with user-defined element type and
 from dolfinx.fem import FunctionSpace
 from ufl import VectorElement,dx
 
-class BeamElementRefined():
+class LinearTimoshenkoElement():
 
     def __init__(self, domain, element_type=None, 
                                 quad_data=None):
         self.domain = domain
         self.cell = domain.ufl_cell()
-        if element_type == None:
+        if element_type is None:
             self.element_type = "CG1" # default
         else:
             self.element_type = element_type
@@ -61,7 +61,7 @@ class BeamElementRefined():
         ordered by: [ux,uy,uz,thetax,thetay,thetaz] (similar to the default case below)
         """
         
-        if quad_data == None:
+        if quad_data is None:
             dx_shear = dx(scheme="default",metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
             dx_beam = [dx, dx_shear, dx_shear,
                   dx, dx,       dx]

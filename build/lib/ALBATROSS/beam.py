@@ -1,5 +1,5 @@
 '''
-The beam_model module
+The beam module
 ---------------------
 This module connects an Axial model and (>=1) Cross-Section models
 allowing for a complete beam model to be constructed, analyzed,
@@ -9,34 +9,27 @@ stress solution field to be obtained
 '''
 
 from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Expression,Function,FunctionSpace
-#,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
-# from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
-#                                 apply_lifting,set_bc,create_vector)
-from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
-                inner,dot,grad,split,cross,Measure,sin,cos)
-# from ALBATROSS.elements import *
+from ufl import sin,cos
 from ALBATROSS.cross_section import CrossSection,CrossSectionAnalytical
 from ALBATROSS.axial import Axial
 from ALBATROSS.utils import get_pts_and_cells
-from petsc4py.PETSc import ScalarType
 import numpy as np
 import pyvista
 from dolfinx.plot import create_vtk_mesh
 
-class BeamModel(Axial):
+class Beam(Axial):
     '''
     Class that combines both 1D and 2D analysis
     '''
 
-    def __init__(self,axial_mesh,xs_info,xs_type='EBPE',segment_type='CONSTANT'):
+    def __init__(self,beam_axis,xs_info,xs_type='EBPE',segment_type='CONSTANT'):
         '''
-        axial_mesh: mesh used for 1D analysis (typically this is a finer
-            discretization than the 1D mesh used for locating xss)
+        beam_axis: object containing axial mesh (used for 1D analysis) 
+            and cross-section positioning mesh (used to locate xs's along the
+            beam axis)
 
-        xs_info = (xs_list,axial_pos_mesh,xs_orientations,xs_adj_list)
+        xs_info = (xs_list,xs_orientations,xs_adj_list)
             xs_list : list of 2D xdmf meshes for each cross-section
-            axial_pos_mesh : the beam axis discretized into the number of
-                elements with nodes at the spanwise locations of the XSs
             xs_orientations: list of vectors defining orientation of 
                 primary orthogonal axis used in xs analysis
             xs_adj_list: adjacency list mapping segment[i] of the axial position
@@ -48,7 +41,8 @@ class BeamModel(Axial):
         xs_type: determines if xs analysis is to be run. 
 
         '''
-        self.axial_mesh = axial_mesh
+        self.axial_mesh = beam_axis.axial_mesh
+        self.axial_pos_mesh = beam_axis.axial_pos_mesh
 
         #define rotation matrices for rotating between beam reference axis and xs reference frame
         #note: 
@@ -65,7 +59,9 @@ class BeamModel(Axial):
         
         if xs_type == 'EBPE':
             #EBPE: Energy Based Polynomial Expansion
-            [self.xs_list, self.axial_pos_mesh, self.orientations,self.xs_adj_list] = xs_info
+            [self.xs_list, self.orientations,self.xs_adj_list] = xs_info
+            if type(self.xs_adj_list) is not np.ndarray:
+                self.xs_adj_list = np.array(self.xs_adj_list)
             self.numxs = len(self.xs_list)
             self.numsegments = len(self.xs_adj_list)
 
@@ -73,30 +69,30 @@ class BeamModel(Axial):
             assert(set(range(self.numxs))==set(self.xs_adj_list.flatten()))
             
             print("Orienting XSs along beam axis....")
-            self.get_xs_orientations_for_1D()
+            self.orient_xss()
 
-            print("Getting XS Properties...")
-            self.get_axial_props_from_xss()
+            print("Linking cross-sectional properties to axial mesh...")
+            self.link_xs_to_axial()
 
         elif xs_type == 'precomputed':
             #For usage with fully populated beam constitutive matrices
             #   for example, from VABS
-            [self.K_list,self.axial_pos_mesh,self.orientations] = xs_info
+            [self.K_list,self.orientations] = xs_info
             self.numxs = len(self.K_list)
 
             print("Orienting XSs along beam axis....")
-            self.get_xs_orientations_for_1D()
+            self.orient_xss()
 
             print("Reading XS Stiffness Matrices...")
             self.get_axial_props_from_K_list()
 
         elif xs_type== 'analytical':
             # xs_info consists of a list of dictionaries of the relevant xs parameter
-            [self.xs_params,self.axial_pos_mesh,self.orientations] = xs_info
+            [self.xs_params,self.orientations] = xs_info
             self.numxs = len(self.xs_params)
 
             print("Orienting XSs along beam axis....")
-            self.get_xs_orientations_for_1D()
+            self.orient_xss()
 
             print("Computing analytical cross section properties ...")
             self.get_axial_props_from_analytic_formulae()
@@ -109,7 +105,7 @@ class BeamModel(Axial):
         print("Computing Elastic Energy...")
         self.elastic_energy()
 
-    def get_xs_orientations_for_1D(self):
+    def orient_xss(self):
         #define orientation of the x2 axis w.r.t. the beam axis x1 to allow for 
         # matching the orientation of the xs with that of the axial mesh
         # (this must be done carefully and with respect to the location of the beam axis)
@@ -133,7 +129,7 @@ class BeamModel(Axial):
         self.o = Function(self.O)
         self.o.interpolate(self.o2)
 
-    def get_axial_props_from_xss(self):
+    def link_xs_to_axial(self):
         '''
         CORE FUNCTION FOR PROCESSING MULTIPLE 2D XSs TO PREPARE A 1D MODEL
         '''
@@ -141,7 +137,6 @@ class BeamModel(Axial):
         # def get_flat_sym_stiff(K_mat):
         #     K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
         #     return K_flat
-        print("Linking cross-sectional properties to axial mesh...")
         
         #determine how the segments are constructed
         if self.segment_type == "CONSTANT":
@@ -154,21 +149,6 @@ class BeamModel(Axial):
         #We need to construct a continuous field over the axial mesh 
         #   from the properties computed from each cross-section
         sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
-        # T2_66 = TensorFunctionSpace(self.axial_pos_mesh,element_type,shape=(6,6),symmetry=sym_cond)
-        # k2 = Function(T2_66)
-        # S2 = FunctionSpace(self.axial_pos_mesh,element_type)
-        # linear_density = Function(S2)
-        # # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
-        # V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
-        # c2 = Function(V2_2)
-        
-        # for i,[mesh2d,mat2D] in enumerate(zip(self.xs_meshes,self.mats)):
-        #     print('    computing properties for XS '+str(i+1)+'/'+str(self.numxs)+'...')
-        #     #instantiate class for cross-section i
-        #     self.xss.append(CrossSection(mesh2d,mat2D))
-        #     #analyze cross section
-        #     self.xss[i].getXSStiffnessMatrix()
-
         #initialize functions and functionspaces over axial positioning mesh            
         T2_66 = TensorFunctionSpace(self.axial_pos_mesh,element_type,shape=(6,6),symmetry=sym_cond)
         k2 = Function(T2_66)
@@ -196,8 +176,6 @@ class BeamModel(Axial):
         #interpolate from axial_pos_mesh to axial_mesh 
 
         #initialize fxn spaces
-        # self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        # self.S = FunctionSpace(self.axial_mesh,('CG',1))
         self.T_66 = TensorFunctionSpace(self.axial_mesh,element_type,shape=(6,6),symmetry=sym_cond)
         self.S = FunctionSpace(self.axial_mesh,element_type)
 
@@ -349,14 +327,7 @@ class BeamModel(Axial):
         # rho2.vector.destroy()
 
         print("Done interpolating cross-sectional properties to axial mesh...")
-
-    # def get_3D_disp(self):
-    #     '''
-    #     returns a fxn defined over a 3D mesh generated from the 
-    #     2D xs's and the 1D analysis mesh
-    #     '''
-    #     return
-    
+   
     def plot_xs_orientations(self):
         pyvista.global_theme.background = [255, 255, 255, 255]
         pyvista.global_theme.font.color = 'black'
@@ -463,14 +434,14 @@ class BeamModel(Axial):
             apply_rot_to_xs(xsdisp,centroid,theta_local)
             apply_disp_to_xs(xsdisp,u_local)
             self.recovery.append([xsdisp,xs_id,nodal_coord])
-
-        # #compute xs displacement functions
-        # for i,xs in enumerate(self.xs_list):
-        #     xs.V = VectorFunctionSpace(xs.msh,('CG',1),dim=3)
-        #     xs.xsdisp = Function(xs.V)
-            
-        #     apply_rot_to_xs(xs,theta_local[i])
-        #     apply_disp_to_xs(xs,u_local[i])
+            print("you're doing great buddy")
+            # #compute xs displacement functions
+            # for i,xs in enumerate(self.xs_list):
+            #     xs.V = VectorFunctionSpace(xs.msh,('CG',1),dim=3)
+            #     xs.xsdisp = Function(xs.V)
+                
+            #     apply_rot_to_xs(xs,theta_local[i])
+            #     apply_disp_to_xs(xs,u_local[i])
 
             if plot_xss:
                 pyvista.global_theme.background = [255, 255, 255, 255]
@@ -492,12 +463,13 @@ class BeamModel(Axial):
 
                 warped = grid.warp_by_vector("u", factor=1)
                 actor_1 = plotter.add_mesh(warped, show_edges=True)
-                plotter.show_axes()
-                # if add_nodes==True:
-                #     plotter.add_mesh(grid, style='points')
-                plotter.view_isometric()
-                if not pyvista.OFF_SCREEN:
-                    plotter.show()
+                
+        plotter.show_axes()
+        # if add_nodes==True:
+        #     plotter.add_mesh(grid, style='points')
+        plotter.view_isometric()
+        if not pyvista.OFF_SCREEN:
+            plotter.show()
 
     def plot_xs_disp_3D(self):
         warp_factor = 1

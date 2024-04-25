@@ -1,7 +1,5 @@
 import gmsh
-# import math
 import sys
-from dolfinx.io import XDMFFile,gmshio
 from mpi4py import MPI
 import meshio
 
@@ -99,4 +97,4 @@ if MPI.COMM_WORLD.rank == 0:
     mesh = create_mesh(msh, "quad", prune_z=True)
     print(mesh.cells)
     print(mesh.cell_data)
-    meshio.write(f"output/"+xcName+".xdmf", mesh)
+    meshio.write("output/"+xcName+".xdmf", mesh)

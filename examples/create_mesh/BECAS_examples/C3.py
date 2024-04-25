@@ -1,7 +1,6 @@
 '''
-C2 - Half-cylinder cross section of isotropic material
+C1 - Hollow Cylinder cross section of isotropic material
 '''
-
 import gmsh
 from dolfinx.io import XDMFFile,gmshio
 from mpi4py import MPI
@@ -11,7 +10,7 @@ gdim=2
 tdim=2
 
 #cross section properties
-xcName = "half_cylinder"
+xcName = "hollow_disk"
 R=.1 #m
 t = 0.01  #m
 
@@ -29,24 +28,33 @@ p5 = gmsh.model.geo.add_point(0,-(R-t),0)
 
 ca1 = gmsh.model.geo.add_circle_arc(p2,p1,p4)
 ca2 = gmsh.model.geo.add_circle_arc(p3,p1,p5)
+ca3 = gmsh.model.geo.add_circle_arc(p4,p1,p2)
+ca4 = gmsh.model.geo.add_circle_arc(p5,p1,p3)
 l1 = gmsh.model.geo.add_line(p2,p3)
 l2 = gmsh.model.geo.add_line(p4,p5)
 
-edges = gmsh.model.geo.addCurveLoop([ca1,l2,-ca2,-l1],-1)
-hollow_disk = gmsh.model.geo.addPlaneSurface([edges],-1)
+edges1 = gmsh.model.geo.addCurveLoop([ca1,l2,-ca2,-l1],-1)
+hollow_disk1 = gmsh.model.geo.addPlaneSurface([edges1],-1)
+edges2 = gmsh.model.geo.addCurveLoop([ca3,-l2,-ca4,l1],-1)
+hollow_disk2 = gmsh.model.geo.addPlaneSurface([edges2],-1)
 
 num_el_circum = 49
 num_el_thick = 4
 gmsh.model.geo.mesh.setTransfiniteCurve(ca1, int(num_el_circum))
 gmsh.model.geo.mesh.setTransfiniteCurve(ca2, int(num_el_circum))
+gmsh.model.geo.mesh.setTransfiniteCurve(ca3, int(num_el_circum))
+gmsh.model.geo.mesh.setTransfiniteCurve(ca4, int(num_el_circum))
 gmsh.model.geo.mesh.setTransfiniteCurve(l1,int(num_el_thick))
 gmsh.model.geo.mesh.setTransfiniteCurve(l2,int(num_el_thick))
-gmsh.model.geo.mesh.setTransfiniteSurface(hollow_disk)
+gmsh.model.geo.mesh.setTransfiniteSurface(hollow_disk1)
+gmsh.model.geo.mesh.setTransfiniteSurface(hollow_disk2)
 
-gmsh.model.add_physical_group(tdim,[hollow_disk],0,xcName)
+gmsh.model.add_physical_group(tdim,[hollow_disk1],0,xcName)
+gmsh.model.add_physical_group(tdim,[hollow_disk2],1,xcName)
 
 #generate the mesh and optionally write the gmsh mesh file
-gmsh.model.geo.mesh.setRecombine(2, hollow_disk)
+gmsh.model.geo.mesh.setRecombine(2, hollow_disk1)
+gmsh.model.geo.mesh.setRecombine(2, hollow_disk2)
 gmsh.model.geo.synchronize()
 gmsh.model.mesh.generate(gdim)
 gmsh.write(f"output/{xcName}.msh")
@@ -67,7 +75,7 @@ with XDMFFile(msh.comm, f"output/{xcName}.xdmf", "w") as file:
 # close gmsh API
 gmsh.finalize()
 
-if False:
+if True:
 
     import pyvista
     from dolfinx import plot

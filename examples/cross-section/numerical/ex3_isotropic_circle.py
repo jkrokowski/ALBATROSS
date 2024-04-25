@@ -9,7 +9,7 @@ import numpy as np
 radius = 1
 num_el = 10 #number of elements through wall thickness
 
-domain = ALBATROSS.utils.create_circle(radius,num_el,'disk')
+domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -23,7 +23,7 @@ circleXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 circleXS.plot_mesh()
 
 #compute the stiffness matrix
-circleXS.getXSStiffnessMatrix()
+circleXS.get_xs_stiffness_matrix()
 
 np.set_printoptions(precision=3)
 

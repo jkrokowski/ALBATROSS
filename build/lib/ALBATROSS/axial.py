@@ -13,18 +13,30 @@ from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Expression,Funct
 # from dolfinx.fem.petsc import LinearProblem
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
-from ufl import (Jacobian, TestFunction,TrialFunction,diag,as_vector, sqrt, 
+from ufl import (Jacobian, TestFunction,TrialFunction,as_vector, sqrt, 
                 inner,dot,grad,split,cross,Measure)
-from ALBATROSS.elements import *
+from ALBATROSS.elements import LinearTimoshenkoElement
 from petsc4py.PETSc import ScalarType
 import numpy as np
 from dolfinx import plot
 import pyvista
 
 from ALBATROSS.utils import get_pts_and_cells
-
+from ALBATROSS.mesh import beam_interval_mesh_3D
 
 from petsc4py import PETSc
+
+class BeamAxis:
+    def __init__(self,points,ele,name):
+        '''
+        points: list of points defining the start and stop points of each unique beam segment
+        ele: number of element for each beam segment (array of size (len(points)-1,))
+        name: name of the beam (string)
+        '''
+        axial_pos_meshname = name+'_axial_pos_mesh'
+        self.axial_pos_mesh = beam_interval_mesh_3D(points,np.ones((len(points)-1,1)),axial_pos_meshname)
+        axial_meshname = name+'_axial_mesh'
+        self.axial_mesh = beam_interval_mesh_3D(points,ele,axial_meshname)
 
 class Axial:
     
@@ -40,7 +52,7 @@ class Axial:
     def __init__(self,domain,xsinfo,orientation):
         #import domain, function, and beam properties
         self.domain = domain
-        self.beam_element = BeamElementRefined(domain)
+        self.beam_element = LinearTimoshenkoElement(domain)
         self.eleDOFs = 6
         self.xsinfo = xsinfo
 
@@ -113,7 +125,7 @@ class Axial:
         print("Adding distributed load....")
         f_vec = self.a*self.rho*Constant(self.domain,ScalarType(f))
 
-        if self.L_form ==None:
+        if self.L_form is None:
             self.L_form = dot(f_vec,self.u_)*self.dx
         else:
             self.L_form += dot(f_vec,self.u_)*self.dx
@@ -170,7 +182,7 @@ class Axial:
         #   -no point moments
         # initialize function for displacement and rotation solution
         self.uh = Function(self.beam_element.W)
-        if self.L_form == None:
+        if self.L_form is None:
             f = Constant(self.domain,ScalarType((0,0,0)))
             self.L_form = -dot(f,self.u_)*self.dx
         

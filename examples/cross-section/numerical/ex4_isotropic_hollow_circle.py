@@ -10,7 +10,7 @@ radius = 1
 wall_thickness = 0.1
 num_el = 3 #number of elements through wall thickness
 
-domain = ALBATROSS.utils.create_hollow_circle(radius,wall_thickness,num_el,'hollow_circle')
+domain = ALBATROSS.mesh.create_hollow_circle(radius,wall_thickness,num_el,'hollow_circle')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -24,7 +24,7 @@ hollowCircleXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 hollowCircleXS.plot_mesh()
 
 #compute the stiffness matrix
-hollowCircleXS.getXSStiffnessMatrix()
+hollowCircleXS.get_xs_stiffness_matrix()
 
 np.set_printoptions(precision=3)
 

@@ -1,20 +1,20 @@
 from dolfinx.fem import Constant
-from ufl import Identity,as_tensor,indices,diag,as_vector,as_matrix
+from ufl import Identity,as_tensor,indices,as_matrix
 
 class Material:
     def __init__(self,name=None,mat_type='ISOTROPIC',mech_props=None,density=None,celltag=None):
         self.name = name
         self.type = mat_type
-        if mech_props == None:
+        if mech_props is None:
             raise Exception("No mechanical properties provided.")
         if mat_type == 'ISOTROPIC':
             self.E = mech_props['E']
             self.nu = mech_props['nu']
-        if density!=None:
+        if density is not None:
             self.density=density
-        if celltag !=None:
+        if celltag is not None:
             self.id = celltag
-        elif celltag == None:
+        elif celltag is None:
             #default to 0
             self.id = 0
 

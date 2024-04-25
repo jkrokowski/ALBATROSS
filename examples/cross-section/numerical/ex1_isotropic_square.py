@@ -1,6 +1,5 @@
 #simple example of cross-sectional analysis of an isotropic square:
 import ALBATROSS
-
 import numpy as np
 
 #cross-section mesh definition
@@ -9,7 +8,7 @@ W = .1 #square height
 H = .1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
-domain = ALBATROSS.utils.create_rectangle(points,[N,N])
+domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -23,7 +22,7 @@ squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 squareXS.plot_mesh()
 
 #compute the stiffness matrix
-squareXS.getXSStiffnessMatrix()
+squareXS.get_xs_stiffness_matrix()
 
 np.set_printoptions(precision=3)
 
