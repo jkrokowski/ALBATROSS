@@ -382,6 +382,8 @@ class CrossSection:
         # self.sols_decoup = self.sols@np.linalg.inv(mat)
 
     def _compute_xs_stiffness_matrix(self):       
+        #TODO: wrap as a fxn to use later for recovery:
+       
         #unpacking values
         x = self.x
         dx = self.dx
@@ -444,7 +446,7 @@ class CrossSection:
         # for the displacement as:
         # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
         # wereh x1 is the beam axis direction
-        
+                
         # expressions for the stress and strain in terms of the polynomial 
         # from expansion above:
         gradubar_c=grad(ubar_c)
@@ -544,13 +546,14 @@ class CrossSection:
     #                     [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
     #                     [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
     
-    def recover_stress(self,loads,plot_stress=True):
+    def recover_stress(self,loads,plot_stress=False):
         '''
         loads: 6x1 vector of the loads over the xs
         '''
-
+        #TODO: rewrite using a sol_coeff_to_
         disp_coeff = self.sols_decoup[:,6:]@self.K1_inv@loads
-
+        print(disp_coeff)
+        print(disp_coeff.shape)
         U2d = FunctionSpace(self.msh,self.Ve)
         ubar = Function(U2d)
         uhat = Function(U2d)
@@ -610,6 +613,8 @@ class CrossSection:
 
             # if not pyvista.OFF_SCREEN:
             plotter.show()
+
+        return sigma_sol_eval
     
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)

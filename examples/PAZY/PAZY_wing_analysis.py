@@ -72,9 +72,23 @@ for domain,ct in zip([ribXSmesh,mainXSmesh],[ribXSct,mainXSct]):
     num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
     topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
     grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-    grid.cell_data["Marker"] = ct.values
-    p.add_mesh(grid, show_edges=True)
+    grid.cell_data["Material"] = ct.values
+    sargs = dict(
+        title_font_size=20,
+        label_font_size=16,
+        shadow=True,
+        n_labels=2,
+        italic=True,
+        fmt="%1.0f",
+        font_family="arial",
+        # width=2,
+        # color = [1,1,1]
+    )
+    annotations = {1:"Aluminum 7075",0:"Nylon PA12"}
+    # p.add_mesh(grid, show_edges=True,show_scalar_bar=False)
+    p.add_mesh(grid, show_edges=True,scalar_bar_args=sargs,annotations=annotations)
     p.show_grid()
+    # p.add_legend()
     # p.view_xy()
     p.view_xy()
     p.show_axes()
@@ -98,19 +112,20 @@ mats = [aluminum7075,nylon_pa12]
 ribXS = ALBATROSS.cross_section.CrossSection(ribXSmesh,mats,celltags=ribXSct)
 
 #compute the stiffness matrix
-ribXS.getXSStiffnessMatrix()
+ribXS.get_xs_stiffness_matrix()
 
 #initialize cross-section object
 mainXS =  ALBATROSS.cross_section.CrossSection(mainXSmesh,mats,celltags=mainXSct)
 
 #compute the stiffness matrix
-mainXS.getXSStiffnessMatrix()
+mainXS.get_xs_stiffness_matrix()
 
 # xs_list = [ribXS,mainXS]
 xs_list = [mainXS,ribXS]
 # xs_list = [mainXS]
 # xs_list = [ribXS]
-
+print(mainXS.yavg)
+print(ribXS.zavg)
 #################################################################
 ########### DEFINE THE INPUTS FOR THE BEAM PROBLEM ##############
 #################################################################
@@ -187,7 +202,6 @@ num_ele = np.ceil(axial_coords_offsets[1:]/mesh_size).astype('int')
 
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_coordinates,num_ele,meshname)
 
-
 #output for aero force generation
 with open(os.path.join(dirpath,'segment_locations.npy'), 'wb') as f:
     np.save(f,nodal_coordinates)
@@ -233,21 +247,20 @@ PAZYWing.solve()
 # from matplotlib import pyplot as plt
 # xs_props = PAZYWing.k.vector.array
 # row = 0
-# EA = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
+# EA = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
 # row = 3
-# GJ = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
+# GJ = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
 # row = 4
-# EI_flap = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
+# EI_flap = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
 # row = 5
-# EI_lag = xs_props[[i*36 +row*6+row for i in range(axial_mesh.geometry.x.shape[0]-1)]]
-# # print(xs_prop)
-# # print(xs_prop.shape)
-# print(axial_mesh.geometry.x.shape)
+# EI_lag = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
+
+# print(beam_axis.axial_mesh.geometry.x.shape)
 
 # fig,ax=plt.subplots()
 # # ax.scatter(axial_mesh.geometry.x[:-1,1],EA)
 # # ax.scatter(axial_mesh.geometry.x[:-1,1],GJ)
-# ax.scatter(axial_mesh.geometry.x[:-1,1],EI_flap)
+# ax.scatter(beam_axis.axial_mesh.geometry.x[:-1,1],EI_flap)
 # # ax.scatter(axial_mesh.geometry.x[:-1,1],EI_lag)
 
 # ax.set(xlabel='spanwise', ylabel='axial stiffness')
@@ -258,7 +271,7 @@ PAZYWing.solve()
 PAZYWing.plot_axial_displacement(warp_factor=1)
 
 #recovers the 3D displacement field over each xs
-PAZYWing.recover_displacement(plot_xss=True)
+PAZYWing.recover_displacement()
 
 #plots both 1D and 2D solutions together
 PAZYWing.plot_xs_disp_3D()

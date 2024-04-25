@@ -375,36 +375,48 @@ class Axial:
         #TODO: ensure this works for multiple points at once
         RbA = self.get_local_basis(points)
 
-        # print("RbA:")
-        # print(RbA)
-        # print(strains.shape)
-        # print(first_comp)
-
         local_strains= np.zeros_like(RbA)
         RTb = np.zeros_like(RbA)
 
-        for i in range(RbA.shape[0]):
-            local_strains[i,:,:] = RbA[i,:,:]@strains[i,:,:]@RbA[i,:,:].T
-            # print("local strain:")
-            # print(local_strains[i,:,:])
-            # print(strains)
-            # print(local_strains)
-            alpha = 0
-            beta = local_strains[i,2,0]
-            gamma = local_strains[i,1,0]
-            Rx = np.array([[1,         0,         0],
-                            [0,np.cos(alpha),-np.sin(alpha)],
-                            [0,np.sin(alpha),np.cos(alpha)]])
-            # rotation about Y-axis
-            Ry = np.array([[np.cos(beta), 0,np.sin(beta)],
-                            [0,         1,        0],
-                            [-np.sin(beta),0,np.cos(beta)]])
-            #rotation about Z-axis
-            Rz = np.array([[np.cos(gamma),-np.sin(gamma),0],
-                            [np.sin(gamma),np.cos(gamma), 0],
-                            [0,         0,          1]])
+        #rotation angles
+        alpha = 0
+        beta = local_strains[2,0]
+        gamma = local_strains[1,0]
+        Rx = np.array([[1,         0,         0],
+                        [0,np.cos(alpha),-np.sin(alpha)],
+                        [0,np.sin(alpha),np.cos(alpha)]])
+        # rotation about Y-axis
+        Ry = np.array([[np.cos(beta), 0,np.sin(beta)],
+                        [0,         1,        0],
+                        [-np.sin(beta),0,np.cos(beta)]])
+        #rotation about Z-axis
+        Rz = np.array([[np.cos(gamma),-np.sin(gamma),0],
+                        [np.sin(gamma),np.cos(gamma), 0],
+                        [0,         0,          1]])
 
-            RTb[i,:,:] = Rz@Ry@Rx
+        RTb[:,:] = Rz@Ry@Rx
+        # for i in range(RbA.shape[0]):
+        #     local_strains[i,:,:] = RbA[i,:,:]@strains[i,:,:]@RbA[i,:,:].T
+        #     # print("local strain:")
+        #     # print(local_strains[i,:,:])
+        #     # print(strains)
+        #     # print(local_strains)
+        #     alpha = 0
+        #     beta = local_strains[i,2,0]
+        #     gamma = local_strains[i,1,0]
+        #     Rx = np.array([[1,         0,         0],
+        #                     [0,np.cos(alpha),-np.sin(alpha)],
+        #                     [0,np.sin(alpha),np.cos(alpha)]])
+        #     # rotation about Y-axis
+        #     Ry = np.array([[np.cos(beta), 0,np.sin(beta)],
+        #                     [0,         1,        0],
+        #                     [-np.sin(beta),0,np.cos(beta)]])
+        #     #rotation about Z-axis
+        #     Rz = np.array([[np.cos(gamma),-np.sin(gamma),0],
+        #                     [np.sin(gamma),np.cos(gamma), 0],
+        #                     [0,         0,          1]])
+
+        #     RTb[i,:,:] = Rz@Ry@Rx
 
         # print("Deformed basis:")
         # print(RTb)
@@ -423,19 +435,47 @@ class Axial:
         topology, cell_types, geom = plot.create_vtk_mesh(self.domain,tdim)
         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
         plotter = pyvista.Plotter()
-
-        grid.point_data["u"] = self.uh.sub(0).collapse().x.array.reshape((geom.shape[0],3))
-        actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
-        warped = grid.warp_by_vector("u", factor=warp_factor)
-        actor_1 = plotter.add_mesh(warped, show_edges=True)
-        plotter.view_xz()
+        sargs = dict(
+            title_font_size=20,
+            label_font_size=16,
+            shadow=True,
+            n_labels=3,
+            italic=True,
+            fmt="%.3f",
+            font_family="arial",
+        )
+        grid.point_data["Beam axis displacement"] = self.uh.sub(0).collapse().x.array.reshape((geom.shape[0],3))
+        actor_0 = plotter.add_mesh(grid, style="wireframe", line_width=5,color="k",scalar_bar_args=sargs)
+        warped = grid.warp_by_vector("Beam axis displacement", factor=warp_factor)
+        actor_1 = plotter.add_mesh(warped, line_width=5,show_edges=True)
+        plotter.view_isometric()
         plotter.show_axes()
 
+        plotter.show_grid()
         if not pyvista.OFF_SCREEN:
             plotter.show()
         else:
             figure = plot.screenshot("beam_mesh.png")
-    
+
+    def get_reactions(self,points):
+        '''
+        returns a list of forces and moments at the specified 
+            beam axis location
+        '''
+        
+        #Construct expression to evalute
+        R = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=6)
+        r = Function(R)
+        r.interpolate(Expression(
+                        self.generalized_stresses(self.uh),
+                        R.element.interpolation_points()
+                        ) )
+        
+        points_on_proc,cells=get_pts_and_cells(self.domain,points)
+        Reactions = r.eval(points_on_proc,cells)
+
+        return Reactions
+
     # def solve2(self):
     #     self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
     #     self.A_mat.assemble()

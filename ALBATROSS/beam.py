@@ -154,9 +154,8 @@ class Beam(Axial):
         k2 = Function(T2_66)
         S2 = FunctionSpace(self.axial_pos_mesh,element_type)
         linear_density = Function(S2)
-        print(num_vals_to_enter)
-        #population cross-sectional properties over axial positioning mesh
-        print(k2.vector.array.shape)
+
+        #populate cross-sectional properties over axial positioning mesh
         for i in range(num_vals_to_enter):
             #TODO: think a bit more about how to build up the xs properties over the beam
             xs_idx =  self.xs_adj_list[i][0]
@@ -344,7 +343,7 @@ class Beam(Axial):
             grid.point_data["u"]= np.concatenate([self.o.x.array.reshape((geom.shape[0]-1,3)),[self.o.x.array[-3:]]],axis=0)
         else:
             grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
-        glyphs = grid.glyph(orient="u",factor=.05,scale='u')
+        glyphs = grid.glyph(orient="u",factor=.2,scale='u')
         actor_2 = plotter.add_mesh(glyphs,color='b')
 
         #plot xs placement mesh
@@ -358,7 +357,7 @@ class Beam(Axial):
         else:
             grid2.point_data["u"]= self.o2.x.array.reshape((geom2.shape[0],3))
 
-        glyphs2 = grid2.glyph(orient="u",factor=0.1,scale='u')
+        glyphs2 = grid2.glyph(orient="u",factor=0.4,scale='u')
         actor_5 = plotter.add_mesh(glyphs2,color='g')
 
         plotter.view_isometric()
@@ -370,7 +369,7 @@ class Beam(Axial):
         #     pyvista.start_xvfb()
         #     figure = plot.screenshot("beam_mesh.png")
 
-    def recover_displacement(self,plot_xss=True):
+    def recover_displacement(self,plot_xss=False):
         #get local displacements
         [u_local,theta_local] = self.get_local_disp(self.axial_pos_mesh.geometry.x)
                 
@@ -416,25 +415,26 @@ class Beam(Axial):
         #       -the displacement of the cross-section
         self.recovery = []
         axial_coords = self.axial_pos_mesh.geometry.x
-        nodal_coords = np.concatenate((axial_coords[:1,:],np.tile(axial_coords[1:-1,:],(2,1)),axial_coords[-1:,:]))
+        nodal_coords = np.concatenate((axial_coords[:1,:],np.repeat(axial_coords[1:-1,:],2,axis=0),axial_coords[-1:,:]))
         xs_ids = self.xs_adj_list.flatten()
-        
-        pyvista.global_theme.background = [255, 255, 255, 255]
-        pyvista.global_theme.font.color = 'black'
-        tdim = 2
-        # grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)
-        plotter = pyvista.Plotter()
 
-        
+        if plot_xss:
+            pyvista.global_theme.background = [255, 255, 255, 255]
+            pyvista.global_theme.font.color = 'black'
+            tdim = 2
+            # grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)
+            plotter = pyvista.Plotter()
+
         for xs_id,nodal_coord in zip(xs_ids,nodal_coords):
             xs = self.xs_list[xs_id]
             xsdisp = Function(xs.recovery_V)
             [u_local,theta_local] = self.get_local_disp([nodal_coord])
-            centroid = np.array([[xs.yavg,xs.zavg,0]]).T
+            centroid = np.array([[0,0,0]]).T
+            # centroid = np.array([[xs.yavg,xs.zavg,0]]).T
             apply_rot_to_xs(xsdisp,centroid,theta_local)
             apply_disp_to_xs(xsdisp,u_local)
             self.recovery.append([xsdisp,xs_id,nodal_coord])
-            print("you're doing great buddy")
+            
             # #compute xs displacement functions
             # for i,xs in enumerate(self.xs_list):
             #     xs.V = VectorFunctionSpace(xs.msh,('CG',1),dim=3)
@@ -463,13 +463,13 @@ class Beam(Axial):
 
                 warped = grid.warp_by_vector("u", factor=1)
                 actor_1 = plotter.add_mesh(warped, show_edges=True)
-
-        plotter.show_axes()
-        # if add_nodes==True:
-        #     plotter.add_mesh(grid, style='points')
-        plotter.view_isometric()
-        if not pyvista.OFF_SCREEN:
-            plotter.show()
+        if plot_xss:
+            plotter.show_axes()
+            # if add_nodes==True:
+            #     plotter.add_mesh(grid, style='points')
+            plotter.view_isometric()
+            if not pyvista.OFF_SCREEN:
+                plotter.show()
 
     def plot_xs_disp_3D(self):
         warp_factor = 1
@@ -479,40 +479,54 @@ class Beam(Axial):
         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
         plotter = pyvista.Plotter()
 
-        grid.point_data["u"] = self.uh.sub(0).collapse().x.array.reshape((geom.shape[0],3))
-        actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
-        warped = grid.warp_by_vector("u", factor=warp_factor)
-        actor_1 = plotter.add_mesh(warped)
-        # plotter.add_scalar_bar('u',intesractive=True)
+        grid.point_data["Beam axis displacement"] = self.uh.sub(0).collapse().x.array.reshape((geom.shape[0],3))
+        sargs = dict(
+            title_font_size=20,
+            label_font_size=16,
+            shadow=True,
+            n_labels=3,
+            italic=True,
+            fmt="%.3f",
+            font_family="arial",
+        )
+        
+        actor_0 = plotter.add_mesh(grid, style="wireframe", color="k",line_width=5)
+        warped = grid.warp_by_vector("Beam axis displacement", factor=warp_factor)
+        actor_1 = plotter.add_mesh(warped,line_width=5,scalar_bar_args=sargs)
+        # Controlling the text properties
+        # plotter.add_scalar_bar('u',interactive=True)
         self.uh.vector.destroy()
         # self.plot_axial_displacement()
         
-        #
         grids = [] #used for rotated xs
         grids2 = [] #used for rotated and warping solution disp
         
         #get rotation matrices from global frame to reference beam frame
-        RbA = self.get_local_basis(self.axial_pos_mesh.geometry.x)
-        RTb = self.get_deformed_basis(self.axial_pos_mesh.geometry.x)
+        # RbA = self.get_local_basis(self.axial_pos_mesh.geometry.x)
+        # RTb = self.get_deformed_basis(self.axial_pos_mesh.geometry.x)
         
         #plot xs meshes:
+        for i,section in enumerate(self.recovery):
+            #unpack section for 
+            xsdisp,xs_id,nodal_coord = section
+            xs =self.xs_list[xs_id]
 
-        for i,xs in enumerate(self.xs_list):
-            #compute translation vector (transform centroid offset to relevant coordinates)
-            trans_vec = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@(np.array([[0,xs.yavg,xs.zavg]]).T)
-            
-            transform_matrix=np.concatenate((np.concatenate([RbA[i,:,:].T@self.RBG,trans_vec],axis=1),np.array([[0,0,0,1]])))
+            RbA = self.get_local_basis(np.array([nodal_coord]))
+            RTb = self.get_deformed_basis(np.array([nodal_coord]))
+
 
             #compute translation vector (transform centroid offset to relevant coordinates)
-            # print(self.axial_pos_mesh.geometry.x[i])
-            global_disp,_ = self.get_global_disp([self.axial_pos_mesh.geometry.x[i]])
-            trans_vec2 = np.array([self.axial_pos_mesh.geometry.x[i]]).T-RbA[i,:,:].T@RTb[i,:,:].T@(np.array([[0,xs.yavg,xs.zavg]]).T) + np.array([global_disp]).T
+            trans_vec = np.array([nodal_coord]).T-RbA[:,:].T@(np.array([[0,0,0]]).T)
+            # trans_vec = np.array([nodal_coord]).T-RbA[:,:].T@(np.array([[0,xs.yavg,xs.zavg]]).T)
             
-            # print("RTb:")
-            # print(RTb[i,:,:])
-            # print("RbA:")
-            # print(RbA[i,:,:])
-            transform_matrix2=np.concatenate((np.concatenate([RbA[i,:,:].T@RTb[i,:,:].T@self.RBG,trans_vec2],axis=1),np.array([[0,0,0,1]])))
+            transform_matrix=np.concatenate((np.concatenate([RbA[:,:].T@self.RBG,trans_vec],axis=1),np.array([[0,0,0,1]])))
+
+            #compute translation vector (transform centroid offset to relevant coordinates)
+            global_disp,_ = self.get_global_disp([nodal_coord])
+            # trans_vec2 = np.array([nodal_coord]).T-RbA[:,:].T@RTb[:,:].T@(np.array([[0,xs.yavg,xs.zavg]]).T) + np.array([global_disp]).T
+            trans_vec2 = np.array([nodal_coord]).T-RbA[:,:].T@RTb[:,:].T@(np.array([[0,0,0]]).T) + np.array([global_disp]).T
+
+            transform_matrix2=np.concatenate((np.concatenate([RbA[:,:].T@RTb[:,:].T@self.RBG,trans_vec2],axis=1),np.array([[0,0,0,1]])))
 
             tdim = xs.msh.topology.dim
             topology2, cell_types2, geom2 = create_vtk_mesh(xs.msh, tdim)
@@ -523,54 +537,71 @@ class Beam(Axial):
             grids2[i].transform(transform_matrix2)
             #only need to transform the displacement into the deformed frame
             #RTb[i,:,:]@
-            grids[i].point_data["u"] = (RbA[i,:,:].T@self.RBG@xs.xsdisp.x.array.reshape((geom2.shape[0],3)).T).T
-            actor2=plotter.add_mesh(grids[i], show_edges=True,opacity=0.25)
-            actor4 = plotter.add_mesh(grids2[i], show_edges=True,opacity=0.25)
+            grids[i].point_data["stress"] = (RbA[:,:].T@self.RBG@xsdisp.x.array.reshape((geom2.shape[0],3)).T).T
+            actor2=plotter.add_mesh(grids[i], show_edges=True,opacity=0.25,show_scalar_bar=False)
+            actor4 = plotter.add_mesh(grids2[i], show_edges=True,opacity=0.25,show_scalar_bar=False)
             # #add mesh for Tangential frame:
             # copied_mesh = actor2.copy(deep=True)
             # copied_mesh.transform(transform_matrix)
-
-            warped = grids[i].warp_by_vector("u", factor=warp_factor)
-            actor_3 = plotter.add_mesh(warped, show_edges=True)
             
+            sargs = dict(
+                title_font_size=20,
+                label_font_size=16,
+                shadow=True,
+                n_labels=2,
+                italic=True,
+                fmt="%1.0f",
+                font_family="arial",
+                # width=2,
+                # color = [1,1,1]
+            )
+            warped = grids[i].warp_by_vector("stress", factor=warp_factor)
+            actor_3 = plotter.add_mesh(warped, show_edges=True,show_scalar_bar=False)
+            # actor_3 = plotter.add_mesh(warped, show_edges=True,scalar_bar_args=sargs)
+            # actor_3.remove_scalar_bar()
+        # plotter.add_scalar_bar()
         plotter.view_isometric()
         plotter.show_axes()
-
-        # if not pyvista.OFF_SCREEN:
+        plotter.show_grid()
         plotter.show()
-        # else:
-        #     pyvista.start_xvfb()
-        #     figure = plot.screenshot("beam_mesh.png")
 
     def recover_stress(self):
-        # self.generalized_stresses(self.uh)
         
-        #need to interpolate evaluate at axial_pos_mesh nodes, but 
-        #   keep stress/reactions defined in the axial mesh or stress recovery will be wildly off.
-        points_on_proc,cells=get_pts_and_cells(self.axial_mesh,self.axial_pos_mesh.geometry.x)
+        Reactions = self.get_reactions(self.axial_pos_mesh.geometry.x)
         
-        S = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=6)
-        s = Function(S)
+        for i,section in enumerate(self.recovery):
+            #unpack section for 
+            xsdisp,xs_id,nodal_coord = section
+            xs =self.xs_list[xs_id]
+
+            self.recovery[i].append(xs.recover_stress(self.get_reactions(np.array([nodal_coord]))))
+
+        # # self.generalized_stresses(self.uh)
         
-        s.interpolate(Expression(self.generalized_stresses(self.uh),S.element.interpolation_points()))
-        Sig = s.eval(points_on_proc,cells)
+        # #need to interpolate evaluate at axial_pos_mesh nodes, but 
+        # #   keep stress/reactions defined in the axial mesh or stress recovery will be wildly off.
+        # points_on_proc,cells=get_pts_and_cells(self.axial_mesh,self.axial_pos_mesh.geometry.x)
+        
+        # S = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=6)
+        # s = Function(S)
+        
+        # s.interpolate(Expression(self.generalized_stresses(self.uh),S.element.interpolation_points()))
+        # Sig = s.eval(points_on_proc,cells)
 
-        #SIG are the reaction forces in the xs. These are can then be fed back to the xs to recover the stresses
-        # print("reaction forces along beam:")
-        # print(Sig)
-        for i,xs in enumerate(self.xs_list):
-            # print("xs area = " + str(xs.A))
-            # print("xs averaged stresses: ")
-            # print(Sig[i])
+        # #SIG are the reaction forces in the xs. These are can then be fed back to the xs to recover the stresses
+        # # print("reaction forces along beam:")
+        # # print(Sig)
 
-            xs.recover_stress_xs(Sig[i])
+        # for i,xs in enumerate(self.xs_list):
+        #     # print("xs area = " + str(xs.A))
+        #     # print("xs averaged stresses: ")
+        #     # print(Sig[i])
 
-            # print('stiffness matrix:')
-            # print(xs.K)
-            # print('displacements and rotations:')
-            # print(self.uh.sub(0).x.array)
+        #     xs.recover_stress(Sig[i])
 
-#TODO: need to add joints to allow for the assembly of models with connections (e.g. branching, loops, frames, etc)
-#TODO:
+        #     # print('stiffness matrix:')
+        #     # print(xs.K)
+        #     # print('displacements and rotations:')
+        #     # print(self.uh.sub(0).x.array)
+
 # ExampleBeam.get_max_stress()
-# ExampleBeam.plot_stress_over_xs()

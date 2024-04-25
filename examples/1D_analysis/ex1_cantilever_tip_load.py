@@ -48,6 +48,7 @@ squareXS = ALBATROSS.cross_section.CrossSection(squareXSmesh,[unobtainium])
 squareXS.get_xs_stiffness_matrix()
 xs_list = [squareXS]
 
+
 #create a beam axis
 meshname = 'ex_1'
 nodal_points = [p1,p2]
@@ -71,7 +72,7 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
 
 #show the orientation of each xs and the interpolated orientation along the beam
-CantileverBeam.plot_xs_orientations()
+# CantileverBeam.plot_xs_orientations()
 
 #applied fixed bc to first endpoint
 CantileverBeam.add_clamped_point(p1)
@@ -96,7 +97,7 @@ CantileverBeam.recover_displacement(plot_xss=True)
 CantileverBeam.plot_xs_disp_3D()
 
 #shows plot of stress over cross-section 
-CantileverBeam.recover_stress() # currently only axial component sigma11 plotted
+CantileverBeam.recover_stress() 
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)

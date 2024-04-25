@@ -544,13 +544,14 @@ class CrossSection:
     #                     [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
     #                     [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
     
-    def recover_stress(self,loads,plot_stress=True):
+    def recover_stress(self,loads,plot_stress=False):
         '''
         loads: 6x1 vector of the loads over the xs
         '''
 
         disp_coeff = self.sols_decoup[:,6:]@self.K1_inv@loads
-
+        print(disp_coeff)
+        print(disp_coeff.shape)
         U2d = FunctionSpace(self.msh,self.Ve)
         ubar = Function(U2d)
         uhat = Function(U2d)
@@ -610,6 +611,8 @@ class CrossSection:
 
             # if not pyvista.OFF_SCREEN:
             plotter.show()
+
+        return sigma_sol_eval
     
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
