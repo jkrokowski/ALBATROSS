@@ -46,8 +46,20 @@ p = pyvista.Plotter(window_size=[800, 800])
 num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
 topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
 grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-grid.cell_data["Marker"] = ct.values
-p.add_mesh(grid, show_edges=True)
+grid.cell_data["Material"] = ct.values
+sargs = dict(
+        title_font_size=20,
+        label_font_size=16,
+        shadow=True,
+        n_labels=2,
+        italic=True,
+        fmt="%1.0f",
+        font_family="arial",
+        # width=2,
+        # color = [1,1,1]
+    )
+annotations = {1:"adamantium",0:"unobtainium"}
+p.add_mesh(grid, show_edges=True,scalar_bar_args=sargs,annotations=annotations)
 p.view_xy()
 p.show()
 
@@ -69,9 +81,9 @@ squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium,adamantium],
 squareXS.plot_mesh()
 
 #compute the stiffness matrix
-squareXS.getXSStiffnessMatrix()
+squareXS.get_xs_stiffness_matrix()
 
-np.set_printoptions(precision=5,suppress=True)
+np.set_printoptions(precision=8,suppress=True)
 
 #output flexibility matrix
 print('Flexibility matrix:')

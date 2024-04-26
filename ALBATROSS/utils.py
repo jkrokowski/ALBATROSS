@@ -57,13 +57,14 @@ def plot_xdmf_mesh(msh,surface=True,add_nodes=False):
           tdim = msh.topology.dim
           topology, cell_types, geom = plot.create_vtk_mesh(msh, tdim)
           grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-          if surface ==True:
+          if surface:
                plotter.add_mesh(grid,show_edges=True,opacity=0.25)
-          if surface == False:
+          if not surface:
                plotter.add_mesh(grid,color='k',show_edges=True)
-          if add_nodes==True:
+          if add_nodes:
                plotter.add_mesh(grid, style='points',color='k')
           plotter.view_isometric()
+          plotter.show_bounds()
           plotter.add_axes()
           if not pyvista.OFF_SCREEN:
                plotter.show()
@@ -74,9 +75,10 @@ def plot_xdmf_mesh(msh,surface=True,add_nodes=False):
                grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
                # plotter.add_mesh(grid,show_edges=True,opacity=0.25)
                plotter.add_mesh(grid,color='k',show_edges=True)
-               if add_nodes==True:
+               if add_nodes:
                     plotter.add_mesh(grid, style='points',color='k')
           plotter.view_isometric()
+          plotter.show_bounds()
           plotter.add_axes()
           if not pyvista.OFF_SCREEN:
                plotter.show() 

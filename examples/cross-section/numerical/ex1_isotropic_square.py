@@ -26,10 +26,6 @@ squareXS.get_xs_stiffness_matrix()
 
 np.set_printoptions(precision=3)
 
-#output flexibility matrix
-print('Flexibility matrix:')
-print(squareXS.S)
-
 #output stiffness matrix
 print('Stiffness matrix:')
 print(squareXS.K)

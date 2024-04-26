@@ -93,11 +93,11 @@ CantileverBeam.plot_axial_displacement(warp_factor=1)
 #recovers the 3D displacement field over each xs
 CantileverBeam.recover_displacement(plot_xss=True)
 
-#plots both 1D and 2D solutions together
-CantileverBeam.plot_xs_disp_3D()
-
 #shows plot of stress over cross-section 
 CantileverBeam.recover_stress() 
+
+#plots both 1D and 2D solutions together
+CantileverBeam.plot_xs_disp_3D()
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)

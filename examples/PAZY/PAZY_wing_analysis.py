@@ -273,11 +273,13 @@ PAZYWing.plot_axial_displacement(warp_factor=1)
 #recovers the 3D displacement field over each xs
 PAZYWing.recover_displacement()
 
-#plots both 1D and 2D solutions together
-PAZYWing.plot_xs_disp_3D()
-
 #shows plot of stress over cross-section 
-PAZYWing.recover_stress() # currently only axial component sigma11 plotted
+PAZYWing.recover_stress()
+
+#plots both 1D and 2D solutions together
+#note:  AL7075-T6 yield is around 500 MPA (5e8)
+#       PA12 3d printed with SLS process yield =~50MPA: 
+PAZYWing.plot_xs_disp_3D()
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)

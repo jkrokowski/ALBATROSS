@@ -433,7 +433,11 @@ class Beam(Axial):
             # centroid = np.array([[xs.yavg,xs.zavg,0]]).T
             apply_rot_to_xs(xsdisp,centroid,theta_local)
             apply_disp_to_xs(xsdisp,u_local)
-            self.recovery.append([xsdisp,xs_id,nodal_coord])
+
+            #initialize a Recovery object of the cross-section
+            recovery = Recovery(xsdisp,xs_id,nodal_coord)
+
+            self.recovery.append(recovery)
             
             # #compute xs displacement functions
             # for i,xs in enumerate(self.xs_list):
@@ -508,7 +512,7 @@ class Beam(Axial):
         #plot xs meshes:
         for i,section in enumerate(self.recovery):
             #unpack section for 
-            xsdisp,xs_id,nodal_coord = section
+            xsdisp,xs_id,nodal_coord = section._unpack()
             xs =self.xs_list[xs_id]
 
             RbA = self.get_local_basis(np.array([nodal_coord]))
@@ -537,8 +541,8 @@ class Beam(Axial):
             grids2[i].transform(transform_matrix2)
             #only need to transform the displacement into the deformed frame
             #RTb[i,:,:]@
-            grids[i].point_data["stress"] = (RbA[:,:].T@self.RBG@xsdisp.x.array.reshape((geom2.shape[0],3)).T).T
             actor2=plotter.add_mesh(grids[i], show_edges=True,opacity=0.25,show_scalar_bar=False)
+            grids[i].point_data["cross-section displacement"] = (RbA[:,:].T@self.RBG@xsdisp.x.array.reshape((geom2.shape[0],3)).T).T
             actor4 = plotter.add_mesh(grids2[i], show_edges=True,opacity=0.25,show_scalar_bar=False)
             # #add mesh for Tangential frame:
             # copied_mesh = actor2.copy(deep=True)
@@ -555,8 +559,10 @@ class Beam(Axial):
                 # width=2,
                 # color = [1,1,1]
             )
-            warped = grids[i].warp_by_vector("stress", factor=warp_factor)
-            actor_3 = plotter.add_mesh(warped, show_edges=True,show_scalar_bar=False)
+            warped = grids[i].warp_by_vector("cross-section displacement", factor=warp_factor)
+            warped.cell_data["VonMises"] = section.von_mises.vector.array
+            warped.set_active_scalars("VonMises")
+            actor_3 = plotter.add_mesh(warped, show_edges=True,clim=[0,5e7],show_scalar_bar=True)
             # actor_3 = plotter.add_mesh(warped, show_edges=True,scalar_bar_args=sargs)
             # actor_3.remove_scalar_bar()
         # plotter.add_scalar_bar()
@@ -567,14 +573,18 @@ class Beam(Axial):
 
     def recover_stress(self):
         
-        Reactions = self.get_reactions(self.axial_pos_mesh.geometry.x)
+        # reactions = self.get_reactions(self.axial_pos_mesh.geometry.x)
         
         for i,section in enumerate(self.recovery):
             #unpack section for 
-            xsdisp,xs_id,nodal_coord = section
+            xsdisp,xs_id,nodal_coord = section._unpack()
             xs =self.xs_list[xs_id]
 
-            self.recovery[i].append(xs.recover_stress(self.get_reactions(np.array([nodal_coord]))))
+            section.reaction = self.get_reactions(np.array([nodal_coord]))
+            
+            section.stress = xs.recover_stress(section.reaction)
+            
+            section.von_mises = xs.get_von_mises_stress(section.stress)
 
         # # self.generalized_stresses(self.uh)
         
@@ -605,3 +615,13 @@ class Beam(Axial):
         #     # print(self.uh.sub(0).x.array)
 
 # ExampleBeam.get_max_stress()
+
+class Recovery:
+
+    def __init__(self,xsdisp,xs_id,nodal_coord):
+        self.xsdisp = xsdisp
+        self.xs_id = xs_id
+        self.nodal_coord = nodal_coord
+
+    def _unpack(self):
+        return self.xsdisp,self.xs_id,self.nodal_coord
