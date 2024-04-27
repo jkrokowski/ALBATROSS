@@ -52,7 +52,7 @@ xs_list = [squareXS]
 #create a beam axis
 meshname = 'ex_1'
 nodal_points = [p1,p2]
-# number of segements of the beams that use different cross-sections
+# number of segments of the beams that use different cross-sections
 num_segments = len(nodal_points)-1 
 num_ele = [100] #number of subdivisions for each beam segment
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
@@ -68,7 +68,7 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 ######### INITIALIZE BEAM OBJECT, APPLY BCs, & SOLVE ############
 #################################################################
 
-#initialize beam object using 1D mesh and definition of xs's
+#initialize beam object using beam axis and definition of xs's
 CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
 
 #show the orientation of each xs and the interpolated orientation along the beam
@@ -88,10 +88,10 @@ CantileverBeam.solve()
 #################################################################
 
 #shows plot of 1D displacement solution (recovery doesn't need be executed)
-CantileverBeam.plot_axial_displacement(warp_factor=1)
+CantileverBeam.plot_axial_displacement(warp_factor=10)
 
 #recovers the 3D displacement field over each xs
-CantileverBeam.recover_displacement(plot_xss=True)
+CantileverBeam.recover_displacement()
 
 #shows plot of stress over cross-section 
 CantileverBeam.recover_stress() 
@@ -101,10 +101,10 @@ CantileverBeam.plot_xs_disp_3D()
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
-print('Max Deflection for point load (EB analytical analytical solution)')
+print('Max Deflection for point load (EB analytical solution)')
 E=unobtainium.E
 I = W*H**3/12
 print( (-F*L**3)/(3*E*I) )
 
-print('Max vertical deflection of centroid:')
+print('Max vertical deflection of tip:')
 print(CantileverBeam.get_local_disp([p2])[0][2])
