@@ -450,8 +450,8 @@ class Axial:
         actor_1 = plotter.add_mesh(warped, line_width=5,show_edges=True)
         plotter.view_isometric()
         plotter.show_axes()
-
-        plotter.show_grid()
+        plotter.show_bounds()
+        # plotter.show_grid()
         if not pyvista.OFF_SCREEN:
             plotter.show()
         else:

@@ -8,11 +8,10 @@ stress solution field to be obtained
 
 '''
 
-from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Expression,Function,FunctionSpace
+from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Function,FunctionSpace
 from ufl import sin,cos
-from ALBATROSS.cross_section import CrossSection,CrossSectionAnalytical
+from ALBATROSS.cross_section import CrossSectionAnalytical
 from ALBATROSS.axial import Axial
-from ALBATROSS.utils import get_pts_and_cells
 import numpy as np
 import pyvista
 from dolfinx.plot import create_vtk_mesh
@@ -568,7 +567,7 @@ class Beam(Axial):
         # plotter.add_scalar_bar()
         plotter.view_isometric()
         plotter.show_axes()
-        plotter.show_grid()
+        plotter.show_bounds()
         plotter.show()
 
     def recover_stress(self):
