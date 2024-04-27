@@ -1,0 +1,89 @@
+:py:mod:`ALBATROSS.frame`
+=========================
+
+.. py:module:: ALBATROSS.frame
+
+.. autoapi-nested-parse::
+
+   The Frame model
+   --------------------------------------
+   Used for connecting multiple beams together, joining their dofs,
+   and solving a model comprised of multiple different meshes
+
+   ..
+       !! processed by numpydoc !!
+
+
+Module Contents
+---------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.frame.Frame
+
+
+
+
+.. py:class:: Frame(Beams)
+
+   .. py:method:: add_beam(Beam)
+
+
+   .. py:method:: add_connection(cxn_members, cxn_pt, cxn_type='rigid')
+
+      
+      adds a dictionary to the list of connections with the following information:
+          -key:value pairs detailing the index number of each member in the self.Members list
+            and the dofs associated with the connection at the point for each member
+      current connection types:
+          -rigid 6-dof
+
+      TODO: connection types in the future:
+          -rigid translation (hinged)
+          -....
+
+      another type of dof would be a "rigid link", where the axes'
+      are non-intersecting, but perscribed.
+
+      A third, more challenging style is the application of a flexible joint
+      This could be implemented with a penalty method, among other approaches
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: create_frame_connectivity()
+
+
+   .. py:method:: plot_axial_displacement(warp_factor=1)
+
+
+   .. py:method:: plot_frame()
+
+
+   .. py:method:: recover_displacement(plot_xss=False)
+
+
+   .. py:method:: recover_stress()
+
+
+   .. py:method:: solve()
+
+
+

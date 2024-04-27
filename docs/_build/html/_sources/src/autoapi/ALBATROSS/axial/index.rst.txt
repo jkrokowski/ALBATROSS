@@ -1,0 +1,345 @@
+:py:mod:`ALBATROSS.axial`
+=========================
+
+.. py:module:: ALBATROSS.axial
+
+.. autoapi-nested-parse::
+
+   The axial module for executing a 1D analysis
+   ---------------------
+   Contains the most important classes for beam formulations 
+   using shear-deformable Timoshenko Beam Theory
+
+   ..
+       !! processed by numpydoc !!
+
+
+Module Contents
+---------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.axial.Axial
+   ALBATROSS.axial.BeamAxis
+
+
+
+
+.. py:class:: Axial(domain, xsinfo, orientation)
+
+   
+   Timoshenko shear deformable beam formulation
+
+   Inputs:
+
+   domain: 1D analysis mesh
+   beam_props: 2-tensor (6x6) function defining beam properties along span
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+   .. py:method:: _construct_system()
+
+
+   .. py:method:: _get_dofs(pt, dof_type='disp')
+
+
+   .. py:method:: _solve_simple()
+
+
+   .. py:method:: add_clamped_point(pt)
+
+      
+      pt = x,y,z location of clamped point
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: add_clamped_point_topo(dof)
+
+
+   .. py:method:: add_dist_load(f)
+
+      
+      f = tuple for (x,y,z) components of distributed load
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: add_point_load(f_list, pts)
+
+      
+      f = list of tuples for (x,y,z) components of point force force
+      pts : list of (x,y,z) location along beam axis to apply point force
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: add_point_moment(m_list, pts)
+
+      
+      f = list of tuples for (x,y,z) components of point force force
+      pts : list of (x,y,z) location along beam axis to apply point force
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: compute_local_axes()
+
+
+   .. py:method:: elastic_energy()
+
+
+   .. py:method:: generalized_strains(w)
+
+
+   .. py:method:: generalized_stresses(w)
+
+
+   .. py:method:: get_deformed_basis(points)
+
+      
+      get the transformation matrix from the reference beam frame (b) to the
+        deformed beam frame (B)
+
+      This only works under the assumption of small displacments (e.g. linear beam theory)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: get_global_disp(points)
+
+      
+      returns the displacement and rotation at a specific 
+      point on the beam axis with respect to the global coordinate system
+
+      ARGS:
+          points = list of (x,y,z) locations to return displacements and rotations
+      RETURNS:
+          list of [disp,rotations], where disp and rot are both shape (numpts,3) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: get_local_basis(points)
+
+      
+      returns the basis vectors for a set of points given as a (numpts,3,3) ndarray
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: get_local_disp(points)
+
+      
+      returns the displacement and rotation at a specific 
+      point on the beam axis with respect to the axial direction and xs principle axes
+
+      ARGS:
+          point = tuple of (x,y,z) locations to return displacements and rotations
+      RETURNS:
+          ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: get_reactions(points)
+
+      
+      returns a list of forces and moments at the specified 
+          beam axis location
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: plot_axial_displacement(warp_factor=1)
+
+      
+      returns a fxn defined over a 3D mesh generated from the 
+      2D xs's and the 1D analysis mesh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: solve()
+
+
+   .. py:method:: span_to_xyz(l)
+
+
+   .. py:method:: tangent(domain)
+
+
+   .. py:method:: tgrad(w)
+
+
+   .. py:method:: xyz_to_span(pt)
+
+
+
+.. py:class:: BeamAxis(points, ele, name)
+
+

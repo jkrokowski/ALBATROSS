@@ -16,9 +16,9 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'lsdo_project_template'
-copyright = '2023, Anugrah'
-author = 'Anugrah'
+project = 'ALBATROSS'
+copyright = '2024, Krokowski'
+author = 'Joshua Krokowski'
 version = '0.1'
 # release = 0.1.0rtc
 
@@ -50,7 +50,7 @@ nb_execution_mode = 'off'
 # autodoc_typehints = 'description'
 
 # autoapi options
-autoapi_dirs = ["../FROOT_BAT/core"]
+autoapi_dirs = ["../ALBATROSS"]
 autoapi_root = 'src/autoapi'
 autoapi_type = 'python'
 autoapi_file_patterns = ['*.py', '*.pyi']

@@ -48,7 +48,6 @@ squareXS = ALBATROSS.cross_section.CrossSection(squareXSmesh,[unobtainium])
 squareXS.get_xs_stiffness_matrix()
 xs_list = [squareXS]
 
-
 #create a beam axis
 meshname = 'ex_1'
 nodal_points = [p1,p2]

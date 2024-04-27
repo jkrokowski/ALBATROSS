@@ -13,5 +13,6 @@ ALBATROSS/utils.py
 ALBATROSS.egg-info/PKG-INFO
 ALBATROSS.egg-info/SOURCES.txt
 ALBATROSS.egg-info/dependency_links.txt
+ALBATROSS.egg-info/requires.txt
 ALBATROSS.egg-info/top_level.txt
 tests/test_test.py

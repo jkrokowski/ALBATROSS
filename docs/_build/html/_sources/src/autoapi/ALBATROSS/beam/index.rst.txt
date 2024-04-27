@@ -1,0 +1,127 @@
+:py:mod:`ALBATROSS.beam`
+========================
+
+.. py:module:: ALBATROSS.beam
+
+.. autoapi-nested-parse::
+
+   The beam module
+   ---------------------
+   This module connects an Axial model and (>=1) Cross-Section models
+   allowing for a complete beam model to be constructed, analyzed,
+   and (given the appropriate cross-section) a full 3D displacement and 
+   stress solution field to be obtained
+
+   ..
+       !! processed by numpydoc !!
+
+
+Module Contents
+---------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.beam.Beam
+   ALBATROSS.beam.Recovery
+
+
+
+
+.. py:class:: Beam(beam_axis, xs_info, xs_type='EBPE', segment_type='CONSTANT')
+
+   Bases: :py:obj:`ALBATROSS.axial.Axial`
+
+   
+   Class that combines both 1D and 2D analysis
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+   .. py:method:: _link_xs_to_axial()
+
+      
+      CORE FUNCTION FOR PROCESSING MULTIPLE 2D XSs TO PREPARE A 1D MODEL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: _orient_xss()
+
+
+   .. py:method:: get_axial_props_from_K_list()
+
+      
+      FUNCTION TO POPULATE TENSOR FXN SPACE WITH BEAM CONSTITUITIVE MATRIX 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: get_axial_props_from_analytic_formulae()
+
+
+   .. py:method:: plot_xs_disp_3D()
+
+
+   .. py:method:: plot_xs_orientations()
+
+
+   .. py:method:: recover_displacement(plot_xss=False)
+
+
+   .. py:method:: recover_stress()
+
+
+
+.. py:class:: Recovery(xsdisp, xs_id, nodal_coord)
+
+   .. py:method:: _unpack()
+
+
+

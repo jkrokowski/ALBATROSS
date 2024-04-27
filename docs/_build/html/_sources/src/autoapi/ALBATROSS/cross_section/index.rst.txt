@@ -1,0 +1,110 @@
+:py:mod:`ALBATROSS.cross_section`
+=================================
+
+.. py:module:: ALBATROSS.cross_section
+
+
+Module Contents
+---------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.cross_section.CrossSection
+   ALBATROSS.cross_section.CrossSectionAnalytical
+
+
+
+
+Attributes
+~~~~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.cross_section.default_scalar_type
+
+
+.. py:class:: CrossSection(msh, materials, celltags=None)
+
+   .. py:attribute:: msh
+
+      
+      TODO: example for four elements (include type/size checks)
+      assert(len(celltags['mat_id'])==len(msh))
+      assert(len(celltags['orientation'])==len(msh))
+      units for orientation?
+      celltags = {'mat_id': [0, 0, 1,0], 'orientation': {0, 90, 90, 0}}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: _apply_rotation(C, alpha, beta, gamma)
+
+
+   .. py:method:: _build_elastic_solution_modes()
+
+
+   .. py:method:: _compute_xs_stiffness_matrix()
+
+
+   .. py:method:: _construct_mat_orientation(orientation)
+
+
+   .. py:method:: _construct_residual()
+
+
+   .. py:method:: _decouple_modes()
+
+
+   .. py:method:: _get_modes()
+
+
+   .. py:method:: getXSMassMatrix()
+
+
+   .. py:method:: get_von_mises_stress(stress)
+
+
+   .. py:method:: get_xs_stiffness_matrix()
+
+
+   .. py:method:: plot_mesh()
+
+
+   .. py:method:: recover_stress(reactions)
+
+
+   .. py:method:: strains_from_warping_fxns(ubar_c, uhat_c, utilde_c, ubreve_c)
+
+
+   .. py:method:: stress_from_warping_fxns(ubar_c, uhat_c, utilde_c, ubreve_c)
+
+
+
+.. py:class:: CrossSectionAnalytical(params)
+
+   .. py:method:: compute_stiffness()
+
+
+
+.. py:data:: default_scalar_type
+
+   
+

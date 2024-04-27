@@ -1,0 +1,89 @@
+:py:mod:`ALBATROSS.elements`
+============================
+
+.. py:module:: ALBATROSS.elements
+
+.. autoapi-nested-parse::
+
+   '
+   Elements module
+   ---------------
+   Defines the finite element spaces with user-defined element type and
+    quadrature degrees
+
+   ..
+       !! processed by numpydoc !!
+
+
+Module Contents
+---------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.elements.LinearTimoshenkoElement
+
+
+
+
+.. py:class:: LinearTimoshenkoElement(domain, element_type=None, quad_data=None)
+
+   .. py:method:: getQuadratureRule(quad_data)
+
+      
+      Returns a list of the cell integrals for 3 displacement
+      and 3  energy with given quadrature degrees.
+
+      Shear locking is possible, so we use reduced integration by 
+      setting the integration measure associated with the "shear DOFs".
+      The axial displacement and rotational DOFs integration measures 
+      remain at the default "dx"
+
+      One can optionally set the quadrature degree by providing a ordered list 
+      ordered by: [ux,uy,uz,thetax,thetay,thetaz] (similar to the default case below)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+   .. py:method:: setUpFunctionSpace()
+
+      
+      Set up function space and the order of integration, with the first 
+      vector element being nodal displacement, and the second vector 
+      element being linearized rotation.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ..
+          !! processed by numpydoc !!
+
+

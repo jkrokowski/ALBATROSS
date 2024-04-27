@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ALBATROSS.cross_section &mdash; lsdo_project_template  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            lsdo_project_template
+          </a>
+              <div class="version">
+                0.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../src/getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/background.html">Background</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/tutorials.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/basic.html">1. Basic tutorials</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/advanced.html">2. Advanced tutorials</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_1.html">Custom feature 1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_2.html">Custom feature 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/basic.html">1. Basic examples</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/advanced.html">2. Advanced examples</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/api.html">API reference</a><ul class="simple">
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">lsdo_project_template</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ALBATROSS.cross_section</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ALBATROSS.cross_section</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">ufl</span> <span class="kn">import</span> <span class="p">(</span><span class="n">dot</span><span class="p">,</span><span class="n">Identity</span><span class="p">,</span><span class="n">sqrt</span><span class="p">,</span><span class="n">inner</span><span class="p">,</span><span class="n">tr</span><span class="p">,</span><span class="n">as_vector</span><span class="p">,</span><span class="n">variable</span><span class="p">,</span><span class="n">cross</span><span class="p">,</span><span class="n">diff</span><span class="p">,</span><span class="n">grad</span><span class="p">,</span><span class="n">sin</span><span class="p">,</span><span class="n">cos</span><span class="p">,</span><span class="n">as_matrix</span><span class="p">,</span><span class="n">SpatialCoordinate</span><span class="p">,</span><span class="n">FacetNormal</span><span class="p">,</span><span class="n">Measure</span><span class="p">,</span><span class="n">as_tensor</span><span class="p">,</span><span class="n">indices</span><span class="p">,</span><span class="n">VectorElement</span><span class="p">,</span><span class="n">MixedElement</span><span class="p">,</span><span class="n">TrialFunction</span><span class="p">,</span><span class="n">TestFunction</span><span class="p">,</span><span class="n">split</span><span class="p">,</span><span class="n">TensorElement</span><span class="p">)</span>
+<span class="c1"># from ufl import Constant as uflConstant</span>
+<span class="kn">from</span> <span class="nn">dolfinx.fem</span> <span class="kn">import</span> <span class="p">(</span><span class="n">Constant</span><span class="p">,</span><span class="n">Expression</span><span class="p">,</span><span class="n">TensorFunctionSpace</span><span class="p">,</span><span class="n">assemble_scalar</span><span class="p">,</span><span class="n">form</span><span class="p">,</span><span class="n">Function</span><span class="p">,</span><span class="n">FunctionSpace</span><span class="p">,</span><span class="n">VectorFunctionSpace</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">dolfinx.fem.petsc</span> <span class="kn">import</span> <span class="n">assemble_matrix</span>
+<span class="c1"># from dolfinx.fem import Constant as femConstant</span>
+<span class="kn">from</span> <span class="nn">dolfinx.mesh</span> <span class="kn">import</span> <span class="n">meshtags</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">petsc4py</span> <span class="kn">import</span> <span class="n">PETSc</span>
+
+
+<span class="kn">from</span> <span class="nn">scipy.sparse.linalg</span> <span class="kn">import</span> <span class="n">inv</span>
+<span class="kn">import</span> <span class="nn">sparseqr</span>
+<span class="kn">from</span> <span class="nn">scipy.sparse</span> <span class="kn">import</span> <span class="n">csr_matrix</span><span class="p">,</span><span class="n">csc_matrix</span>
+
+<span class="kn">from</span> <span class="nn">dolfinx.plot</span> <span class="kn">import</span> <span class="n">create_vtk_mesh</span>
+<span class="kn">import</span> <span class="nn">pyvista</span>
+
+<span class="kn">from</span> <span class="nn">ALBATROSS.material</span> <span class="kn">import</span> <span class="n">getMatConstitutive</span><span class="p">,</span><span class="n">Material</span><span class="p">,</span><span class="n">getMatConstitutiveIsotropic</span>
+<span class="kn">from</span> <span class="nn">ALBATROSS.utils</span> <span class="kn">import</span> <span class="n">plot_xdmf_mesh</span><span class="p">,</span><span class="n">get_vtx_to_dofs</span><span class="p">,</span><span class="n">get_pts_and_cells</span><span class="p">,</span><span class="n">sparseify</span>
+
+<span class="n">default_scalar_type</span> <span class="o">=</span> <span class="n">PETSc</span><span class="o">.</span><span class="n">ScalarType</span>    
+
+<span class="c1">#TODO: allow user to specify a point to find xs props about</span>
+<span class="c1">#TODO: provide a method to translate between different xs values?</span>
+
+<div class="viewcode-block" id="CrossSection"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection">[docs]</a><span class="k">class</span> <span class="nc">CrossSection</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">msh</span><span class="p">,</span> <span class="n">materials</span> <span class="p">,</span><span class="n">celltags</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1">#analysis domain</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">msh</span> <span class="o">=</span> <span class="n">msh</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        TODO: example for four elements (include type/size checks)</span>
+<span class="sd">        assert(len(celltags[&#39;mat_id&#39;])==len(msh))</span>
+<span class="sd">        assert(len(celltags[&#39;orientation&#39;])==len(msh))</span>
+<span class="sd">        units for orientation?</span>
+<span class="sd">        celltags = {&#39;mat_id&#39;: [0, 0, 1,0], &#39;orientation&#39;: {0, 90, 90, 0}}</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ct</span> <span class="o">=</span> <span class="n">celltags</span>
+        <span class="c1">#list of material objects </span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">materials</span> <span class="o">=</span> <span class="n">materials</span>
+        
+        <span class="c1">#geometric dimension</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">d</span> <span class="o">=</span> <span class="mi">3</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tdim</span> <span class="o">=</span> <span class="mi">2</span>
+
+        <span class="c1">#number of materials</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_mat</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">materials</span><span class="p">)</span>
+        <span class="c1">#tuple of material names and ids</span>
+        <span class="c1"># self.mat_ids = list(zip(list(self.material.keys()),list(range(self.num_mat))))</span>
+        <span class="c1"># mat_names = [self.materials[i].name for i in range(self.num_mat)]</span>
+          
+        
+        <span class="c1"># print(&quot;mat ids:&quot;)</span>
+        <span class="c1"># print(self.mat_ids)</span>
+
+        <span class="c1">#indices</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">l</span><span class="o">=</span><span class="n">indices</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+        <span class="c1"># self.p,self.q,self.r,self.s=indices(4)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">B</span> <span class="o">=</span> <span class="n">indices</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        
+        <span class="c1">#integration measures (subdomain data accounts for different materials)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ct</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1">#check that the number and values of celltags match those specified in the material objects</span>
+            <span class="n">mesh_ct</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ct</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+            <span class="n">mat_ct</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">materials</span><span class="p">[</span><span class="n">_i</span><span class="p">]</span><span class="o">.</span><span class="n">id</span> <span class="k">for</span> <span class="n">_i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_mat</span><span class="p">)]</span> <span class="p">)</span>
+            <span class="k">assert</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">mesh_ct</span><span class="o">==</span><span class="n">mat_ct</span><span class="p">))</span>
+            
+            <span class="c1">#material property functions</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Q</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,(</span><span class="s1">&#39;DG&#39;</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
+            <span class="c1"># self.C = TensorFunctionSpace(self.msh,(&#39;DG&#39;,0),shape=(3,3,3,3))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nu</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">material</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materials</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">material</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;ISOTROPIC&quot;</span><span class="p">:</span>
+                    <span class="n">cells</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ct</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">material</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="n">cells</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full_like</span><span class="p">(</span><span class="n">cells</span><span class="p">,</span><span class="n">material</span><span class="o">.</span><span class="n">E</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="n">default_scalar_type</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="n">cells</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full_like</span><span class="p">(</span><span class="n">cells</span><span class="p">,</span><span class="n">material</span><span class="o">.</span><span class="n">nu</span><span class="p">,</span><span class="n">dtype</span><span class="o">=</span><span class="n">default_scalar_type</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">material</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;ORTHOROPIC&quot;</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;forthcoming&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;unsupported material type&quot;</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">getMatConstitutiveIsotropic</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span>
+            
+            <span class="c1">#construct measure for subdomains using celltag info</span>
+            <span class="c1"># self.dx = Measure(&quot;dx&quot;,domain=self.msh,subdomain_data=self.ct)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dx</span> <span class="o">=</span> <span class="n">Measure</span><span class="p">(</span><span class="s2">&quot;dx&quot;</span><span class="p">,</span><span class="n">domain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">subdomain_data</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ct</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">ct</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dx</span> <span class="o">=</span> <span class="n">Measure</span><span class="p">(</span><span class="s2">&quot;dx&quot;</span><span class="p">,</span><span class="n">domain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">)</span>
+        <span class="c1">#     for material in self.materials:</span>
+        <span class="c1">#         print(self.ct.find(material.id))</span>
+        <span class="c1">#         material_facets=meshtags(self.msh,self.tdim,self.ct.find(material.id),material.id)</span>
+        <span class="c1">#         material.dx = Measure(&quot;dx&quot;,domain=self.msh,subdomain_data=material_facets)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">getMatConstitutiveIsotropic</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">materials</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">E</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">materials</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ds</span> <span class="o">=</span> <span class="n">Measure</span><span class="p">(</span><span class="s2">&quot;ds&quot;</span><span class="p">,</span><span class="n">domain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">)</span>
+        
+        <span class="c1">#spatial coordinate and facet normals</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">SpatialCoordinate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n</span> <span class="o">=</span> <span class="n">FacetNormal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">)</span>
+        
+        <span class="c1">#compute cross-sectional area and linear density (used for body forces)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">A</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="mf">1.0</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lin_density</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_mat</span> <span class="o">&gt;</span><span class="mi">1</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">material</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materials</span><span class="p">:</span>
+                <span class="n">material</span><span class="o">.</span><span class="n">A</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="mf">1.0</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span><span class="p">(</span><span class="n">material</span><span class="o">.</span><span class="n">id</span><span class="p">)))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">lin_density</span> <span class="o">+=</span> <span class="n">material</span><span class="o">.</span><span class="n">A</span><span class="o">*</span><span class="n">material</span><span class="o">.</span><span class="n">density</span>
+        <span class="c1">#TODO: compute density weight areas and areas of each subdomain?</span>
+        
+        <span class="c1">#compute average y and z locations </span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">yavg</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span><span class="p">))</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">A</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">zavg</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span><span class="p">))</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">A</span>
+
+        <span class="c1">#vectorfunctionspace for initializing displacment functions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">recovery_V</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">dim</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        
+<div class="viewcode-block" id="CrossSection.get_xs_stiffness_matrix"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection.get_xs_stiffness_matrix">[docs]</a>    <span class="k">def</span> <span class="nf">get_xs_stiffness_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        
+        <span class="c1"># Construct Displacement Coefficient mixed function space</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Ve</span> <span class="o">=</span> <span class="n">VectorElement</span><span class="p">(</span><span class="s2">&quot;CG&quot;</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="o">.</span><span class="n">ufl_cell</span><span class="p">(),</span><span class="mi">1</span><span class="p">,</span><span class="n">dim</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">V</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span> <span class="n">MixedElement</span><span class="p">(</span><span class="mi">4</span><span class="o">*</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">Ve</span><span class="p">]))</span>
+        
+        <span class="c1">#displacement and test functions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">u</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">V</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">V</span><span class="p">)</span>
+
+        <span class="c1">#displacement coefficient trial functions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ubar</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">uhat</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">utilde</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">ubreve</span><span class="o">=</span><span class="n">split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">u</span><span class="p">)</span>
+
+        <span class="c1">#displacement coefficient test functions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vbar</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vhat</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vtilde</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vbreve</span><span class="o">=</span><span class="n">split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
+
+        <span class="c1">#partial derivatives of displacement:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ubar_B</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ubar</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uhat_B</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uhat</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">utilde_B</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">utilde</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ubreve_B</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ubreve</span><span class="p">)</span>
+
+        <span class="c1">#partial derivatives of shape fxn:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vbar_a</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vbar</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vhat_a</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vhat</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtilde_a</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vtilde</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vbreve_a</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vbreve</span><span class="p">)</span>
+        
+        <span class="c1">#construct material constitutive tensor field</span>
+        <span class="c1"># self.constructConstitutiveField()</span>
+
+        <span class="c1">#assemble matrix</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Constructing Residual...&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_construct_residual</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Computing non-trivial solutions....&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_get_modes</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Orthogonalizing w.r.t. elastic modes...&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decouple_modes</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_build_elastic_solution_modes</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Computing Beam Constitutive Matrix....&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_compute_xs_stiffness_matrix</span><span class="p">()</span></div>
+        <span class="c1"># PETSc.garbage_cleanup()</span>
+       
+<div class="viewcode-block" id="CrossSection._apply_rotation"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection._apply_rotation">[docs]</a>    <span class="k">def</span> <span class="nf">_apply_rotation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">C</span><span class="p">,</span><span class="n">alpha</span><span class="p">,</span><span class="n">beta</span><span class="p">,</span><span class="n">gamma</span><span class="p">):</span>
+        <span class="c1">#indices</span>
+        <span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">l</span>
+        <span class="n">p</span><span class="p">,</span><span class="n">q</span><span class="p">,</span><span class="n">r</span><span class="p">,</span><span class="n">s</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">p</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">s</span>
+        <span class="c1">#rotation about X-axis</span>
+        <span class="n">Rx</span> <span class="o">=</span> <span class="n">as_matrix</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span>         <span class="mi">0</span><span class="p">,</span>         <span class="mi">0</span><span class="p">],</span>
+                        <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">cos</span><span class="p">(</span><span class="n">alpha</span><span class="p">),</span><span class="o">-</span><span class="n">sin</span><span class="p">(</span><span class="n">alpha</span><span class="p">)],</span>
+                        <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">sin</span><span class="p">(</span><span class="n">alpha</span><span class="p">),</span><span class="n">cos</span><span class="p">(</span><span class="n">alpha</span><span class="p">)]])</span>
+        <span class="c1">#rotation about Y-axis</span>
+        <span class="n">Ry</span> <span class="o">=</span> <span class="n">as_matrix</span><span class="p">([[</span><span class="n">cos</span><span class="p">(</span><span class="n">beta</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span><span class="n">sin</span><span class="p">(</span><span class="n">beta</span><span class="p">)],</span>
+                        <span class="p">[</span><span class="mi">0</span><span class="p">,</span>         <span class="mi">1</span><span class="p">,</span>        <span class="mi">0</span><span class="p">],</span>
+                        <span class="p">[</span><span class="o">-</span><span class="n">sin</span><span class="p">(</span><span class="n">beta</span><span class="p">),</span><span class="mi">0</span><span class="p">,</span><span class="n">cos</span><span class="p">(</span><span class="n">beta</span><span class="p">)]])</span>
+        <span class="c1">#rotation about Z-axis</span>
+        <span class="n">Rz</span> <span class="o">=</span> <span class="n">as_matrix</span><span class="p">([[</span><span class="n">cos</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="o">-</span><span class="n">sin</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="mi">0</span><span class="p">],</span>
+                        <span class="p">[</span><span class="n">sin</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="n">cos</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span> <span class="mi">0</span><span class="p">],</span>
+                        <span class="p">[</span><span class="mi">0</span><span class="p">,</span>         <span class="mi">0</span><span class="p">,</span>          <span class="mi">1</span><span class="p">]])</span>
+        
+        <span class="c1">#3D rotation matrix</span>
+        <span class="n">R</span> <span class="o">=</span> <span class="n">Rz</span><span class="o">*</span><span class="n">Ry</span><span class="o">*</span><span class="n">Rx</span>
+
+        <span class="n">Cprime</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">(</span><span class="n">R</span><span class="p">[</span><span class="n">p</span><span class="p">,</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">R</span><span class="p">[</span><span class="n">q</span><span class="p">,</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">C</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="p">]</span><span class="o">*</span><span class="n">R</span><span class="o">.</span><span class="n">T</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">r</span><span class="p">]</span><span class="o">*</span><span class="n">R</span><span class="o">.</span><span class="n">T</span><span class="p">[</span><span class="n">l</span><span class="p">,</span><span class="n">s</span><span class="p">],(</span><span class="n">p</span><span class="p">,</span><span class="n">q</span><span class="p">,</span><span class="n">r</span><span class="p">,</span><span class="n">s</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">Cprime</span></div>
+    
+<div class="viewcode-block" id="CrossSection._construct_mat_orientation"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection._construct_mat_orientation">[docs]</a>    <span class="k">def</span> <span class="nf">_construct_mat_orientation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">orientation</span><span class="p">):</span>
+        <span class="c1">#orientation is a list of angles</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Q</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,(</span><span class="s2">&quot;DG&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span><span class="n">dim</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">orientation</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CrossSection._construct_residual"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection._construct_residual">[docs]</a>    <span class="k">def</span> <span class="nf">_construct_residual</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1">#geometric dimension</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span>
+        <span class="c1">#indices</span>
+        <span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">l</span>
+        <span class="n">a</span><span class="p">,</span><span class="n">B</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">B</span>
+        <span class="c1">#trial and test functions</span>
+        <span class="n">ubar</span><span class="p">,</span><span class="n">uhat</span><span class="p">,</span><span class="n">utilde</span><span class="p">,</span><span class="n">ubreve</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ubar</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">uhat</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">utilde</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">ubreve</span>
+        <span class="n">vbar</span><span class="p">,</span><span class="n">vhat</span><span class="p">,</span><span class="n">vtilde</span><span class="p">,</span><span class="n">vbreve</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">vbar</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vhat</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vtilde</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vbreve</span>
+        <span class="c1">#partial derivatives of trial and test functions</span>
+        <span class="n">ubar_B</span><span class="p">,</span><span class="n">uhat_B</span><span class="p">,</span><span class="n">utilde_B</span><span class="p">,</span><span class="n">ubreve_B</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ubar_B</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">uhat_B</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">utilde_B</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">ubreve_B</span>
+        <span class="n">vbar_a</span><span class="p">,</span><span class="n">vhat_a</span><span class="p">,</span><span class="n">vtilde_a</span><span class="p">,</span><span class="n">vbreve_a</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">vbar_a</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vhat_a</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vtilde_a</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">vbreve_a</span>
+
+        <span class="n">C</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">C</span>
+        <span class="c1"># #restricted integration domain</span>
+        <span class="c1"># if self.ct == None:</span>
+        <span class="c1">#     dx = self.dx</span>
+        <span class="c1"># else:</span>
+        <span class="c1">#     print(&quot;material id:&quot;)</span>
+        <span class="c1">#     # print(material.id)</span>
+        <span class="c1">#     # subdomain_indices = self.ct.find(material.id)</span>
+        <span class="c1">#     # print(subdomain_indices)</span>
+        <span class="c1">#     # subdomain_values  = np.full_like(subdomain_indices, material.id, dtype=np.int32)</span>
+        <span class="c1">#     # print(subdomain_values)</span>
+        <span class="c1">#     # subdomain = meshtags(self.msh, 2, subdomain_indices, subdomain_values)</span>
+        <span class="c1">#     # dx = Measure(&#39;dx&#39;, domain=self.msh, subdomain_data=subdomain,subdomain_id=material.id)</span>
+        <span class="c1">#     dx = self.dx</span>
+        <span class="c1">#     # dx = self.dx</span>
+        <span class="n">dx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dx</span>      
+        
+
+        <span class="c1">#if an orthotropic material is used, the constructMatOrientation method</span>
+        <span class="c1">#must be called prior to applying rotations</span>
+        <span class="c1"># if material.type == &#39;ORTHOTROPIC&#39;:</span>
+        <span class="c1">#     #TODO: need to think about how to store these tensors? </span>
+        <span class="c1">#     #We can&#39;t store potentially thousands of these, so we need to store the constitutive tensor (per material)</span>
+        <span class="c1">#     # the rotation angles for each element associated with each cell as a DG0 fxn? </span>
+        <span class="c1">#     C = self._apply_rotation(material.C,self.theta[0],self.theta[1],self.theta[2])</span>
+        <span class="c1"># elif material.type == &#39;ISOTROPIC&#39;:</span>
+        <span class="c1">#     C = material.C</span>
+            <span class="c1"># C = getMatConstitutive(self.msh,material)</span>
+
+        <span class="c1">#sub-tensors of stiffness tensor</span>
+        <span class="n">Ci1k1</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">(</span><span class="n">C</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="mi">0</span><span class="p">],(</span><span class="n">i</span><span class="p">,</span><span class="n">k</span><span class="p">))</span>
+        <span class="n">Ci1kB</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">([[[</span><span class="n">C</span><span class="p">[</span><span class="n">i_</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">k_</span><span class="p">,</span> <span class="n">l_</span><span class="p">]</span> <span class="k">for</span> <span class="n">l_</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]]</span>
+                    <span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">d</span><span class="p">)]</span> <span class="k">for</span> <span class="n">i_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">d</span><span class="p">)])</span>
+        <span class="n">Ciak1</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">([[[</span><span class="n">C</span><span class="p">[</span><span class="n">i_</span><span class="p">,</span> <span class="n">j_</span><span class="p">,</span> <span class="n">k_</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">d</span><span class="p">)]</span>
+                    <span class="k">for</span> <span class="n">j_</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]]</span> <span class="k">for</span> <span class="n">i_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">d</span><span class="p">)])</span>
+        <span class="n">CiakB</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">([[[[</span><span class="n">C</span><span class="p">[</span><span class="n">i_</span><span class="p">,</span> <span class="n">j_</span><span class="p">,</span> <span class="n">k_</span><span class="p">,</span> <span class="n">l_</span><span class="p">]</span> <span class="k">for</span> <span class="n">l_</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]]</span>
+                    <span class="k">for</span> <span class="n">k_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">d</span><span class="p">)]</span> <span class="k">for</span> <span class="n">j_</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]]</span> 
+                    <span class="k">for</span> <span class="n">i_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">d</span><span class="p">)])</span>
+              
+        <span class="c1"># equation 1,2,3</span>
+        <span class="n">L1</span><span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="n">Ci1k1</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">utilde</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">vbar</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span>\
+            <span class="o">+</span> <span class="n">Ci1kB</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">uhat_B</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">vbar</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span> \
+            <span class="o">-</span> <span class="n">Ciak1</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">,</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">uhat</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">vbar_a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span> \
+            <span class="o">-</span> <span class="n">CiakB</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">ubar_B</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">vbar_a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span> \
+
+        <span class="c1"># # equation 4,5,6</span>
+        <span class="n">L2</span> <span class="o">=</span> <span class="mi">6</span><span class="o">*</span><span class="n">Ci1k1</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">ubreve</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">vhat</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span>\
+            <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="n">Ci1kB</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">utilde_B</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">vhat</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span> \
+            <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="n">Ciak1</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">,</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">utilde</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">vhat_a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span> \
+            <span class="o">-</span> <span class="n">CiakB</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">uhat_B</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">vhat_a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span> \
+
+        <span class="c1"># equation 7,8,9</span>
+        <span class="n">L3</span> <span class="o">=</span> <span class="mi">3</span><span class="o">*</span><span class="n">Ci1kB</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">ubreve_B</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">vtilde</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span> \
+            <span class="o">-</span> <span class="mi">3</span><span class="o">*</span><span class="n">Ciak1</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">,</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">ubreve</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">*</span><span class="n">vtilde_a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span> \
+            <span class="o">-</span> <span class="n">CiakB</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">utilde_B</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">vtilde_a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span>\
+
+        <span class="c1">#equation 10,11,12</span>
+        <span class="n">L4</span><span class="o">=</span> <span class="o">-</span><span class="n">CiakB</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">ubreve_B</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">B</span><span class="p">]</span><span class="o">*</span><span class="n">vbreve_a</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">a</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span>\
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">Residual</span> <span class="o">=</span>  <span class="n">L1</span><span class="o">+</span><span class="n">L2</span><span class="o">+</span><span class="n">L3</span><span class="o">+</span><span class="n">L4</span></div>
+
+<div class="viewcode-block" id="CrossSection._get_modes"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection._get_modes">[docs]</a>    <span class="k">def</span> <span class="nf">_get_modes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Assembling System Matrix....&#39;</span><span class="p">)</span>   
+        <span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span> <span class="o">=</span> <span class="n">assemble_matrix</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Residual</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span><span class="o">.</span><span class="n">assemble</span><span class="p">()</span>
+
+        <span class="n">m</span><span class="p">,</span><span class="n">n1</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span><span class="o">.</span><span class="n">getSize</span><span class="p">()</span>
+        <span class="c1"># Anp = self.A_mat.getValues(range(m),range(n1))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Computing QR factorization&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="n">Acsr</span> <span class="o">=</span> <span class="n">csr_matrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span><span class="o">.</span><span class="n">getValuesCSR</span><span class="p">()[::</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="kn">import</span> <span class="nn">time</span>
+        <span class="n">t0</span><span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="c1">#perform QR factorization and store as struct in householder form</span>
+        <span class="n">QR</span><span class="o">=</span> <span class="n">sparseqr</span><span class="o">.</span><span class="n">qr_factorize</span><span class="p">(</span> <span class="n">Acsr</span><span class="o">.</span><span class="n">transpose</span><span class="p">()</span> <span class="p">)</span>
+        <span class="c1">#build matrix of unit vectors for selecting last 12 columns</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">m</span><span class="p">,</span><span class="mi">12</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">12</span><span class="p">):</span>
+            <span class="n">X</span><span class="p">[</span><span class="n">m</span><span class="o">-</span><span class="mi">1</span><span class="o">-</span><span class="n">i</span><span class="p">,</span><span class="mi">11</span><span class="o">-</span><span class="n">i</span><span class="p">]</span><span class="o">=</span><span class="mi">1</span>
+        <span class="c1">#perform matrix multiplication implicitly to construct orthogonal nullspace basis</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sols</span> <span class="o">=</span> <span class="n">sparseqr</span><span class="o">.</span><span class="n">qmult</span><span class="p">(</span><span class="n">QR</span><span class="p">,</span><span class="n">X</span><span class="p">)</span>
+        <span class="c1"># print(self.sols)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sparse_sols</span> <span class="o">=</span> <span class="n">sparseify</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sols</span><span class="p">,</span><span class="n">sparse_format</span><span class="o">=</span><span class="s1">&#39;csc&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;QR factorization time = </span><span class="si">%f</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="o">-</span><span class="n">t0</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="CrossSection._decouple_modes"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection._decouple_modes">[docs]</a>    <span class="k">def</span> <span class="nf">_decouple_modes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># We need to handle this operation on a per material basis, so we can&#39;t just store C one time</span>
+
+        <span class="c1">#this is a change of basis operation from the originally computed basis to one</span>
+        <span class="c1"># using our knowledge of what the solution should look like</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span>
+        <span class="n">dx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dx</span>
+        <span class="n">C</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">C</span>
+        <span class="c1">#indices</span>
+        <span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">l</span>
+        <span class="n">a</span><span class="p">,</span><span class="n">B</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">B</span>
+
+        <span class="c1">#get maps of vertices to displacement coefficients DOFs </span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ubar_vtx_to_dof</span> <span class="o">=</span> <span class="n">get_vtx_to_dofs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">V</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uhat_vtx_to_dof</span> <span class="o">=</span> <span class="n">get_vtx_to_dofs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">V</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">utilde_vtx_to_dof</span> <span class="o">=</span> <span class="n">get_vtx_to_dofs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">V</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ubreve_vtx_to_dof</span> <span class="o">=</span> <span class="n">get_vtx_to_dofs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">V</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+        
+        <span class="n">ubar_vtx_to_dof</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ubar_vtx_to_dof</span>
+        <span class="n">uhat_vtx_to_dof</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uhat_vtx_to_dof</span>
+
+        <span class="c1">#GET UBAR AND UHAT RELATED MODES</span>
+        <span class="n">ubar_modes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sols</span><span class="p">[</span><span class="n">ubar_vtx_to_dof</span><span class="p">,:]</span>
+        <span class="n">uhat_modes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sols</span><span class="p">[</span><span class="n">uhat_vtx_to_dof</span><span class="p">,:]</span>
+
+        <span class="c1">#CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE</span>
+        <span class="n">UBAR</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">V</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">collapse</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">UHAT</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">V</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">collapse</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">ubar_mode</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">UBAR</span><span class="p">)</span>
+        <span class="n">uhat_mode</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">UHAT</span><span class="p">)</span>
+
+        <span class="c1">#area and center of xs</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">A</span>
+
+        <span class="c1">#INITIALIZE DECOUPLING MATRIX (12X12)</span>
+        <span class="n">mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">12</span><span class="p">,</span><span class="mi">12</span><span class="p">))</span>
+        
+        <span class="c1">#LOOP THROUGH MAT&#39;S COLUMN (EACH MODE IS A COLUMN OF MAT):</span>
+        <span class="k">for</span> <span class="n">mode</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">mat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="c1">#construct function from mode</span>
+            <span class="n">ubar_mode</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="n">ubar_modes</span><span class="p">[:,:,</span><span class="n">mode</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+            <span class="n">uhat_mode</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="n">uhat_modes</span><span class="p">[:,:,</span><span class="n">mode</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+
+            <span class="c1">#FIRST THREE ROWS : AVERAGE UBAR_i VALUE FOR THAT MODE</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="n">ubar_mode</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span><span class="o">/</span><span class="n">A</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="n">ubar_mode</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span><span class="o">/</span><span class="n">A</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="n">ubar_mode</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span><span class="o">/</span><span class="n">A</span>
+            
+            <span class="c1">#SECOND THREE ROWS : AVERAGE ROTATION (COMPUTED USING UBAR x Xi, WHERE X1=0, X2,XY=Y,Z)</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(((</span><span class="n">ubar_mode</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">-</span><span class="n">ubar_mode</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span><span class="o">*</span><span class="n">dx</span><span class="p">)))</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">4</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(((</span><span class="n">ubar_mode</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span><span class="o">*</span><span class="n">dx</span><span class="p">)))</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">5</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(((</span><span class="o">-</span><span class="n">ubar_mode</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span><span class="o">*</span><span class="n">dx</span><span class="p">)))</span>
+            <span class="c1"># CONSTRUCT STRESSES FOR LAST SIX ROWS</span>
+
+            <span class="c1">#compute strains at x1=0</span>
+            <span class="n">gradubar</span><span class="o">=</span><span class="n">grad</span><span class="p">(</span><span class="n">ubar_mode</span><span class="p">)</span>
+            <span class="n">eps</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">([[</span><span class="n">uhat_mode</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">uhat_mode</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">uhat_mode</span><span class="p">[</span><span class="mi">2</span><span class="p">]],</span>
+                            <span class="p">[</span><span class="n">gradubar</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">gradubar</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">gradubar</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">]],</span>
+                            <span class="p">[</span><span class="n">gradubar</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span><span class="n">gradubar</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span><span class="n">gradubar</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">]]])</span>
+            
+            <span class="c1"># construct strain and stress tensors based on u_sol</span>
+            <span class="n">sigma</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">(</span><span class="n">C</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="p">]</span><span class="o">*</span><span class="n">eps</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="p">],(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">))</span>
+
+            <span class="c1">#relevant components of stress tensor</span>
+            <span class="n">sigma11</span> <span class="o">=</span> <span class="n">sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">sigma12</span> <span class="o">=</span> <span class="n">sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">sigma13</span> <span class="o">=</span> <span class="n">sigma</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>
+
+            <span class="c1">#integrate stresses over cross-section at &quot;root&quot; of beam and construct xs load vector</span>
+            <span class="n">P1</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="n">sigma11</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span>
+            <span class="n">V2</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="n">sigma12</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span>
+            <span class="n">V3</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="n">sigma13</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span>
+            <span class="n">T1</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(((</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">*</span><span class="n">sigma13</span> <span class="o">-</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">*</span><span class="n">sigma12</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span>
+            <span class="n">M2</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">((</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">*</span><span class="n">sigma11</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span>
+            <span class="n">M3</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">*</span><span class="n">sigma11</span><span class="o">*</span><span class="n">dx</span><span class="p">))</span>
+
+            <span class="c1">#THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">6</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">P1</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">7</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">V2</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">8</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">V3</span>   
+
+            <span class="c1">#FOURTH THREE ROWS: AVERAGE MOMENTS (COMPUTED WITH UBAR AND UHAT)</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">9</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">T1</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">10</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">M2</span>
+            <span class="n">mat</span><span class="p">[</span><span class="mi">11</span><span class="p">,</span><span class="n">mode</span><span class="p">]</span><span class="o">=</span><span class="n">M3</span>
+        
+        <span class="c1"># see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111</span>
+        <span class="n">ubar_mode</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>  <span class="c1">#need to add to prevent PETSc memory leak </span>
+        <span class="n">uhat_mode</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>  <span class="c1">#need to add to prevent PETSc memory leak </span>
+        
+        <span class="n">mat_sparse</span> <span class="o">=</span> <span class="n">sparseify</span><span class="p">(</span><span class="n">mat</span><span class="p">,</span><span class="n">sparse_format</span><span class="o">=</span><span class="s1">&#39;csc&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sols_decoup</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sparse_sols</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">inv</span><span class="p">(</span><span class="n">mat_sparse</span><span class="p">)))</span><span class="o">.</span><span class="n">toarray</span><span class="p">()</span></div>
+        <span class="c1"># self.sols_decoup = self.sols@np.linalg.inv(mat)</span>
+
+<div class="viewcode-block" id="CrossSection._build_elastic_solution_modes"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection._build_elastic_solution_modes">[docs]</a>    <span class="k">def</span> <span class="nf">_build_elastic_solution_modes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1">#Initialize a tensor element and mixed tensor function space </span>
+        <span class="c1"># for the elastic solution modes</span>
+        <span class="n">Ne</span> <span class="o">=</span> <span class="n">TensorElement</span><span class="p">(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="o">.</span><span class="n">ufl_cell</span><span class="p">(),</span><span class="mi">1</span><span class="p">,</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">6</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">N_space</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">MixedElement</span><span class="p">(</span><span class="mi">4</span><span class="o">*</span><span class="p">[</span><span class="n">Ne</span><span class="p">]))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">N</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">N_space</span><span class="p">)</span>
+        
+        <span class="c1">#extract portions of elastic solution mode function related to each warping fxn</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">N_bar</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">N_hat</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">N_tilde</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">N_breve</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">N</span><span class="o">.</span><span class="n">split</span><span class="p">()</span> 
+
+        <span class="c1">#unpack elastic solution modes</span>
+        <span class="n">elastic_sols</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sols_decoup</span><span class="p">[:,</span><span class="mi">6</span><span class="p">:]</span>
+
+        <span class="c1">#get map of function dofs </span>
+        <span class="n">N_bar_vtx_to_dofs</span> <span class="o">=</span> <span class="n">get_vtx_to_dofs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">N_space</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+        <span class="n">N_hat_vtx_to_dofs</span> <span class="o">=</span> <span class="n">get_vtx_to_dofs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">N_space</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">N_tilde_vtx_to_dofs</span> <span class="o">=</span> <span class="n">get_vtx_to_dofs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">N_space</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+        <span class="n">N_breve_vtx_to_dofs</span> <span class="o">=</span> <span class="n">get_vtx_to_dofs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">N_space</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+
+        <span class="c1">#get separate elastic solution mode values</span>
+        <span class="n">N_bar_vals</span> <span class="o">=</span> <span class="n">elastic_sols</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ubar_vtx_to_dof</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),:]</span>
+        <span class="n">N_hat_vals</span> <span class="o">=</span> <span class="n">elastic_sols</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">uhat_vtx_to_dof</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),:]</span>
+        <span class="n">N_tilde_vals</span> <span class="o">=</span> <span class="n">elastic_sols</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">utilde_vtx_to_dof</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),:]</span>
+        <span class="n">N_breve_vals</span> <span class="o">=</span> <span class="n">elastic_sols</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ubreve_vtx_to_dof</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),:]</span>
+
+        <span class="c1">#populate elastic solution modes to elastic solution mode function</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">N_bar</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="n">N_bar_vtx_to_dofs</span><span class="o">.</span><span class="n">flatten</span><span class="p">()]</span> <span class="o">=</span> <span class="n">N_bar_vals</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">N_hat</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="n">N_hat_vtx_to_dofs</span><span class="o">.</span><span class="n">flatten</span><span class="p">()]</span> <span class="o">=</span> <span class="n">N_hat_vals</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">N_tilde</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="n">N_tilde_vtx_to_dofs</span><span class="o">.</span><span class="n">flatten</span><span class="p">()]</span> <span class="o">=</span> <span class="n">N_tilde_vals</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">N_breve</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="n">N_breve_vtx_to_dofs</span><span class="o">.</span><span class="n">flatten</span><span class="p">()]</span> <span class="o">=</span> <span class="n">N_breve_vals</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="CrossSection._compute_xs_stiffness_matrix"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection._compute_xs_stiffness_matrix">[docs]</a>    <span class="k">def</span> <span class="nf">_compute_xs_stiffness_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>             
+        <span class="c1">#unpacking values</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span>
+        <span class="n">dx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dx</span>
+        <span class="c1">#indices</span>
+        <span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">l</span>
+        <span class="n">a</span><span class="p">,</span><span class="n">B</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">B</span>
+
+        <span class="c1">#initialize matrices (elastic solution mode Jacobian and Hessian)</span>
+        <span class="n">K1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">))</span>
+        <span class="n">K2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">))</span>
+      
+        <span class="c1">#elastic solution mode function related to each warping fxn</span>
+        <span class="n">N_bar</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">N_bar</span>
+        <span class="n">N_hat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">N_hat</span>
+        <span class="n">N_tilde</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">N_tilde</span>
+        <span class="n">N_breve</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">N_breve</span> 
+
+        <span class="c1">#construct fenicsx variables pertaining to elastic solution modes</span>
+        <span class="n">c7</span> <span class="o">=</span> <span class="n">variable</span><span class="p">(</span><span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">PETSc</span><span class="o">.</span><span class="n">ScalarType</span><span class="p">((</span><span class="mf">0.0</span><span class="p">))))</span>
+        <span class="n">c8</span> <span class="o">=</span> <span class="n">variable</span><span class="p">(</span><span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">PETSc</span><span class="o">.</span><span class="n">ScalarType</span><span class="p">((</span><span class="mf">0.0</span><span class="p">))))</span>
+        <span class="n">c9</span> <span class="o">=</span> <span class="n">variable</span><span class="p">(</span><span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">PETSc</span><span class="o">.</span><span class="n">ScalarType</span><span class="p">((</span><span class="mf">0.0</span><span class="p">))))</span>
+        <span class="n">c10</span> <span class="o">=</span> <span class="n">variable</span><span class="p">(</span><span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">PETSc</span><span class="o">.</span><span class="n">ScalarType</span><span class="p">((</span><span class="mf">0.0</span><span class="p">))))</span>
+        <span class="n">c11</span> <span class="o">=</span> <span class="n">variable</span><span class="p">(</span><span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">PETSc</span><span class="o">.</span><span class="n">ScalarType</span><span class="p">((</span><span class="mf">0.0</span><span class="p">))))</span>
+        <span class="n">c12</span> <span class="o">=</span> <span class="n">variable</span><span class="p">(</span><span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">PETSc</span><span class="o">.</span><span class="n">ScalarType</span><span class="p">((</span><span class="mf">0.0</span><span class="p">))))</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">([</span><span class="n">c7</span><span class="p">,</span><span class="n">c8</span><span class="p">,</span><span class="n">c9</span><span class="p">,</span><span class="n">c10</span><span class="p">,</span><span class="n">c11</span><span class="p">,</span><span class="n">c12</span><span class="p">])</span>
+
+        <span class="c1">#construct general warping displacement functions in terms of the </span>
+        <span class="c1">#   elastic solution modes and elastic solution mode coefficients</span>
+        <span class="n">ubar_c</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">N_bar</span><span class="p">,</span><span class="n">c</span><span class="p">)</span>
+        <span class="n">uhat_c</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">N_hat</span><span class="p">,</span><span class="n">c</span><span class="p">)</span>
+        <span class="n">utilde_c</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">N_tilde</span><span class="p">,</span><span class="n">c</span><span class="p">)</span>
+        <span class="n">ubreve_c</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">N_breve</span><span class="p">,</span><span class="n">c</span><span class="p">)</span>
+
+        <span class="c1">#these elastic solution modes are related by the general expression </span>
+        <span class="c1"># for the displacement as:</span>
+        <span class="c1"># u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3</span>
+        <span class="c1"># wereh x1 is the beam axis direction</span>
+                
+        <span class="c1"># expressions for the stress and strain in terms of the polynomial </span>
+        <span class="c1"># from expansion above:</span>
+        <span class="n">eps_c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">strains_from_warping_fxns</span><span class="p">(</span><span class="n">ubar_c</span><span class="p">,</span><span class="n">uhat_c</span><span class="p">,</span><span class="n">utilde_c</span><span class="p">,</span><span class="n">ubreve_c</span><span class="p">)</span>
+        <span class="n">sigma_c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stress_from_warping_fxns</span><span class="p">(</span><span class="n">ubar_c</span><span class="p">,</span><span class="n">uhat_c</span><span class="p">,</span><span class="n">utilde_c</span><span class="p">,</span><span class="n">ubreve_c</span><span class="p">)</span>
+
+        <span class="c1">#only stresses with a 1x component are of concern:</span>
+        <span class="n">sigma11_c</span> <span class="o">=</span> <span class="n">sigma_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">sigma12_c</span> <span class="o">=</span> <span class="n">sigma_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">sigma13_c</span> <span class="o">=</span> <span class="n">sigma_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>
+
+        <span class="c1">#construct expression for the load applied to a cross-section in </span>
+        <span class="c1"># terms of stress and strain expressions defined based on  the </span>
+        <span class="c1"># polynomial expansion:</span>
+        <span class="n">P1</span> <span class="o">=</span> <span class="n">sigma11_c</span><span class="o">*</span><span class="n">dx</span>
+        <span class="n">V2</span> <span class="o">=</span> <span class="n">sigma12_c</span><span class="o">*</span><span class="n">dx</span>
+        <span class="n">V3</span> <span class="o">=</span> <span class="n">sigma13_c</span><span class="o">*</span><span class="n">dx</span>
+        <span class="n">T1</span> <span class="o">=</span> <span class="o">-</span><span class="p">((</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">*</span><span class="n">sigma13_c</span> <span class="o">-</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">*</span><span class="n">sigma12_c</span><span class="p">)</span><span class="o">*</span><span class="n">dx</span>
+        <span class="n">M2</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">*</span><span class="n">sigma11_c</span><span class="o">*</span><span class="n">dx</span>
+        <span class="n">M3</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">*</span><span class="n">sigma11_c</span><span class="o">*</span><span class="n">dx</span>
+
+        <span class="c1">#store loads in a list instead of a ufl vector as we cannot take </span>
+        <span class="c1"># variable derivatives of non-scalar forms</span>
+        <span class="n">P</span> <span class="o">=</span> <span class="p">[</span><span class="n">P1</span><span class="p">,</span><span class="n">V2</span><span class="p">,</span><span class="n">V3</span><span class="p">,</span><span class="n">T1</span><span class="p">,</span><span class="n">M2</span><span class="p">,</span><span class="n">M3</span><span class="p">]</span>
+        
+        <span class="c1"># construct expression for the internal energy of the beam based on</span>
+        <span class="c1"># the polynomial expansion:</span>
+        <span class="n">Uc</span> <span class="o">=</span> <span class="n">sigma_c</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">eps_c</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">dx</span>
+
+        <span class="k">for</span> <span class="n">idx1</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">idx2</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">):</span>
+                <span class="c1">#build values of K1 matrix using derivatives of load vector </span>
+                <span class="c1"># w.r.t. elastic solution coefficients</span>
+                <span class="n">K1_xx_form</span> <span class="o">=</span> <span class="n">diff</span><span class="p">(</span><span class="n">P</span><span class="p">[</span><span class="n">idx1</span><span class="p">],</span><span class="n">c</span><span class="p">[</span><span class="n">idx2</span><span class="p">])</span>
+                <span class="n">K1</span><span class="p">[</span><span class="n">idx1</span><span class="p">,</span><span class="n">idx2</span><span class="p">]</span> <span class="o">=</span> <span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="n">K1_xx_form</span><span class="p">))</span>
+                
+                <span class="c1">#build values of K2 matrix using derivatives of internal </span>
+                <span class="c1"># energy form w.r.t. elastic solution coefficients</span>
+                <span class="n">K2_xx_form</span> <span class="o">=</span> <span class="n">diff</span><span class="p">(</span><span class="n">diff</span><span class="p">(</span><span class="n">Uc</span><span class="p">,</span><span class="n">c</span><span class="p">[</span><span class="n">idx1</span><span class="p">]),</span><span class="n">c</span><span class="p">[</span><span class="n">idx2</span><span class="p">])</span>
+                <span class="n">K2</span><span class="p">[</span><span class="n">idx1</span><span class="p">,</span><span class="n">idx2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.5</span><span class="o">*</span><span class="n">assemble_scalar</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="n">K2_xx_form</span><span class="p">))</span>
+
+        <span class="c1">#compute Flexibility matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K1</span> <span class="o">=</span> <span class="n">K1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K2</span> <span class="o">=</span> <span class="n">K2</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K1_inv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">K1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">S</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">K1_inv</span><span class="o">.</span><span class="n">T</span><span class="nd">@K2@self</span><span class="o">.</span><span class="n">K1_inv</span>
+        
+        <span class="c1">#invert to find stiffness matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">S</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="CrossSection.strains_from_warping_fxns"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection.strains_from_warping_fxns">[docs]</a>    <span class="k">def</span> <span class="nf">strains_from_warping_fxns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">ubar_c</span><span class="p">,</span><span class="n">uhat_c</span><span class="p">,</span><span class="n">utilde_c</span><span class="p">,</span><span class="n">ubreve_c</span><span class="p">):</span>
+        <span class="n">gradubar_c</span><span class="o">=</span><span class="n">grad</span><span class="p">(</span><span class="n">ubar_c</span><span class="p">)</span>
+        <span class="n">eps</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">([[</span><span class="n">uhat_c</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">uhat_c</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">uhat_c</span><span class="p">[</span><span class="mi">2</span><span class="p">]],</span>
+                            <span class="p">[</span><span class="n">gradubar_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">gradubar_c</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span><span class="n">gradubar_c</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">]],</span>
+                            <span class="p">[</span><span class="n">gradubar_c</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span><span class="n">gradubar_c</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span><span class="n">gradubar_c</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">]]])</span>
+        <span class="k">return</span> <span class="n">eps</span> </div>
+
+<div class="viewcode-block" id="CrossSection.stress_from_warping_fxns"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection.stress_from_warping_fxns">[docs]</a>    <span class="k">def</span> <span class="nf">stress_from_warping_fxns</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">ubar_c</span><span class="p">,</span><span class="n">uhat_c</span><span class="p">,</span><span class="n">utilde_c</span><span class="p">,</span><span class="n">ubreve_c</span><span class="p">):</span>
+        <span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">i</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">j</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">l</span>
+        <span class="n">eps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">strains_from_warping_fxns</span><span class="p">(</span><span class="n">ubar_c</span><span class="p">,</span><span class="n">uhat_c</span><span class="p">,</span><span class="n">utilde_c</span><span class="p">,</span><span class="n">ubreve_c</span><span class="p">)</span>
+
+        <span class="n">stress</span> <span class="o">=</span> <span class="n">as_tensor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">C</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="p">]</span><span class="o">*</span><span class="n">eps</span><span class="p">[</span><span class="n">k</span><span class="p">,</span><span class="n">l</span><span class="p">],(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">))</span>
+        
+        <span class="k">return</span> <span class="n">stress</span> </div>
+    
+<div class="viewcode-block" id="CrossSection.recover_stress"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection.recover_stress">[docs]</a>    <span class="k">def</span> <span class="nf">recover_stress</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">reactions</span><span class="p">):</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">K1_inv</span><span class="nd">@reactions</span>
+        <span class="c1"># print(type(c))</span>
+        <span class="c1"># warping_fxns = @self.K1_inv@reactions</span>
+        <span class="n">c_const</span><span class="o">=</span><span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span><span class="n">PETSc</span><span class="o">.</span><span class="n">ScalarType</span><span class="p">(</span><span class="n">c</span><span class="p">))</span>
+        <span class="n">ubar</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">N_bar</span><span class="p">,</span><span class="n">c_const</span><span class="p">)</span>
+        <span class="n">uhat</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">N_hat</span><span class="p">,</span><span class="n">c_const</span><span class="p">)</span>
+        <span class="n">utilde</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">N_tilde</span><span class="p">,</span><span class="n">c_const</span><span class="p">)</span>
+        <span class="n">ubreve</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">N_breve</span><span class="p">,</span><span class="n">c_const</span><span class="p">)</span>
+
+        <span class="n">stress</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">stress_from_warping_fxns</span><span class="p">(</span><span class="n">ubar</span><span class="p">,</span><span class="n">uhat</span><span class="p">,</span><span class="n">utilde</span><span class="p">,</span><span class="n">ubreve</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">stress</span></div>
+    
+<div class="viewcode-block" id="CrossSection.get_von_mises_stress"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection.get_von_mises_stress">[docs]</a>    <span class="k">def</span> <span class="nf">get_von_mises_stress</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">stress</span><span class="p">):</span>
+        <span class="c1">#deviatoric stress</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">stress</span> <span class="o">-</span> <span class="mf">1.</span> <span class="o">/</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">tr</span><span class="p">(</span><span class="n">stress</span><span class="p">)</span> <span class="o">*</span> <span class="n">Identity</span><span class="p">(</span><span class="n">stress</span><span class="o">.</span><span class="n">ufl_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">von_Mises</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="mf">3.</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">inner</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">s</span><span class="p">))</span>
+        <span class="n">V_von_mises</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;DG&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="n">stress_expr</span> <span class="o">=</span> <span class="n">Expression</span><span class="p">(</span><span class="n">von_Mises</span><span class="p">,</span> <span class="n">V_von_mises</span><span class="o">.</span><span class="n">element</span><span class="o">.</span><span class="n">interpolation_points</span><span class="p">())</span>
+        <span class="n">stresses</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">V_von_mises</span><span class="p">)</span>
+        <span class="n">stresses</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">stress_expr</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">stresses</span></div>
+
+<div class="viewcode-block" id="CrossSection.getXSMassMatrix"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection.getXSMassMatrix">[docs]</a>    <span class="k">def</span> <span class="nf">getXSMassMatrix</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1">#compute xs mass properties:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">M</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">))</span>
+
+
+
+
+        <span class="k">return</span></div>
+    
+    <span class="c1"># def coeff_to_field(self,fxn,coeff,vtx_to_dof):</span>
+    <span class="c1">#     #uses vtx_to_dof map to populate field with correct solution coefficients</span>
+    <span class="c1">#     fxn.vector.array = coeff.flatten()[vtx_to_dof].flatten()</span>
+    <span class="c1">#     fxn.vector.destroy</span>
+
+    <span class="c1"># def construct_warping_fxns(self,u_c,N):</span>
+    <span class="c1">#     #utility to populate data from decoupled modes to warping displacement functions</span>
+    <span class="c1">#     Uc = u_c.function_space #fxn space associated with fxn</span>
+
+    <span class="c1">#     #loop through subspaces and map values from nullspace to specified fxn values</span>
+    <span class="c1">#     vtx_to_dofs = []</span>
+    <span class="c1">#     for i in range(Uc.num_sub_spaces):</span>
+    <span class="c1">#         vtx_to_dofs.append(get_vtx_to_dofs(self.msh,Uc.sub(0)))</span>
+    <span class="c1">#         vtx_to_dofs_flat = vtx_to_dofs[i].flatten()</span>
+    <span class="c1">#         u_c.vector.array[vtx_to_dofs_flat] = N.flatten()[vtx_to_dofs_flat]</span>
+
+    <span class="c1">#     # ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)</span>
+    <span class="c1">#     # ubar_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(0))</span>
+    <span class="c1">#     # uhat_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(1))</span>
+    <span class="c1">#     # utilde_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(2))</span>
+    <span class="c1">#     # ubreve_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(3))</span>
+
+    <span class="c1"># def map_disp_to_stress(self,ubar,uhat):</span>
+    <span class="c1">#     i,j,k,l=self.i,self.j,self.k,self.l</span>
+
+    <span class="c1">#     #compute strains at x1=0</span>
+    <span class="c1">#     eps = self.get_eps_from_disp_fxns(ubar,uhat)        </span>
+        
+    <span class="c1">#     # construct strain and stress tensors based on u_sol</span>
+    <span class="c1">#     sigma = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))</span>
+    <span class="c1">#     return sigma</span>
+    
+    <span class="c1"># def get_eps_from_disp_fxns(self,ubar,uhat):</span>
+    <span class="c1">#     gradubar=grad(ubar)</span>
+    <span class="c1">#     return as_tensor([[uhat[0],uhat[1],uhat[2]],</span>
+    <span class="c1">#                     [gradubar[0,0],gradubar[1,0],gradubar[2,0]],</span>
+    <span class="c1">#                     [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])</span>
+    
+    <span class="c1"># def recover_stress_old(self,loads,plot_stress=False):</span>
+    <span class="c1">#     &#39;&#39;&#39;</span>
+    <span class="c1">#     loads: 6x1 vector of the loads over the xs</span>
+    <span class="c1">#     &#39;&#39;&#39;</span>
+    <span class="c1">#     #TODO: rewrite using a sol_coeff_to_</span>
+    <span class="c1">#     disp_coeff = self.sols_decoup[:,6:]@self.K1_inv@loads</span>
+    <span class="c1">#     print(disp_coeff)</span>
+    <span class="c1">#     print(disp_coeff.shape)</span>
+    <span class="c1">#     U2d = FunctionSpace(self.msh,self.Ve)</span>
+    <span class="c1">#     ubar = Function(U2d)</span>
+    <span class="c1">#     uhat = Function(U2d)</span>
+    <span class="c1">#     utilde = Function(U2d)</span>
+    <span class="c1">#     ubreve = Function(U2d)</span>
+
+    <span class="c1">#     #populate displacement coeff fxns based on coeffcient values</span>
+    <span class="c1">#     self.coeff_to_field(ubar,disp_coeff,self.ubar_vtx_to_dof)</span>
+    <span class="c1">#     self.coeff_to_field(uhat,disp_coeff,self.uhat_vtx_to_dof)</span>
+    <span class="c1">#     self.coeff_to_field(utilde,disp_coeff,self.utilde_vtx_to_dof)</span>
+    <span class="c1">#     self.coeff_to_field(ubreve,disp_coeff,self.ubreve_vtx_to_dof)</span>
+
+    <span class="c1">#     sigma = self.map_disp_to_stress(ubar,uhat)</span>
+
+    <span class="c1">#     S = TensorFunctionSpace(self.msh,(&#39;CG&#39;,1),shape=(3,3))</span>
+    <span class="c1">#     sigma_sol = Function(S)</span>
+    <span class="c1">#     sigma_sol.interpolate(Expression(sigma,S.element.interpolation_points()))</span>
+    <span class="c1">#     points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)</span>
+
+    <span class="c1">#     sigma_sol_eval = sigma_sol.eval(points_on_proc,cells)</span>
+    <span class="c1">#     # print(&quot;Sigma Sol:&quot;)</span>
+    <span class="c1">#     # print(sigma_sol_eval)</span>
+    <span class="c1">#     # L = 0</span>
+    <span class="c1">#     # utotal_exp = ubar+uhat*L+utilde*(L**2)+ubreve*(L**3)</span>
+    <span class="c1">#     # utotal = Function(U2d)</span>
+    <span class="c1">#     # utotal.interpolate(Expression(utotal_exp,U2d.element.interpolation_points()))</span>
+    <span class="c1">#     # points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)</span>
+
+    <span class="c1">#     # sigma_sol_eval = utotal.eval(points_on_proc,cells)        </span>
+    <span class="c1">#     if plot_stress:</span>
+    <span class="c1">#         warp_factor = 0.000001</span>
+
+    <span class="c1">#         #plot Axial mesh</span>
+    <span class="c1">#         tdim = self.msh.topology.dim</span>
+    <span class="c1">#         topology, cell_types, geom = create_vtk_mesh(self.msh,tdim)</span>
+    <span class="c1">#         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)</span>
+    <span class="c1">#         plotter = pyvista.Plotter()</span>
+    <span class="c1">#         actor_0 = plotter.add_mesh(grid, style=&quot;wireframe&quot;, color=&quot;k&quot;)</span>
+    <span class="c1">#         RBG = np.array([[ 0,  0,  1],</span>
+    <span class="c1">#                             [ 1,  0,  0],</span>
+    <span class="c1">#                             [ 0,  1, 0]])</span>
+    <span class="c1">#         # print(geom.shape[0])</span>
+    <span class="c1">#         # grid.point_data[&#39;u&#39;] = (utotal.x.array.reshape((geom.shape[0],3)).T).T</span>
+    <span class="c1">#         # warped = grid.warp_by_vector(&quot;u&quot;,factor=warp_factor)</span>
+    <span class="c1">#         # actor_1 = plotter.add_mesh(warped, show_edges=True)</span>
+    <span class="c1">#         grid.point_data[&#39;sigma11&#39;] = sigma_sol_eval[:,0]</span>
+    <span class="c1">#         warped = grid.warp_by_scalar(&quot;sigma11&quot;,factor=warp_factor)</span>
+    <span class="c1">#         actor_2 = plotter.add_mesh(warped,show_edges=True)</span>
+
+    <span class="c1">#         # actor_1 = plotter.add_mesh(grid, style=&#39;points&#39;,color=&#39;k&#39;,point_size=12)</span>
+    <span class="c1">#         # grid.point_data[&quot;u&quot;]= self.o.x.array.reshape((geom.shape[0],3))</span>
+    <span class="c1">#         # glyphs = grid.glyph(orient=&quot;u&quot;,factor=.25)</span>
+    <span class="c1">#         # actor_2 = plotter.add_mesh(glyphs,color=&#39;b&#39;)</span>
+
+    <span class="c1">#         plotter.view_xy()</span>
+    <span class="c1">#         plotter.show_axes()</span>
+
+    <span class="c1">#         # if not pyvista.OFF_SCREEN:</span>
+    <span class="c1">#         plotter.show()</span>
+
+    <span class="c1">#     return sigma_sol_eval</span>
+    
+<div class="viewcode-block" id="CrossSection.plot_mesh"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSection.plot_mesh">[docs]</a>    <span class="k">def</span> <span class="nf">plot_mesh</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">plot_xdmf_mesh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">msh</span><span class="p">)</span></div></div>
+        <span class="c1"># #plots mesh o</span>
+        <span class="c1"># pyvista.global_theme.background = [255, 255, 255, 255]</span>
+        <span class="c1"># pyvista.global_theme.font.color = &#39;black&#39;</span>
+        <span class="c1"># tdim = self.msh.topology.dim</span>
+        <span class="c1"># topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)</span>
+        <span class="c1"># grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)</span>
+        <span class="c1"># plotter = pyvista.Plotter()</span>
+        <span class="c1"># plotter.add_mesh(grid, show_edges=True,opacity=0.25)</span>
+        <span class="c1"># plotter.view_isometric()</span>
+        <span class="c1"># plotter.show_axes()</span>
+        <span class="c1"># if not pyvista.OFF_SCREEN:</span>
+        <span class="c1">#     plotter.show()</span>
+
+<div class="viewcode-block" id="CrossSectionAnalytical"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSectionAnalytical">[docs]</a><span class="k">class</span> <span class="nc">CrossSectionAnalytical</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">params</span><span class="p">):</span>
+        <span class="c1">#process params based on shape</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;shape&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;E&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nu</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;nu&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="o">==</span><span class="s1">&#39;rectangle&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;h&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;w&#39;</span><span class="p">]</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span><span class="s1">&#39;box&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;h&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;w&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">t_h</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;t_h&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">t_w</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;t_w&#39;</span><span class="p">]</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;circle&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;r&#39;</span><span class="p">]</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;hollow circle&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;r&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;t&#39;</span><span class="p">]</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;ellipse&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;radius_x&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;radius_y&#39;</span><span class="p">]</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;hollow ellipse&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;radius_x&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;radius_y&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;t_x&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;t_y&#39;</span><span class="p">]</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;I&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;h&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;w&#39;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">t_h</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;t_h&#39;</span><span class="p">]</span> <span class="c1">#flange thickness</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">t_w</span> <span class="o">=</span> <span class="n">params</span><span class="p">[</span><span class="s1">&#39;t_w&#39;</span><span class="p">]</span> <span class="c1">#web thickness</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;busy doing nothing...&quot;</span><span class="p">)</span>
+        
+<div class="viewcode-block" id="CrossSectionAnalytical.compute_stiffness"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/cross_section/index.html#ALBATROSS.cross_section.CrossSectionAnalytical.compute_stiffness">[docs]</a>    <span class="k">def</span> <span class="nf">compute_stiffness</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="c1">#### RECTANGULAR XS ####</span>
+
+        <span class="c1">########</span>
+        <span class="c1">########</span>
+        <span class="c1">########</span>
+        <span class="c1">########</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;rectangle&#39;</span><span class="p">:</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">)</span>
+            <span class="n">G</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">))</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">&gt;=</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">:</span>
+                <span class="n">J</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">**</span> <span class="mi">3</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">/</span> <span class="mi">9</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">J</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">**</span> <span class="mi">3</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">/</span> <span class="mi">9</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span>
+
+            <span class="n">kappa</span> <span class="o">=</span> <span class="mi">5</span><span class="o">/</span><span class="mi">6</span>
+            
+            <span class="n">EA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA1</span><span class="o">=</span><span class="n">kappa</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA2</span><span class="o">=</span><span class="n">kappa</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">GJ</span> <span class="o">=</span> <span class="n">G</span><span class="o">*</span><span class="n">J</span>
+            <span class="n">EI1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span><span class="mi">12</span> <span class="p">)</span>
+            <span class="n">EI2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span><span class="mi">12</span> <span class="p">)</span>
+            
+            <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span>  <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">EA</span><span class="p">,</span><span class="n">kGA1</span><span class="p">,</span><span class="n">kGA2</span><span class="p">,</span><span class="n">GJ</span><span class="p">,</span><span class="n">EI1</span><span class="p">,</span><span class="n">EI2</span><span class="p">]))</span>
+        
+        
+        <span class="c1">#### BOX XS ####</span>
+        <span class="c1">########</span>
+        <span class="c1">#      #</span>
+        <span class="c1">#      #</span>
+        <span class="c1">#      #</span>
+        <span class="c1">########</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span><span class="s1">&#39;box&#39;</span><span class="p">:</span>
+            <span class="c1">#this torsional model assumes a wall thickness that is less than 10% of the width or height</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">)</span><span class="o">-</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="p">))</span>
+            <span class="n">G</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">))</span>
+            
+            <span class="c1">#from wikipedia page on Timoshenko theory: https://en.wikipedia.org/wiki/Timoshenko%E2%80%93Ehrenfest_beam_theory</span>
+            <span class="n">m</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="p">)</span> <span class="o">/</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="p">))</span> <span class="p">)</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="p">(</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="p">)</span>
+            <span class="n">kappa</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="mi">10</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">3</span><span class="o">*</span><span class="n">m</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">/</span>
+                      <span class="p">((</span><span class="mi">12</span> <span class="o">+</span> <span class="mi">72</span><span class="o">*</span><span class="n">m</span> <span class="o">+</span> <span class="mi">150</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">90</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+                       <span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="o">*</span><span class="p">(</span><span class="mi">11</span><span class="o">+</span><span class="mi">66</span><span class="o">*</span><span class="n">m</span> <span class="o">+</span> <span class="mi">135</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">90</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+                       <span class="o">+</span><span class="mi">10</span><span class="o">*</span><span class="n">n</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="p">((</span><span class="mi">3</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="n">m</span> <span class="o">+</span> <span class="mi">3</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span> <span class="p">)</span>
+            
+            <span class="n">EA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA1</span><span class="o">=</span><span class="n">kappa</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA2</span><span class="o">=</span><span class="n">kappa</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">EI1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span><span class="mi">12</span> <span class="o">-</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="p">)</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span> <span class="o">/</span><span class="mi">12</span><span class="p">)</span>
+            <span class="n">EI2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span><span class="mi">12</span> <span class="o">-</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="p">)</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span> <span class="o">/</span><span class="mi">12</span><span class="p">)</span>
+            
+            <span class="n">J</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="o">**</span><span class="mi">2</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">GJ</span> <span class="o">=</span> <span class="n">G</span><span class="o">*</span><span class="n">J</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span>  <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">EA</span><span class="p">,</span><span class="n">kGA1</span><span class="p">,</span><span class="n">kGA2</span><span class="p">,</span><span class="n">GJ</span><span class="p">,</span><span class="n">EI1</span><span class="p">,</span><span class="n">EI2</span><span class="p">]))</span>
+
+        <span class="c1">#### CIRCULAR XS ######</span>
+           <span class="c1">#######</span>
+         <span class="c1">###########</span>
+        <span class="c1">#############</span>
+        <span class="c1">#############</span>
+         <span class="c1">###########</span>
+           <span class="c1">#######</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;circle&#39;</span><span class="p">:</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="o">**</span><span class="mi">2</span>
+            <span class="n">G</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">))</span>
+
+            <span class="c1">#from wikipedia page on Timoshenko theory: https://en.wikipedia.org/wiki/Timoshenko%E2%80%93Ehrenfest_beam_theory</span>
+            <span class="n">kappa</span> <span class="o">=</span> <span class="p">(</span><span class="mi">6</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">7</span><span class="o">+</span><span class="mi">6</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span>
+            
+            <span class="n">EA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA1</span><span class="o">=</span><span class="n">kappa</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA2</span><span class="o">=</span><span class="n">kappa</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">I</span> <span class="o">=</span> <span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="o">**</span><span class="mi">4</span><span class="p">))</span>
+            <span class="n">EI1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">I</span>
+            <span class="n">EI2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">I</span>
+
+            <span class="n">J</span> <span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="n">I</span>
+            <span class="n">GJ</span> <span class="o">=</span> <span class="n">G</span><span class="o">*</span><span class="n">J</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span>  <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">EA</span><span class="p">,</span><span class="n">kGA1</span><span class="p">,</span><span class="n">kGA2</span><span class="p">,</span><span class="n">GJ</span><span class="p">,</span><span class="n">EI1</span><span class="p">,</span><span class="n">EI2</span><span class="p">]))</span>
+
+        <span class="c1">#### HOLLOW CIRCULAR XS ######</span>
+           <span class="c1">#######</span>
+         <span class="c1">##       ##</span>
+        <span class="c1">##         ##</span>
+        <span class="c1">##         ##</span>
+         <span class="c1">##       ##</span>
+           <span class="c1">#######        </span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;hollow circle&#39;</span><span class="p">:</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="o">**</span><span class="mi">2</span><span class="o">-</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">G</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">))</span>
+
+            <span class="c1">#from wikipedia page on Timoshenko theory</span>
+            <span class="n">m</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">r</span>
+            <span class="n">kappa</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="mi">6</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span> <span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="p">)</span>
+                        <span class="o">/</span> <span class="p">((</span><span class="mi">7</span><span class="o">+</span><span class="mi">6</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="mi">20</span><span class="o">+</span><span class="mi">12</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+            
+            <span class="n">EA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA1</span><span class="o">=</span><span class="n">kappa</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA2</span><span class="o">=</span><span class="n">kappa</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">I</span><span class="o">=</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="o">**</span><span class="mi">4</span><span class="o">-</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span>
+            <span class="n">EI1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">I</span>
+            <span class="n">EI2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">I</span>
+            
+            <span class="n">J</span> <span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="n">I</span>
+            <span class="n">GJ</span> <span class="o">=</span> <span class="n">G</span><span class="o">*</span><span class="n">J</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span>  <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">EA</span><span class="p">,</span><span class="n">kGA1</span><span class="p">,</span><span class="n">kGA2</span><span class="p">,</span><span class="n">GJ</span><span class="p">,</span><span class="n">EI1</span><span class="p">,</span><span class="n">EI2</span><span class="p">]))</span>
+        
+        <span class="c1">#### ELLIPSE XS ####</span>
+            <span class="c1">#############</span>
+         <span class="c1">###################</span>
+        <span class="c1">#####################</span>
+        <span class="c1">#####################</span>
+         <span class="c1">###################</span>
+            <span class="c1">#############        </span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;ellipse&#39;</span><span class="p">:</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span>
+            <span class="n">G</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">))</span>
+
+            <span class="c1">#from wikipedia page on Timoshenko theory: https://en.wikipedia.org/wiki/Timoshenko%E2%80%93Ehrenfest_beam_theory</span>
+            <span class="n">kappa1</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="mi">12</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">3</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+                    <span class="o">/</span> <span class="p">(</span> <span class="p">(</span> <span class="p">(</span><span class="mi">40</span><span class="o">+</span> <span class="mi">37</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="mi">16</span> <span class="o">+</span> <span class="mi">10</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span> <span class="p">)</span> 
+            <span class="n">kappa2</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="mi">12</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">3</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+                        <span class="o">/</span> <span class="p">(</span> <span class="p">(</span> <span class="p">(</span><span class="mi">40</span><span class="o">+</span> <span class="mi">37</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="mi">16</span> <span class="o">+</span> <span class="mi">10</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span> <span class="p">)</span> 
+            
+            <span class="n">EA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA1</span><span class="o">=</span><span class="n">kappa1</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA2</span><span class="o">=</span><span class="n">kappa2</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">EI1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">3</span> <span class="p">)</span>
+            <span class="n">EI2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span> <span class="p">)</span>
+            
+            <span class="c1">#from https://roymech.org/Useful_Tables/Torsion.html</span>
+            <span class="n">J</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">GJ</span> <span class="o">=</span> <span class="n">G</span><span class="o">*</span><span class="n">J</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span>  <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">EA</span><span class="p">,</span><span class="n">kGA1</span><span class="p">,</span><span class="n">kGA2</span><span class="p">,</span><span class="n">GJ</span><span class="p">,</span><span class="n">EI1</span><span class="p">,</span><span class="n">EI2</span><span class="p">]))</span>
+
+        <span class="c1">#### HOLLOW ELLIPSE XS ####</span>
+            <span class="c1">#############</span>
+         <span class="c1">###################</span>
+        <span class="c1">#####################</span>
+        <span class="c1">#####################</span>
+         <span class="c1">###################</span>
+            <span class="c1">#############  </span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;hollow ellipse&#39;</span><span class="p">:</span>
+            <span class="c1"># inner and outer ellipse are assumed to be similar</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="p">)</span> <span class="o">-</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_x</span><span class="p">)</span><span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_y</span><span class="p">))</span> <span class="p">)</span>
+            <span class="n">G</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">))</span>
+
+            <span class="c1">#TODO: fix these kappas</span>
+            <span class="c1">#from wikipedia page on Timoshenko theory: https://en.wikipedia.org/wiki/Timoshenko%E2%80%93Ehrenfest_beam_theory</span>
+            <span class="n">kappa1</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="mi">12</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">3</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+                    <span class="o">/</span> <span class="p">(</span> <span class="p">(</span> <span class="p">(</span><span class="mi">40</span><span class="o">+</span> <span class="mi">37</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="mi">16</span> <span class="o">+</span> <span class="mi">10</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span> <span class="p">)</span> 
+            <span class="n">kappa2</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="mi">12</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">3</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+                        <span class="o">/</span> <span class="p">(</span> <span class="p">(</span> <span class="p">(</span><span class="mi">40</span><span class="o">+</span> <span class="mi">37</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span> <span class="o">+</span> <span class="p">((</span><span class="mi">16</span> <span class="o">+</span> <span class="mi">10</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">4</span><span class="p">)</span> <span class="p">)</span> 
+            
+            <span class="n">EA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA1</span><span class="o">=</span><span class="n">kappa1</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA2</span><span class="o">=</span><span class="n">kappa2</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">EI1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span><span class="o">*</span><span class="p">(</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">3</span> <span class="p">)</span> <span class="o">-</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_x</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_y</span><span class="p">)</span><span class="o">**</span><span class="mi">3</span> <span class="p">)</span> <span class="p">)</span>
+            <span class="n">EI2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">4</span><span class="p">)</span><span class="o">*</span><span class="p">(</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span> <span class="p">)</span> <span class="o">-</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_x</span><span class="p">)</span><span class="o">**</span><span class="mi">3</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_y</span><span class="p">)</span> <span class="p">)</span> <span class="p">)</span>
+            
+            <span class="c1">#from Roark&#39;s Table 10.1</span>
+            <span class="n">q</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="p">)</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span>
+            <span class="n">J</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r_x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">r_y</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span><span class="o">-</span> <span class="n">q</span> <span class="p">)</span>
+            <span class="n">GJ</span> <span class="o">=</span> <span class="n">G</span><span class="o">*</span><span class="n">J</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span>  <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">EA</span><span class="p">,</span><span class="n">kGA1</span><span class="p">,</span><span class="n">kGA2</span><span class="p">,</span><span class="n">GJ</span><span class="p">,</span><span class="n">EI1</span><span class="p">,</span><span class="n">EI2</span><span class="p">]))</span>
+
+        <span class="c1">#### I XS #####</span>
+        <span class="c1">#################</span>
+                <span class="c1">#</span>
+                <span class="c1">#</span>
+                <span class="c1">#</span>
+                <span class="c1">#</span>
+                <span class="c1">#</span>
+                <span class="c1">#</span>
+                <span class="c1">#</span>
+        <span class="c1">#################</span>
+            
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="s1">&#39;I&#39;</span><span class="p">:</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">-</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="p">)</span>
+            <span class="n">G</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">))</span>
+            
+            <span class="c1">#from cowper (wikipedia list)</span>
+            <span class="n">m</span> <span class="o">=</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span>
+            <span class="n">kappa1</span> <span class="o">=</span> <span class="p">(</span> <span class="p">(</span><span class="mi">10</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">3</span><span class="o">*</span><span class="n">m</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">/</span> 
+                        <span class="p">((</span><span class="mi">12</span><span class="o">+</span><span class="mi">72</span><span class="o">*</span><span class="n">m</span><span class="o">+</span><span class="mi">150</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span><span class="o">+</span><span class="mi">90</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span> 
+                         <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="o">*</span><span class="p">(</span><span class="mi">11</span><span class="o">+</span><span class="mi">66</span><span class="o">*</span><span class="n">m</span><span class="o">+</span><span class="mi">135</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span><span class="o">+</span><span class="mi">90</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span> 
+                         <span class="o">+</span> <span class="mi">30</span><span class="o">*</span><span class="n">n</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="n">m</span><span class="o">+</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> 
+                         <span class="o">+</span> <span class="mi">5</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nu</span><span class="o">*</span><span class="n">n</span><span class="o">*</span><span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="mi">8</span><span class="o">*</span><span class="n">m</span><span class="o">+</span><span class="mi">9</span><span class="o">*</span><span class="n">m</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span> <span class="p">)</span>
+            <span class="c1">#TODO: find the best shear correction factor about the y </span>
+            <span class="n">kappa2</span> <span class="o">=</span> <span class="mi">5</span><span class="o">/</span><span class="mi">6</span> <span class="c1">#lacking an accurate answer, we just use the rectangular one</span>
+
+            <span class="n">EA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA1</span><span class="o">=</span><span class="n">kappa1</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+            <span class="n">kGA2</span><span class="o">=</span><span class="n">kappa1</span><span class="o">*</span><span class="n">G</span><span class="o">*</span><span class="n">A</span>
+
+            <span class="c1">#from roark&#39;s table 10.2</span>
+            <span class="n">J</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="mi">3</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="o">**</span><span class="mi">3</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="o">**</span><span class="mi">3</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="p">)</span>
+            <span class="n">GJ</span> <span class="o">=</span> <span class="n">G</span><span class="o">*</span><span class="n">J</span>
+            <span class="n">EI1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span><span class="mi">12</span> <span class="p">)</span> <span class="o">-</span> <span class="p">((</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span> <span class="o">-</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="p">)</span><span class="o">**</span><span class="mi">3</span> <span class="p">)</span> <span class="o">/</span><span class="mi">12</span> <span class="p">))</span>
+            <span class="n">EI2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">E</span><span class="o">*</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">h</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">t_w</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span><span class="mi">12</span> <span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t_h</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="o">**</span><span class="mi">3</span> <span class="o">/</span> <span class="mi">12</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span>  <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">EA</span><span class="p">,</span><span class="n">kGA1</span><span class="p">,</span><span class="n">kGA2</span><span class="p">,</span><span class="n">GJ</span><span class="p">,</span><span class="n">EI1</span><span class="p">,</span><span class="n">EI2</span><span class="p">]))</span>            
+        
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;busy doing nothing&#39;</span><span class="p">)</span></div></div>
+        
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Anugrah.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ALBATROSS.beam &mdash; ALBATROSS  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/underscore.js"></script>
+        <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+        <script src="../../../../_static/sphinx_highlight.js"></script>
+        <script src="../../../../_static/clipboard.min.js"></script>
+        <script src="../../../../_static/copybutton.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            ALBATROSS
+          </a>
+              <div class="version">
+                0.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../background.html">Background</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/basic.html">1. Basic tutorials</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/advanced.html">2. Advanced tutorials</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../custom_1.html">Custom feature 1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../examples/basic.html">1. Basic examples</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../examples/advanced.html">2. Advanced examples</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API reference</a><ul class="simple">
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">ALBATROSS</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ALBATROSS.beam</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../../_sources/src/autoapi/ALBATROSS/beam/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-ALBATROSS.beam">
+<span id="albatross-beam"></span><h1><a class="reference internal" href="#module-ALBATROSS.beam" title="ALBATROSS.beam"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ALBATROSS.beam</span></code></a><a class="headerlink" href="#module-ALBATROSS.beam" title="Permalink to this heading"></a></h1>
+<section id="the-beam-module">
+<p>This module connects an Axial model and (&gt;=1) Cross-Section models
+allowing for a complete beam model to be constructed, analyzed,
+and (given the appropriate cross-section) a full 3D displacement and
+stress solution field to be obtained</p>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this heading"></a></h2>
+<section id="classes">
+<h3>Classes<a class="headerlink" href="#classes" title="Permalink to this heading"></a></h3>
+<table class="autosummary longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ALBATROSS.beam.Beam" title="ALBATROSS.beam.Beam"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Beam</span></code></a></p></td>
+<td><p>Class that combines both 1D and 2D analysis</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ALBATROSS.beam.Recovery" title="ALBATROSS.beam.Recovery"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Recovery</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py class">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.beam.</span></span><span class="sig-name descname"><span class="pre">Beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beam_axis</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs_info</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'EBPE'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">segment_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'CONSTANT'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="../axial/index.html#ALBATROSS.axial.Axial" title="ALBATROSS.axial.Axial"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ALBATROSS.axial.Axial</span></code></a></p>
+<p>Class that combines both 1D and 2D analysis</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam._link_xs_to_axial">
+<span class="sig-name descname"><span class="pre">_link_xs_to_axial</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam._link_xs_to_axial"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam._link_xs_to_axial" title="Permalink to this definition"></a></dt>
+<dd><p>CORE FUNCTION FOR PROCESSING MULTIPLE 2D XSs TO PREPARE A 1D MODEL</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam._orient_xss">
+<span class="sig-name descname"><span class="pre">_orient_xss</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam._orient_xss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam._orient_xss" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam.get_axial_props_from_K_list">
+<span class="sig-name descname"><span class="pre">get_axial_props_from_K_list</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam.get_axial_props_from_K_list"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam.get_axial_props_from_K_list" title="Permalink to this definition"></a></dt>
+<dd><p>FUNCTION TO POPULATE TENSOR FXN SPACE WITH BEAM CONSTITUITIVE MATRIX</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam.get_axial_props_from_analytic_formulae">
+<span class="sig-name descname"><span class="pre">get_axial_props_from_analytic_formulae</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam.get_axial_props_from_analytic_formulae"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam.get_axial_props_from_analytic_formulae" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam.plot_xs_disp_3D">
+<span class="sig-name descname"><span class="pre">plot_xs_disp_3D</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam.plot_xs_disp_3D"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam.plot_xs_disp_3D" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam.plot_xs_orientations">
+<span class="sig-name descname"><span class="pre">plot_xs_orientations</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam.plot_xs_orientations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam.plot_xs_orientations" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam.recover_displacement">
+<span class="sig-name descname"><span class="pre">recover_displacement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plot_xss</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam.recover_displacement"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam.recover_displacement" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Beam.recover_stress">
+<span class="sig-name descname"><span class="pre">recover_stress</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Beam.recover_stress"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Beam.recover_stress" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Recovery">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.beam.</span></span><span class="sig-name descname"><span class="pre">Recovery</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xsdisp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xs_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nodal_coord</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Recovery"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Recovery" title="Permalink to this definition"></a></dt>
+<dd><dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.beam.Recovery._unpack">
+<span class="sig-name descname"><span class="pre">_unpack</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/beam.html#Recovery._unpack"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.beam.Recovery._unpack" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Krokowski.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
