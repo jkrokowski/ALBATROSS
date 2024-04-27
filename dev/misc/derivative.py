@@ -9,11 +9,6 @@ V = fem.FunctionSpace(domain, ('CG',1))
 u = fem.Function(V)
 du = fem.Function(V)
 
-
 u = c 
 deriv_u = derivative(u,c,du)
 print(du)
-
-
-
-

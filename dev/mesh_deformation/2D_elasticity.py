@@ -1,6 +1,6 @@
 from dolfinx.fem.petsc import LinearProblem
-from dolfinx.fem import locate_dofs_topological,dirichletbc,VectorFunctionSpace,Function,TensorFunctionSpace
-from ufl import tr,sym,grad,Constant,Identity,TrialFunction,TestFunction,inner,dx
+from dolfinx.fem import Constant,locate_dofs_topological,dirichletbc,VectorFunctionSpace,Function,TensorFunctionSpace
+from ufl import tr,sym,grad,Identity,TrialFunction,TestFunction,inner,dx
 from dolfinx import geometry,mesh,plot
 from mpi4py import MPI
 import numpy as np
@@ -13,7 +13,7 @@ Nx = 250
 Ny = 10
 delta = 0.05
 domain = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[0,0],[L, H]]),[Nx,Ny], cell_type=mesh.CellType.quadrilateral)
-domain2 = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[L-H-delta,0+delta],[L-delta, L+delta]]),[Ny,Nx], cell_type=mesh.CellType.quadrilateral)
+# domain2 = mesh.create_rectangle( MPI.COMM_WORLD,np.array([[L-H-delta,0+delta],[L-delta, L+delta]]),[Ny,Nx], cell_type=mesh.CellType.quadrilateral)
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
 if True:
@@ -23,9 +23,9 @@ if True:
     plotter = pyvista.Plotter()
     plotter.add_mesh(grid, show_edges=True,opacity=0.25)
 
-    topology, cell_types, geometry = plot.create_vtk_mesh(domain2, tdim)
-    grid2 = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-    plotter.add_mesh(grid2, show_edges=True,opacity=0.25)
+    # topology, cell_types, geometry = plot.create_vtk_mesh(domain2, tdim)
+    # grid2 = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+    # plotter.add_mesh(grid2, show_edges=True,opacity=0.25)
 
     plotter.view_xy()
     if not pyvista.OFF_SCREEN:
@@ -55,8 +55,10 @@ V = VectorFunctionSpace(domain, ("CG", 1))
 du = TrialFunction(V)
 u_ = TestFunction(V)
 a = inner(sigma(du), eps(u_))*dx
-# l = inner(f, u_)*dx
-l = -rho_g*u_[1]*dx
+print(f.ufl_shape)
+print(u_.ufl_shape)
+l = inner(f, u_)*dx
+# l = -rho_g*u_[1]*dx
 
 def clamped_boundary(x):
     return np.isclose(x[0], 0)

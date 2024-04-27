@@ -1,8 +1,5 @@
+#simple example of cross-sectional analysis of an isotropic symmetric box:
 import ALBATROSS
-
-from dolfinx import mesh,plot
-import pyvista
-from mpi4py import MPI
 import numpy as np
 
 #create mesh
@@ -17,21 +14,21 @@ t4 = 0.01
 points = [(-W/2,H/2),(W/2,H/2),(W/2,-H/2),(-W/2,-H/2)]
 thicknesses = [t1,t2,t3,t4]
 num_el = 4*[4] #number of elements through each wall thickness
-domain = ALBATROSS.utils.create_2D_box(points,thicknesses,num_el,'box_xs')
+domain = ALBATROSS.mesh.create_hollow_box(points,thicknesses,num_el,'box_xs')
 
-mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':100.,'nu':.2} ,
-                        'DENSITY':2.7e3}
-        }
+unobtainium = ALBATROSS.material.Material(name='unobtainium',
+                                           mat_type='ISOTROPIC',
+                                           mech_props={'E':100,'nu':0.2},
+                                           density=2700)
 
 #initialize cross-section object
-boxXS = ALBATROSS.cross_section.CrossSection(domain,mats)
+boxXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
 boxXS.plot_mesh()
 
 #compute the stiffness matrix
-boxXS.getXSStiffnessMatrix()
+boxXS.get_xs_stiffness_matrix()
 
 np.set_printoptions(precision=3)
 
@@ -44,7 +41,7 @@ print('Stiffness matrix:')
 print(boxXS.K)
 
 print("Analytical axial stiffness (EA):")
-E = mats['Unobtainium']['MECH_PROPS']['E']
+E = unobtainium.E
 A = W*H - (H-t1-t3)*(W-t2-t4)
 print(E*A)
 print("Computed Axial Stiffness:")

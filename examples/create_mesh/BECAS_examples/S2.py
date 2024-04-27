@@ -1,7 +1,5 @@
 import gmsh
-# import math
 import sys
-from dolfinx.io import XDMFFile,gmshio
 from mpi4py import MPI
 import meshio
 
@@ -14,17 +12,20 @@ xcName = "square_2iso_quads"
 gdim=2
 tdim=2
 
+H = .1
+W = .1
+
 # Copied from `t1.py'...
 lc = 1e-2
 
 # When the surface has only 3 or 4 points on its boundary the list of corners
 # can be omitted in the `setTransfiniteSurface()' call:
-gmsh.model.geo.addPoint(0, 0, 0, 1.0, 1)
-gmsh.model.geo.addPoint(0.05, 0, 0, 1.0, 2)
-gmsh.model.geo.addPoint(0.05, 0.1, 0, 1.0, 3)
-gmsh.model.geo.addPoint(0, 0.1, 0, 1.0, 4)
-gmsh.model.geo.addPoint(-0.05, 0, 0, 1.0, 5)
-gmsh.model.geo.addPoint(-0.05, 0.1, 0, 1.0, 6)
+gmsh.model.geo.addPoint(0, -H/2, 0, 1.0, 1)
+gmsh.model.geo.addPoint(W/2, -H/2, 0, 1.0, 2)
+gmsh.model.geo.addPoint(W/2, H/2, 0, 1.0, 3)
+gmsh.model.geo.addPoint(0, H/2, 0, 1.0, 4)
+gmsh.model.geo.addPoint(-W/2, -H/2, 0, 1.0, 5)
+gmsh.model.geo.addPoint(-W/2, H/2, 0, 1.0, 6)
 gmsh.model.geo.addLine(1, 2, 1)
 gmsh.model.geo.addLine(2, 3, 2)
 gmsh.model.geo.addLine(3, 4, 3)
@@ -96,4 +97,4 @@ if MPI.COMM_WORLD.rank == 0:
     mesh = create_mesh(msh, "quad", prune_z=True)
     print(mesh.cells)
     print(mesh.cell_data)
-    meshio.write(f"output/"+xcName+".xdmf", mesh)
+    meshio.write("output/"+xcName+".xdmf", mesh)

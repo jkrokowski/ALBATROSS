@@ -3,7 +3,6 @@ T1 - Three Cell Hollow Box Validation Example Mesh from BECAS manual
 '''
 
 import gmsh
-import numpy as np
 from dolfinx.io import XDMFFile,gmshio
 from mpi4py import MPI
 

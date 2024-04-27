@@ -10,28 +10,24 @@ gdim=2
 tdim=2
 
 #cross section geometry
-H=.25
-L=1.0
-#thickness of box wall starting from top and moving CW around XC
-t1,t2,t3,t4 = 0.05, 0.025, 0.02, 0.035
-print(t4)
-
+H=.1
+W=.1
 gmsh.initialize()
 gmsh.model.add(xcName)
 gmsh.model.setCurrent(xcName)
 lc = 1e-1
 
 #meshtags
-r1 = gmsh.model.occ.add_rectangle(0, 0, 0, 0.05,.1)
-r2 = gmsh.model.occ.add_rectangle(0,0,0, -0.05, 0.1)
+r1 = gmsh.model.occ.add_rectangle(-W/2, -H/2, 0, W/2,H)
+r2 = gmsh.model.occ.add_rectangle(0,-H/2,0, W/2, H)
 # gmsh.model.occ.fragment([(gdim,r1)],[(gdim,r2),(gdim,r3)])
 
 # Synchronize OpenCascade representation with gmsh model
 gmsh.model.occ.synchronize()
 
 # gmsh.model.add_physical_group(tdim,[r1,r2,r3,r4],5,"full_xc")
-gmsh.model.add_physical_group(tdim,[r1],0,"right")
-gmsh.model.add_physical_group(tdim,[r2],1,"left")
+gmsh.model.add_physical_group(tdim,[r1],0,"left")
+gmsh.model.add_physical_group(tdim,[r2],1,"right")
 
 #adjust mesh size parameters
 gmsh.option.setNumber('Mesh.MeshSizeMin', 0.01)

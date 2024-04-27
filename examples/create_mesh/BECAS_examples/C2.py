@@ -3,7 +3,6 @@ C2 - Half-cylinder cross section of isotropic material
 '''
 
 import gmsh
-import numpy as np
 from dolfinx.io import XDMFFile,gmshio
 from mpi4py import MPI
 
