@@ -132,8 +132,9 @@ elif method == "incremental":
     defo = dot(R_new.T, t0 + tgrad(total_displ + u)) - t0
     curv = curv_old + dot(R_old.T * H.T, tgrad(theta))
     
-C_N = diag(as_vector([ES, GS_2, GS_3]))
-C_M = diag(as_vector([GJ, EI_2, EI_3]))
+# C_N = diag(as_vector([ES, GS_2, GS_3]))
+# C_M = diag(as_vector([GJ, EI_2, EI_3]))
+C = diag(as_vector([ES, GS_2, GS_3,GJ, EI_2, EI_3]))
 
 # We first define a uniform quadrature degree of 4 for integrating the various 
 # nonlinear forms.
@@ -153,7 +154,10 @@ facet_tag = mesh.meshtags(domain,fdim,end_pt_node,np.full(len(end_pt_node),2,dty
 ds = Measure("ds", domain=domain, subdomain_data=facet_tag, metadata=metadata)
 dx = Measure("dx", domain=domain, metadata=metadata)
 
-elastic_energy = 0.5 * (dot(defo, dot(C_N, defo)) + dot(curv, dot(C_M, curv))) * dx
+gen_eps = as_vector([defo[0],defo[1],defo[2],curv[0],curv[1],curv[2]])
+
+elastic_energy = 0.5 * (dot(gen_eps, dot(C, gen_eps))) * dx
+# elastic_energy = 0.5 * (dot(defo, dot(C_N, defo)) + dot(curv, dot(C_M, curv))) * dx
 
 residual = derivative(elastic_energy, v, v_)
 residual += load * (M_max* dot(H, theta_)[1] - F_max * u_[1]) * ds(2)

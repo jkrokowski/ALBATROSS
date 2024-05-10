@@ -376,7 +376,7 @@ class CrossSection:
         # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
         ubar_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
         uhat_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
-        
+        self.mat = mat
         mat_sparse = sparseify(mat,sparse_format='csc')
 
         self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
