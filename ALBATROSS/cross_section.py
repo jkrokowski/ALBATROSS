@@ -478,7 +478,7 @@ class CrossSection:
         
         # construct expression for the internal energy of the beam based on
         # the polynomial expansion:
-        Uc = sigma_c[i,j]*eps_c[i,j]*dx
+        Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
 
         for idx1 in range(6):
             for idx2 in range(6):
@@ -490,7 +490,7 @@ class CrossSection:
                 #build values of K2 matrix using derivatives of internal 
                 # energy form w.r.t. elastic solution coefficients
                 K2_xx_form = diff(diff(Uc,c[idx1]),c[idx2])
-                K2[idx1,idx2] = 0.5*assemble_scalar(form(K2_xx_form))
+                K2[idx1,idx2] = assemble_scalar(form(K2_xx_form))
 
         #compute Flexibility matrix
         self.K1 = K1
@@ -518,8 +518,7 @@ class CrossSection:
     
     def recover_stress(self,reactions):
         c = self.K1_inv@reactions
-        # print(type(c))
-        # warping_fxns = @self.K1_inv@reactions
+
         c_const=Constant(self.msh,PETSc.ScalarType(c))
         ubar = dot(self.N_bar,c_const)
         uhat = dot(self.N_hat,c_const)
@@ -527,8 +526,12 @@ class CrossSection:
         ubreve = dot(self.N_breve,c_const)
 
         stress = self.stress_from_warping_fxns(ubar,uhat,utilde,ubreve)
-        
         return stress
+        # V_stress = TensorFunctionSpace(self.msh, ("DG", 0),shape=(3,3))
+        # stress_expr = Expression(stress, V_stress.element.interpolation_points())
+        # stresses = Function(V_stress)
+        # stresses.interpolate(stress_expr)
+        # return stresses
     
     def get_von_mises_stress(self,stress):
         #deviatoric stress

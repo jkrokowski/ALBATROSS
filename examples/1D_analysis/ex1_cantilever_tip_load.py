@@ -80,6 +80,7 @@ CantileverBeam.add_clamped_point(p1)
 #apply force at free end in the negative z direction
 CantileverBeam.add_point_load([(0,0,-F)],[p2])
 
+
 #solve the linear problem
 CantileverBeam.solve()
 
@@ -94,7 +95,7 @@ CantileverBeam.plot_axial_displacement(warp_factor=10)
 CantileverBeam.recover_displacement()
 
 #shows plot of stress over cross-section 
-CantileverBeam.recover_stress() 
+CantileverBeam.recover_stress()
 
 #plots both 1D and 2D solutions together
 CantileverBeam.plot_xs_disp_3D()
@@ -108,3 +109,11 @@ print( (-F*L**3)/(3*E*I) )
 
 print('Max vertical deflection of tip:')
 print(CantileverBeam.get_local_disp([p2])[0][2])
+print('------')
+
+print('Maximum Stress for point load (EB analytical solution):')
+M = -F*L #maximum moment
+print( (-H/2)* (-F*L) / I  )
+print('Maximum Stress for point load (computed value):')
+print( CantileverBeam.get_max_stress() )
+print()

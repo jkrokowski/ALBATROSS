@@ -507,7 +507,7 @@ class Beam(Axial):
         #get rotation matrices from global frame to reference beam frame
         # RbA = self.get_local_basis(self.axial_pos_mesh.geometry.x)
         # RTb = self.get_deformed_basis(self.axial_pos_mesh.geometry.x)
-        
+        sigma_max = self.get_max_stress()
         #plot xs meshes:
         for i,section in enumerate(self.recovery):
             #unpack section for 
@@ -561,7 +561,7 @@ class Beam(Axial):
             warped = grids[i].warp_by_vector("cross-section displacement", factor=warp_factor)
             warped.cell_data["VonMises"] = section.von_mises.vector.array
             warped.set_active_scalars("VonMises")
-            actor_3 = plotter.add_mesh(warped, show_edges=True,clim=[0,5e7],show_scalar_bar=True)
+            actor_3 = plotter.add_mesh(warped, show_edges=True,clim=[0,sigma_max],show_scalar_bar=True)
             # actor_3 = plotter.add_mesh(warped, show_edges=True,scalar_bar_args=sargs)
             # actor_3.remove_scalar_bar()
         # plotter.add_scalar_bar()
@@ -613,8 +613,14 @@ class Beam(Axial):
         #     # print('displacements and rotations:')
         #     # print(self.uh.sub(0).x.array)
 
-# ExampleBeam.get_max_stress()
-
+    def get_max_stress(self):
+        sigma_max = 0
+        for i,section in enumerate(self.recovery):
+            max_section_stress = np.max(section.von_mises.x.array)
+            if max_section_stress > sigma_max:
+                sigma_max = max_section_stress
+        return sigma_max
+       
 class Recovery:
 
     def __init__(self,xsdisp,xs_id,nodal_coord):

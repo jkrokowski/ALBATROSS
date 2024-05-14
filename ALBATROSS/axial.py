@@ -175,6 +175,7 @@ class Axial:
         ksp.setOperators(self.A_mat)
         # ksp.setFromOptions()
         ksp.solve(self.b,uvec)
+
     def _solve_simple(self):    
         # --------
         # between these lines is the vastly simplified solution in the case of:
@@ -224,6 +225,17 @@ class Axial:
                                                   np.isclose(x[2],pt[2])))
                 f_dofs = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),locate_dofs)
                 self.b.array[f_dofs[0]] = f
+        if bool(self.m_pt):
+            W1, rot_dofs = self.beam_element.W.sub(1).collapse()
+            for m_pt in self.m_pt:
+                m = m_pt[0]
+                pt = m_pt[1]
+                def locate_dofs(x):
+                    return np.logical_and.reduce((np.isclose(x[0],pt[0]),
+                                                  np.isclose(x[1],pt[1]),
+                                                  np.isclose(x[2],pt[2])))
+                m_dofs = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),locate_dofs)
+                self.b.array[m_dofs[0]] = m
 
     def add_clamped_point(self,pt):
         '''
@@ -464,7 +476,7 @@ class Axial:
         '''
         
         #Construct expression to evalute
-        R = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=6)
+        R = VectorFunctionSpace(self.axial_mesh,('DG',0),dim=6)
         r = Function(R)
         r.interpolate(Expression(
                         self.generalized_stresses(self.uh),
