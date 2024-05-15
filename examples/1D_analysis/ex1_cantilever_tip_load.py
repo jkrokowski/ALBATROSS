@@ -20,7 +20,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 10 #number of quad elements per side on xc mesh
+N = 20 #number of quad elements per side on xc mesh
 W = .1 #xs width
 H = .1 #xs height
 A = W*H #xs area
@@ -80,7 +80,6 @@ CantileverBeam.add_clamped_point(p1)
 #apply force at free end in the negative z direction
 CantileverBeam.add_point_load([(0,0,-F)],[p2])
 
-
 #solve the linear problem
 CantileverBeam.solve()
 
@@ -102,18 +101,20 @@ CantileverBeam.plot_xs_disp_3D()
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
-print('Max Deflection for point load (EB analytical solution)')
+print('Max Tip Deflection for point load')
+print('EB analytical solution:')
 E=unobtainium.E
 I = W*H**3/12
 print( (-F*L**3)/(3*E*I) )
 
-print('Max vertical deflection of tip:')
+print('ALBATROSS computed value:')
 print(CantileverBeam.get_local_disp([p2])[0][2])
 print('------')
 
-print('Maximum Stress for point load (EB analytical solution):')
+print('Maximum Stress for point load (at root of beam)')
+print('EB analytical solution:')
 M = -F*L #maximum moment
 print( (-H/2)* (-F*L) / I  )
-print('Maximum Stress for point load (computed value):')
+print('ALBATROSS computed value:')
 print( CantileverBeam.get_max_stress() )
 print()
