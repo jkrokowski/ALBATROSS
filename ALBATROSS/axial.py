@@ -34,7 +34,7 @@ class BeamAxis:
         name: name of the beam (string)
         '''
         axial_pos_meshname = name+'_axial_pos_mesh'
-        self.axial_pos_mesh = beam_interval_mesh_3D(points,np.ones((len(points)-1,1)),axial_pos_meshname)
+        self.axial_pos_mesh = beam_interval_mesh_3D(points,np.ones((len(points)-1)),axial_pos_meshname)
         axial_meshname = name+'_axial_mesh'
         self.axial_mesh = beam_interval_mesh_3D(points,ele,axial_meshname)
 
@@ -123,7 +123,7 @@ class Axial:
         '''
         
         print("Adding distributed load....")
-        f_vec = self.a*self.rho*Constant(self.domain,ScalarType(f))
+        f_vec = self.linear_density*Constant(self.domain,ScalarType(f))
 
         if self.L_form is None:
             self.L_form = dot(f_vec,self.u_)*self.dx

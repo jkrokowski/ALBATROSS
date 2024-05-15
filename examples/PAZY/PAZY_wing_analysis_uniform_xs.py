@@ -98,13 +98,13 @@ mats = [aluminum7075,nylon_pa12]
 ribXS = ALBATROSS.cross_section.CrossSection(ribXSmesh,mats,celltags=ribXSct)
 
 #compute the stiffness matrix
-ribXS.getXSStiffnessMatrix()
+ribXS.get_xs_stiffness_matrix()
 
 #initialize cross-section object
 mainXS =  ALBATROSS.cross_section.CrossSection(mainXSmesh,mats,celltags=mainXSct)
 
 #compute the stiffness matrix
-mainXS.getXSStiffnessMatrix()
+mainXS.get_xs_stiffness_matrix()
 
 # xs_list = [ribXS,mainXS]
 xs_list = [mainXS]
@@ -142,13 +142,13 @@ L = p2[1]-p1[1]
 #1D mesh for locating beam cross-sections along beam axis
 meshname_axial_pos = 'axial_postion_mesh'
 num_segments = 1 # number of xs's used
-axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D([p1,p2],[num_segments],meshname_axial_pos)
+axial_pos_mesh = ALBATROSS.mesh.beam_interval_mesh_3D([p1,p2],[num_segments],meshname_axial_pos)
 
-#1D mesh used for 1D analysis
-meshname_axial = 'axial_mesh'
+# #1D mesh used for 1D analysis
+# meshname_axial = 'axial_mesh'
 ne_1D = nodal_coordinates.shape[0] #number of elements for 1D mesh
 num_elements = np.tile([1],ne_1D)
-axial_mesh = ALBATROSS.utils.beam_interval_mesh_3D(nodal_coordinates,np.ones_like(nodal_coordinates[:-1,0]),meshname_axial)
+# axial_mesh = ALBATROSS.mesh.beam_interval_mesh_3D(nodal_coordinates,np.ones_like(nodal_coordinates[:-1,0]),meshname_axial)
 
 #define orientation of each xs with a vector
 orientations = np.tile([-1,0,0],num_segments)
@@ -166,7 +166,7 @@ xs_info = [xs_list,axial_pos_mesh,orientations,xs_adjacency_list]
 #################################################################
 
 #initialize beam object using 1D mesh and definition of xs's
-PAZYWing = ALBATROSS.beam_model.BeamModel(axial_mesh,xs_info,segment_type="CONSTANT")
+PAZYWing = ALBATROSS.beam.Beam(axial_mesh,xs_info)
 
 #show the orientation of each xs and the interpolated orientation along the beam
 PAZYWing.plot_xs_orientations()

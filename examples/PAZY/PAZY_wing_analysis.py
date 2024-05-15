@@ -120,12 +120,8 @@ mainXS =  ALBATROSS.cross_section.CrossSection(mainXSmesh,mats,celltags=mainXSct
 #compute the stiffness matrix
 mainXS.get_xs_stiffness_matrix()
 
-# xs_list = [ribXS,mainXS]
 xs_list = [mainXS,ribXS]
-# xs_list = [mainXS]
-# xs_list = [ribXS]
-print(mainXS.yavg)
-print(ribXS.zavg)
+
 #################################################################
 ########### DEFINE THE INPUTS FOR THE BEAM PROBLEM ##############
 #################################################################
@@ -202,11 +198,11 @@ p.view_isometric()
 p.show_axes()
 p.show()
 
-#output for aero force generation
-with open(os.path.join(dirpath,'segment_locations.npy'), 'wb') as f:
-    np.save(f,nodal_coordinates)
-with open(os.path.join(dirpath,'nodal_coords.npy'), 'wb') as f:
-    np.save(f,beam_axis.axial_mesh.geometry.x)
+# #output for aero force generation
+# with open(os.path.join(dirpath,'segment_locations.npy'), 'wb') as f:
+#     np.save(f,nodal_coordinates)
+# with open(os.path.join(dirpath,'nodal_coords.npy'), 'wb') as f:
+#     np.save(f,beam_axis.axial_mesh.geometry.x)
 
 #define orientation of each xs with a vector
 orientations = np.tile([-1,0,0],num_segments)
@@ -230,12 +226,13 @@ PAZYWing = ALBATROSS.beam.Beam(beam_axis,xs_info)
 #show the orientation of each xs and the interpolated orientation along the beam
 # PAZYWing.plot_xs_orientations()
 
-#apply force at free end in the negative z direction
-# PAZYWing.add_point_load(aero_forces[1:,:],nodal_coordinates_from_aero[1:,:])
-PAZYWing.add_point_load([10,0,1000],[tip_pt])
-
 #applied fixed bc to first endpoint
 PAZYWing.add_clamped_point(root_pt)
+
+#apply force at free end in the negative z direction
+PAZYWing.add_point_load(aero_forces[1:,:],nodal_coordinates_from_aero[1:,:])
+# PAZYWing.add_point_load([1.,1.,0],[tip_pt])
+# PAZYWing.add_dist_load((0,0,-9.81))
 
 #solve the linear problem
 PAZYWing.solve()
