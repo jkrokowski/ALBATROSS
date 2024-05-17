@@ -18,11 +18,10 @@ VT = fem.FunctionSpace(mesh_2D,("CG",1))
 T = fem.Function(VT)
 T.x.array[:] = 1.
 area = T*dx
-args = area.arguments()
 # UFL arguments need unique indices within a form
+args = area.arguments()
 n = max(a.number() for a in args) if args else -1
-# du = Argument(VX, n+1)
-du = Argument(VX,0)
+du = Argument(VX, n+1)
 dAdX = derivative(area, X, du)
 print("Derivatives of area w.r.t. spatial coordinates")
 dAdX_vec = fem.petsc.assemble_vector(fem.form(dAdX)).array

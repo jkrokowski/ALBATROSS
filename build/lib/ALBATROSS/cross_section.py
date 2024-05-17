@@ -1,9 +1,7 @@
-from ufl import (dot,Identity,sqrt,inner,tr,as_vector,variable,cross,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement)
+from ufl import (Argument,derivative,dot,Identity,sqrt,inner,tr,variable,diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,Measure,as_tensor,indices,VectorElement,MixedElement,TrialFunction,TestFunction,split,TensorElement)
 # from ufl import Constant as uflConstant
 from dolfinx.fem import (Constant,Expression,TensorFunctionSpace,assemble_scalar,form,Function,FunctionSpace,VectorFunctionSpace)
-from dolfinx.fem.petsc import assemble_matrix
-# from dolfinx.fem import Constant as femConstant
-from dolfinx.mesh import meshtags
+from dolfinx.fem.petsc import assemble_matrix,assemble_vector
 import numpy as np
 from petsc4py import PETSc
 
@@ -12,11 +10,8 @@ from scipy.sparse.linalg import inv
 import sparseqr
 from scipy.sparse import csr_matrix,csc_matrix
 
-from dolfinx.plot import create_vtk_mesh
-import pyvista
-
-from ALBATROSS.material import getMatConstitutive,Material,getMatConstitutiveIsotropic
-from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,get_pts_and_cells,sparseify
+from ALBATROSS.material import getMatConstitutiveIsotropic
+from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,sparseify
 
 default_scalar_type = PETSc.ScalarType    
 
@@ -96,6 +91,7 @@ class CrossSection:
         
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
+        self.VX = VectorFunctionSpace(self.msh,("CG",1))
         self.n = FacetNormal(self.msh)
         
         #compute cross-sectional area and linear density (used for body forces)
@@ -480,23 +476,65 @@ class CrossSection:
         # the polynomial expansion:
         Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
 
-        for idx1 in range(6):
-            for idx2 in range(6):
-                #build values of K1 matrix using derivatives of load vector 
-                # w.r.t. elastic solution coefficients
-                K1_xx_form = diff(P[idx1],c[idx2])
-                K1[idx1,idx2] = assemble_scalar(form(K1_xx_form))
+        #now we begin the differentiation, form construction, and form assembly
+        # to get K1 & K2 as well as dK1dx & dK2dx (used for shape optimization)
+        self.K1_form = [[diff(P[idx1],c[idx2]) for idx1 in range(6)] 
+                        for idx2 in range(6)]
+        self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx1 in range(6)]
+                        for idx2 in range(6)]
+        # args = self.K1_form[0][0].arguments()
+        # n = max(a.number() for a in args) if args else -1
+        # du = Argument(self.VX,n+1)
+        du = Argument(self.VX,0) #there are no arguments in any of these forms?
+        self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du)
+                            for idx1 in range(6)] 
+                                for idx2 in range(6)]
+        self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
+                            for idx1 in range(6)] 
+                                for idx2 in range(6)]
+        
+        self.K1 = np.array([[assemble_scalar(form(self.K1_form[idx1][idx2]))
+                     for idx1 in range(6)] 
+                        for idx2 in range(6)])
+        self.K2 = np.array([[assemble_scalar(form(self.K2_form[idx1][idx2]))
+                     for idx1 in range(6)] 
+                        for idx2 in range(6)])
+        self.dK1dx = [[assemble_vector(form(self.dK1dx_form[idx1][idx2]))
+                        for idx1 in range(6)] 
+                            for idx2 in range(6)]     
+        self.dK2dx = [[assemble_vector(form(self.dK2dx_form[idx1][idx2]))
+                for idx1 in range(6)] 
+                    for idx2 in range(6)]                  
+
+        # for idx1 in range(6):
+        #     for idx2 in range(6):
+        #         #build values of K1 matrix using derivatives of load vector 
+        #         # w.r.t. elastic solution coefficients
+        #         K1_xx_form = diff(P[idx1],c[idx2])
+        #         if idx1==4 and idx2 == 4:
+        #             args = K1_xx_form.arguments()
+        #             n = max(a.number() for a in args) if args else -1
+        #             du = Argument(self.VX,n+1)
+        #             self.dK1_44_form_dx = derivative(K1_xx_form,self.x,du)
+        #             self.dK144dx_vec = assemble_vector(form(self.dK1_44_form_dx))
+        #         K1[idx1,idx2] = assemble_scalar(form(K1_xx_form))
                 
-                #build values of K2 matrix using derivatives of internal 
-                # energy form w.r.t. elastic solution coefficients
-                K2_xx_form = diff(diff(Uc,c[idx1]),c[idx2])
-                K2[idx1,idx2] = assemble_scalar(form(K2_xx_form))
+        #         #build values of K2 matrix using derivatives of internal 
+        #         # energy form w.r.t. elastic solution coefficients
+        #         K2_xx_form = diff(diff(Uc,c[idx1]),c[idx2])
+        #         if idx1==4 and idx2 == 4:
+        #             args = K2_xx_form.arguments()
+        #             n = max(a.number() for a in args) if args else -1
+        #             du = Argument(self.VX,n+1)
+        #             self.dK2_44_form_dx = derivative(K2_xx_form,self.x,du)
+        #             self.dK244dx_vec = assemble_vector(form(self.dK2_44_form_dx))
+        #         K2[idx1,idx2] = assemble_scalar(form(K2_xx_form))
 
         #compute Flexibility matrix
-        self.K1 = K1
-        self.K2 = K2
-        self.K1_inv = np.linalg.inv(K1)
-        self.S = self.K1_inv.T@K2@self.K1_inv
+        # self.K1 = K1
+        # self.K2 = K2
+        self.K1_inv = np.linalg.inv(self.K1)
+        self.S = self.K1_inv.T@self.K2@self.K1_inv
         
         #invert to find stiffness matrix
         self.K = np.linalg.inv(self.S)
