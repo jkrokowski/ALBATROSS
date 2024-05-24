@@ -504,7 +504,19 @@ class CrossSection:
                             for idx2 in range(6)]     
         self.dK2dx = [[assemble_vector(form(self.dK2dx_form[idx1][idx2]))
                 for idx1 in range(6)] 
-                    for idx2 in range(6)]                  
+                    for idx2 in range(6)]
+                 
+        self.K1inv = np.linalg.inv(self.K1)         
+        
+        self.dSdK1 = -self.K1inv.T @ (self.K1inv.T @ self.K2 
+                                      + self.K2 @ self.K1inv) @ self.K1inv
+        
+        self.dSK2 = self.K1inv.T @ self.K1inv
+
+        #TODO: implement the tensor opertion for each tensor product
+        #   dSdx = dSdK1 @ dK1dx + dSdK2 dK2dx
+
+        
 
         # for idx1 in range(6):
         #     for idx2 in range(6):
