@@ -123,7 +123,7 @@ class Axial:
         '''
         
         print("Adding distributed load....")
-        f_vec = self.a*self.rho*Constant(self.domain,ScalarType(f))
+        f_vec = self.linear_density*Constant(self.domain,ScalarType(f))
 
         if self.L_form is None:
             self.L_form = dot(f_vec,self.u_)*self.dx

@@ -152,7 +152,7 @@ class Beam(Axial):
         T2_66 = TensorFunctionSpace(self.axial_pos_mesh,element_type,shape=(6,6),symmetry=sym_cond)
         k2 = Function(T2_66)
         S2 = FunctionSpace(self.axial_pos_mesh,element_type)
-        linear_density = Function(S2)
+        linear_density2 = Function(S2)
 
         #populate cross-sectional properties over axial positioning mesh
         for i in range(num_vals_to_enter):
@@ -166,7 +166,7 @@ class Beam(Axial):
                 k2.vector.array[21*i,21*(i+1)] = xs.K.flatten()
             elif not sym_cond:
                 k2.vector.array[36*i:36*(i+1)] = xs.K.flatten()
-                linear_density.vector.array[i] = xs.lin_density
+                linear_density2.vector.array[i] = xs.linear_density
                 # a2.vector.array[i] = xs.A
                 # rho2.vector.array[i] = xs.rho
                 # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
@@ -183,11 +183,11 @@ class Beam(Axial):
 
         #interpolate linear density area
         self.linear_density = Function(self.S)
-        self.linear_density.interpolate(linear_density)
+        self.linear_density.interpolate(linear_density2)
 
         # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
         k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
-        linear_density.vector.destroy()
+        linear_density2.vector.destroy()
 
         print("Done interpolating cross-sectional properties to axial mesh...")
     
@@ -268,9 +268,9 @@ class Beam(Axial):
         T2_66 = TensorFunctionSpace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
         k2 = Function(T2_66)
         #TODO:same process for mass matrix
-        # S2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
+        S2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
         # a2 = Function(S2)
-        # rho2 = Function(S2)
+        rho2 = Function(S2)
         # # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
         # V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
         # c2 = Function(V2_2)
@@ -289,7 +289,7 @@ class Beam(Axial):
             elif not sym_cond:
                 k2.vector.array[36*i:36*(i+1)] = self.xss[i].K.flatten()
                 # a2.vector.array[i] = self.xss[i].A
-                # rho2.vector.array[i] = self.xss[i].rho
+                rho2.vector.array[i] = self.xss[i].linear_density
                 # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
 
         print("Done finding cross-sectional properties...")
@@ -311,8 +311,8 @@ class Beam(Axial):
         # self.a.interpolate(a2)
 
         # #interpolate xs density
-        # self.rho = Function(self.S)
-        # self.rho.interpolate(rho2)
+        self.rho = Function(self.S)
+        self.rho.interpolate(rho2)
 
         # #interpolate centroidal location in g frame
         # self.c = Function(self.V_2)

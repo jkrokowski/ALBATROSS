@@ -54,8 +54,9 @@ tdim = domain.topology.dim
 topology, cell_types, geom = plot.create_vtk_mesh(domain, tdim)
 grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
 
-bending_sensitivity = squareXS.dK2dx[3][3].array
-sensitivity = np.concatenate([bending_sensitivity.reshape(-1,2),np.zeros((bending_sensitivity.reshape(-1,2).shape[0],1))],axis=1)
+# sensitivity_to_plot = squareXS.dK2dx[3][3].array
+sensitivity_to_plot = squareXS.dK1dx[4][4].array
+sensitivity = np.concatenate([sensitivity_to_plot.reshape(-1,2),np.zeros((sensitivity_to_plot.reshape(-1,2).shape[0],1))],axis=1)
 
 grid.point_data["sensitivity"] = sensitivity
 warped = grid.warp_by_vector("sensitivity")

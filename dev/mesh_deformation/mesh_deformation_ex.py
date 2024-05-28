@@ -80,7 +80,8 @@ top_dofs = dolfinx.fem.locate_dofs_topological(
 bc = dolfinx.fem.dirichletbc(u_radial, top_dofs)
 
 bcs = [bc_fixed, bc]
-deform_mesh_poisson(V, bcs)
+deform_mesh(V, bcs)
+# deform_mesh_poisson(V, bcs)
 
 
 if True:

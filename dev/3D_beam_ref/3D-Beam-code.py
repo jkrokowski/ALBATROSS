@@ -1,9 +1,9 @@
 #Reference 3D Solution for comparison with the beam analysis approach
 
 # Scaled variable
-Lx = 20
-W = 1
-H = 1
+Lx = 2
+W = .1
+H = .1
 
 E = 10e6
 nu = 0.2
@@ -11,8 +11,11 @@ rho = 2.7e-3
 mu = E/(2*(1+nu))
 lambda_ = (E*nu)/((1+nu)*(1-2*nu))
 g = 9.81
-N=20
-Nx = N*Lx
+
+load = -5000*rho*g
+
+N=15
+Nx = N*int(Lx/W)
 print("number of dofs: %i" % (N*N*Nx))
 
 import numpy as np
@@ -50,7 +53,7 @@ def sigma(u):
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
-f = fem.Constant(domain, ScalarType((0, 0, -rho*g)))
+f = fem.Constant(domain, ScalarType((0, 0, load)))
 a = ufl.inner(sigma(u), epsilon(v)) * ufl.dx
 L = ufl.dot(f, v) * ufl.dx + ufl.dot(T, v) * ds
 
