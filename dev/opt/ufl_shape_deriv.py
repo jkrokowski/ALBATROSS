@@ -5,7 +5,7 @@ import numpy as np
 import pyvista
 W = 1 
 H = 2
-N = 2
+N = 4
 num_el = [N,N]
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 mesh_2D = mesh.create_rectangle(MPI.COMM_WORLD,points,num_el, cell_type=mesh.CellType.quadrilateral)
@@ -46,8 +46,8 @@ sensitivity = np.concatenate([dAdX_vec.reshape(-1,2),np.zeros((dAdX_vec.reshape(
 
 grid.point_data["sensitivity"] = sensitivity
 warped = grid.warp_by_vector("sensitivity")
-# plotter.add_mesh(warped,show_edges=True,opacity=0.5)
-plotter.add_mesh(grid,show_edges=True,opacity=1)
+plotter.add_mesh(warped,show_edges=True,opacity=0.5)
+# plotter.add_mesh(grid,show_edges=True,opacity=1)
 plotter.view_isometric()
 plotter.show_bounds()
 plotter.add_axes()

@@ -70,7 +70,7 @@ bc_fixed = dolfinx.fem.dirichletbc(c, fixed_dofs, V)
 
 
 def radial(x):
-    return (x[0], x[1])
+    return (-0.5*x[0]*x[1], 0.25*x[1]*x[0])
 
 
 u_radial = dolfinx.fem.Function(V)
@@ -80,8 +80,8 @@ top_dofs = dolfinx.fem.locate_dofs_topological(
 bc = dolfinx.fem.dirichletbc(u_radial, top_dofs)
 
 bcs = [bc_fixed, bc]
-deform_mesh(V, bcs)
-# deform_mesh_poisson(V, bcs)
+# deform_mesh(V, bcs)
+deform_mesh_poisson(V, bcs)
 
 
 if True:

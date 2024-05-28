@@ -4,7 +4,7 @@ from dolfinx.fem import (Constant,Expression,TensorFunctionSpace,assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix,assemble_vector
 import numpy as np
 from petsc4py import PETSc
-
+from dolfinx.mesh import locate_entities_boundary
 
 from scipy.sparse.linalg import inv
 import sparseqr
@@ -502,25 +502,39 @@ class CrossSection:
         self.K2 = np.array([[assemble_scalar(form(self.K2_form[idx1][idx2]))
                      for idx1 in range(6)] 
                         for idx2 in range(6)])
-        self.dK1dx = [[assemble_vector(form(self.dK1dx_form[idx1][idx2]))
+        self.dK1dx = np.array([[assemble_vector(form(self.dK1dx_form[idx1][idx2]))
                         for idx1 in range(6)] 
-                            for idx2 in range(6)]     
-        self.dK2dx = [[assemble_vector(form(self.dK2dx_form[idx1][idx2]))
+                            for idx2 in range(6)])     
+        self.dK2dx = np.array([[assemble_vector(form(self.dK2dx_form[idx1][idx2]))
                 for idx1 in range(6)] 
-                    for idx2 in range(6)]
-                 
+                    for idx2 in range(6)])
+        
+        #boundary dofs ([:,:,self.boundary_dofs])
+        self.boundary_dofs = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        
+        #compute inverse of K1 once and store
         self.K1inv = np.linalg.inv(self.K1)         
         
-        self.dSdK1 = -self.K1inv.T @ (self.K1inv.T @ self.K2 
-                                      + self.K2 @ self.K1inv) @ self.K1inv
+        #first term of dSdx
+        self.dK1invT = -np.einsum('ijk,ij->ijk',
+                             self.K1inv.T @ self.dK1dx.transpose(1,0,2),
+                               self.K1inv.T @ self.K2 @ self.K1inv ) 
+        #second term of dSdx
+        self.dK2 = np.einsum('ijk,ij->ijk',
+                        self.K1inv.T@self.dK2dx,
+                        self.K1inv)
         
-        self.dSK2 = self.K1inv.T @ self.K1inv
+        #third term of dSdx
+        self.dK1inv = -np.einsum('ijk,ij->ijk',
+                            self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
+                              self.K1inv)
 
-        #TODO: implement the tensor opertion for each tensor product
-        #   dSdx = dSdK1 @ dK1dx + dSdK2 dK2dx
-
+        #tensor opertion dSdx
+        self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
         
-
+        #derivative of stiffness matrix
+        self.dKdx = np.linalg.inv(self.dSdx[:,:,self.boundary_dofs].transpose(2,0,1)).transpose(1,2,0)
+        
         # for idx1 in range(6):
         #     for idx2 in range(6):
         #         #build values of K1 matrix using derivatives of load vector 

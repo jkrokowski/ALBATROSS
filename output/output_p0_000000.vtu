@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<VTKFile type="UnstructuredGrid" version="2.2">
+  <UnstructuredGrid>
+    <Piece NumberOfPoints="22" NumberOfCells="10">
+      <Points>
+        <DataArray type="Float64" NumberOfComponents="3" format="ascii">0 0 0 0.1 0 0 0.1 0 0 0.2 0 0 0.2 0 0 0.3 0 0 0.3 0 0 0.4 0 0 0.4 0 0 0.5 0 0 0.5 0 0 0.6000000000000001 0 0 0.6000000000000001 0 0 0.7000000000000001 0 0 0.7000000000000001 0 0 0.8 0 0 0.8 0 0 0.9 0 0 0.9 0 0 1 0 0 0 0 0 0 0 0 </DataArray>
+      </Points>
+      <Cells>
+        <DataArray type="Int32" Name="connectivity" format="ascii">0 1 2 3 2 3 4 5 4 5 6 7 6 7 8 9 8 9 10 11 10 11 12 13 12 13 14 15 14 15 16 17 16 17 18 19 18 19 20 21 </DataArray>
+        <DataArray type="Int32" Name="offsets" format="ascii">4 8 12 16 20 24 28 32 36 40 </DataArray>
+        <DataArray type="Int8" Name="types" format="ascii">68 68 68 68 68 68 68 68 68 68 </DataArray>
+      </Cells>
+      <CellData>
+        <DataArray type="UInt8" Name="vtkGhostType" format="ascii" RangeMin="0" RangeMax="1">0 0 0 0 0 0 0 0 0 0 </DataArray>
+        <DataArray type="Int64" IdType="1" Name="vtkOriginalCellIds" format="ascii" RangeMin="0" RangeMax="9">0 1 2 3 4 5 6 7 8 9 </DataArray>
+      </CellData>
+      <PointData Scalars="Displacement and Rotation ">
+        <DataArray type="Int64" IdType="1" Name="vtkOriginalPointIds" format="ascii" RangeMin="0" RangeMax="21">0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 </DataArray>
+        <DataArray type="UInt8" Name="vtkGhostType" format="ascii" RangeMin="0" RangeMax="0">0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 </DataArray>
+        <DataArray type="Float64" Name="Displacement and Rotation " format="ascii">0 0 -4.245487714284819e-06 -8.203402285712525e-06 -1.586192914285372e-05 -1.4772178285711e-05 -3.330551057142122e-05 -1.988795314285258e-05 -5.521404342855896e-05 -2.373235199999432e-05 -8.040696428569566e-05 -2.648699999999339e-05 -0.0001078853348571172 -2.833352228570689e-05 -0.0001368318419999666 -2.945354399999199e-05 -0.0001666107977142441 -3.002869028570588e-05 -0.0001967681391428069 -3.024058628570555e-05 -0.0002270314285713695 -3.027085714284826e-05 </DataArray>
+      </PointData>
+    </Piece>
+  </UnstructuredGrid>
+</VTKFile>
