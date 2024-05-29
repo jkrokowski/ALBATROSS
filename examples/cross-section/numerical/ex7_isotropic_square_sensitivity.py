@@ -3,12 +3,12 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 30 #number of quad elements per side
+N = 5 #number of quad elements per side
 W = .1 #square height  
 H = .2 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
-domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
+domain = ALBATROSS.mesh.create_rectangle(points,[N,2*N])
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -65,7 +65,9 @@ for i in range(6):
     # sensitivity_to_plot = squareXS.dKdx[3,3,:].reshape(-1,2)
     sensitivity_to_plot = np.zeros((geom.shape[0],2))
 
-    sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dSdx[i,i,:].reshape(-1,2)[squareXS.boundary_dofs,:]
+    # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dSdx[i,i,:].reshape(-1,2)[squareXS.boundary_dofs,:]
+    sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dKdx[i,i,:].reshape(-1,2)[squareXS.boundary_dofs,:]
+
     # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dKdx[4,4,:]
     # sensitivity_to_plot = squareXS.dKdx[0,0,:]
     # sensitivity_to_plot[squareXS.boundary_dofs] = squareXS.dSdx[2,2,:]
@@ -74,14 +76,16 @@ for i in range(6):
     sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)
 
     grids[i].point_data["sensitivity"] = sensitivity
-    warped.append(grids[i].warp_by_vector("sensitivity",factor=.00001))
+    # warped.append(grids[i].warp_by_vector("sensitivity",factor=.00001))
     # plotter.add_mesh(warped,show_edges=True,opacity=0.5)
-    # plotter.add_mesh(grids[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
-    plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
-    plotter.add_text(f'dS/dx({i},{i})')
-    plotter.view_isometric()
-    plotter.show_bounds()
-plotter.add_axes()
+    plotter.add_mesh(grids[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
+    # plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
+    plotter.add_text(f'dK/dx({i},{i})')
+    plotter.view_xy()
+    # plotter.show_bounds()
+    plotter.add_axes()
+plotter.subplot(0,0)
+plotter.show_bounds()
 if not pyvista.OFF_SCREEN:
     plotter.show()
 

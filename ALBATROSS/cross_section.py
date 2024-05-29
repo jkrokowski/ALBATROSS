@@ -485,6 +485,23 @@ class CrossSection:
                         for idx2 in range(6)]
         self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx1 in range(6)]
                         for idx2 in range(6)]
+        
+        self.K1 = np.array([[assemble_scalar(form(self.K1_form[idx1][idx2]))
+                     for idx1 in range(6)] 
+                        for idx2 in range(6)])
+        self.K2 = np.array([[assemble_scalar(form(self.K2_form[idx1][idx2]))
+                     for idx1 in range(6)] 
+                        for idx2 in range(6)])
+        
+        #compute Flexibility matrix
+        # self.K1 = K1
+        # self.K2 = K2
+        self.K1inv = np.linalg.inv(self.K1)
+        self.S = self.K1inv.T@self.K2@self.K1inv
+        
+        #invert to find stiffness matrix
+        self.K = np.linalg.inv(self.S)
+
         # args = self.K1_form[0][0].arguments()
         # n = max(a.number() for a in args) if args else -1
         # du = Argument(self.VX,n+1)
@@ -495,13 +512,6 @@ class CrossSection:
         self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
                             for idx1 in range(6)] 
                                 for idx2 in range(6)]
-        
-        self.K1 = np.array([[assemble_scalar(form(self.K1_form[idx1][idx2]))
-                     for idx1 in range(6)] 
-                        for idx2 in range(6)])
-        self.K2 = np.array([[assemble_scalar(form(self.K2_form[idx1][idx2]))
-                     for idx1 in range(6)] 
-                        for idx2 in range(6)])
         self.dK1dx = np.array([[assemble_vector(form(self.dK1dx_form[idx1][idx2]))
                         for idx1 in range(6)] 
                             for idx2 in range(6)])     
@@ -512,9 +522,7 @@ class CrossSection:
         #boundary dofs ([:,:,self.boundary_dofs])
         self.boundary_dofs = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         
-        #compute inverse of K1 once and store
-        self.K1inv = np.linalg.inv(self.K1)         
-        
+        #use chain rule for derivative of flexibility matrix dSdx:
         #first term of dSdx
         self.dK1invT = -np.einsum('ijk,ij->ijk',
                              self.K1inv.T @ self.dK1dx.transpose(1,0,2),
@@ -529,11 +537,13 @@ class CrossSection:
                             self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
                               self.K1inv)
 
-        #tensor opertion dSdx
+        #add terms to get dSdx
         self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
         
-        #derivative of stiffness matrix
-        self.dKdx = np.linalg.inv(self.dSdx[:,:,self.boundary_dofs].transpose(2,0,1)).transpose(1,2,0)
+        #compute derivative of stiffness matrix (dKdx) from derivative of flexibility matrix (dSdx)
+        self.dKdx = - np.einsum('ijk,ij->ijk',
+                                self.K @ self.dSdx,
+                                self.K)
         
         # for idx1 in range(6):
         #     for idx2 in range(6):
@@ -559,14 +569,14 @@ class CrossSection:
         #             self.dK244dx_vec = assemble_vector(form(self.dK2_44_form_dx))
         #         K2[idx1,idx2] = assemble_scalar(form(K2_xx_form))
 
-        #compute Flexibility matrix
-        # self.K1 = K1
-        # self.K2 = K2
-        self.K1_inv = np.linalg.inv(self.K1)
-        self.S = self.K1_inv.T@self.K2@self.K1_inv
+        # #compute Flexibility matrix
+        # # self.K1 = K1
+        # # self.K2 = K2
+        # self.K1_inv = np.linalg.inv(self.K1)
+        # self.S = self.K1_inv.T@self.K2@self.K1_inv
         
-        #invert to find stiffness matrix
-        self.K = np.linalg.inv(self.S)
+        # #invert to find stiffness matrix
+        # self.K = np.linalg.inv(self.S)
 
     def strains_from_warping_fxns(self,ubar_c,uhat_c,utilde_c,ubreve_c):
         gradubar_c=grad(ubar_c)
