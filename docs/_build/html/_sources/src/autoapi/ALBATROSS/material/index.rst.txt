@@ -35,6 +35,7 @@ Functions
 .. py:class:: Material(name=None, mat_type='ISOTROPIC', mech_props=None, density=None, celltag=None)
 
 
+
 .. py:function:: assignMaterialProps(mesh, mats)
 
    

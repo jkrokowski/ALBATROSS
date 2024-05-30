@@ -3,7 +3,8 @@
 
 ## Installation:
 The main requirements are FEniCSx, beyond the typical numpy, scipy, etc requirements. 
-For cross-sectional analysis, a python wrapped implementation of a sparse QR decomposition is used which can be installed from PyPi
+For cross-sectional analysis, a python wrapped implementation of a sparse QR decomposition is used which can be installed from PyPi. 
+
 Usage of a [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) (or for even faster installation, [mamba](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html)) enviroment is recommended.
 
 First, install the package dependencies. Then clone the repository and pip install:
@@ -14,5 +15,8 @@ First, install the package dependencies. Then clone the repository and pip insta
 4. run ```git clone https://github.com/jkrokowski/ALBATROSS.git```
 5. From the top level ALBATROSS directory, run ```pip install .```
 
-## A Simple Example
-Run ex1_cantilever_beam.py here
+## Understanding the theory
+If you are unfamiliar with the theory behind beam models and their place within the solid mechanics world, we suggest you start at the [background](./background.md) page. 
+
+## Running your first analysis
+For the "hello world" example of a beam model, start with the [hello beam tutorial](./tutorials/hello_beam) 

@@ -1,3 +1,7 @@
+---
+title: Cross Sectional Analysis
+---
+
 # Basic tutorials
 
 These pages for each category of tutorials are optional 

@@ -29,6 +29,7 @@ Classes
 
 .. py:class:: Frame(Beams)
 
+
    .. py:method:: add_beam(Beam)
 
 

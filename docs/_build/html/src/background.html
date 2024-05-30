@@ -1,29 +1,28 @@
 <!DOCTYPE html>
-<html class="writer-html5" lang="en">
+<html class="writer-html5" lang="en" data-content_root="../">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Background &mdash; ALBATROSS  documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
-      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css" />
-      <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
-      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css" />
-      <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
 
   
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
   
-        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="../_static/doctools.js"></script>
-        <script src="../_static/sphinx_highlight.js"></script>
-        <script src="../_static/clipboard.min.js"></script>
-        <script src="../_static/copybutton.js"></script>
+        <script src="../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+        <script src="../_static/copybutton.js?v=f281be69"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -57,16 +56,16 @@
 <li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Background</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials.html">Tutorials</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="tutorials/basic.html">1. Basic tutorials</a><ul class="simple">
+<li class="toctree-l2"><a class="reference internal" href="tutorials/hello%20beam.html">1. 1D Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/hello%20beam.html#advanced-tutorials">2. Advanced tutorials</a><ul class="simple">
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="tutorials/advanced.html">2. Advanced tutorials</a><ul class="simple">
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cross%20section.html">3. Cross Sectional Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/cross%20section.html#basic-tutorials">4. Basic tutorials</a><ul class="simple">
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="custom_1.html">Custom feature 1</a></li>
-<li class="toctree-l1"><a class="reference internal" href="custom_2.html">Custom feature 2</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples.html">Examples</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="examples/basic.html">1. Basic examples</a><ul class="simple">
 </ul>
@@ -106,25 +105,31 @@
            <div itemprop="articleBody">
              
   <section class="tex2jax_ignore mathjax_ignore" id="background">
-<h1>Background<a class="headerlink" href="#background" title="Permalink to this heading"></a></h1>
-<p>This page is intended to provide the reader with any theoretical
-knowledge or other concepts that form the basis of your package.
-This page can include equations, figures, flowcharts, etc. for a better understanding of the theory behind
-the package along with any code snippets necessary to explain the software design.</p>
-<section id="referencing-using-bib-files">
-<h2>Referencing using bib files<a class="headerlink" href="#referencing-using-bib-files" title="Permalink to this heading"></a></h2>
-<p>You can add references in the <code class="docutils literal notranslate"><span class="pre">references.bib</span></code> file and cite them
-in the page like this <span id="id1">[<a class="reference internal" href="#id3" title="Fernando Perez, Brian E Granger, and John D Hunter. Python: an ecosystem for scientific computing. Computing in Science &amp; Engineering, 13(2):13–21, 2011.">PGH11</a>]</span>.
-You can also include a list of references cited at the end as shown below.</p>
+<h1>Background<a class="headerlink" href="#background" title="Link to this heading"></a></h1>
+<p>Beam models are useful for simplifying the computation of displacements and stresses of a slender structure. A slender structure is one that has one characteristic dimension that is much greater than the others.</p>
+<figure class="align-default" id="id1">
+<img alt="../_images/analysis_splitting.png" class="with-border" src="../_images/analysis_splitting.png" />
+<figcaption>
+<p><span class="caption-text">Using a beam model to compute displacements of a 3D model</span><a class="headerlink" href="#id1" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p>A 3D structure is split into a set of <em>topologically</em> two dimensional <strong>“cross-sections”</strong> and a <em>topologically</em> one dimensional <strong>“beam axis”</strong>. Both the cross-sections and the beam axis are, in general, embedded in three dimensional space.</p>
+<p>The 1D model utilizes the 2D analysis as an input as a type of material property that represents the material and the geometric shape of the beam. Loads and boundary conditions are applied to the 1D model. The 1D analysis computes the displacements and the reaction force &amp; reaction moment distributions along the beam axis.</p>
+<p>Finally, using both the 2D analysis results, the displacement and stresses of the original structure can be recovered.</p>
+<section id="cross-sectional-analysis">
+<h2>Cross-Sectional Analysis<a class="headerlink" href="#cross-sectional-analysis" title="Link to this heading"></a></h2>
+<p>The cross-sectional analysis involves computing a set of parameters that are are used to relate strains along the beam axis to the reactions</p>
 </section>
-<section id="bibliography">
-<h2>Bibliography<a class="headerlink" href="#bibliography" title="Permalink to this heading"></a></h2>
-<div class="docutils container" id="id2">
-<dl class="citation">
-<dt class="label" id="id3"><span class="brackets"><a class="fn-backref" href="#id1">PGH11</a></span></dt>
-<dd><p>Fernando Perez, Brian E Granger, and John D Hunter. Python: an ecosystem for scientific computing. <em>Computing in Science &amp; Engineering</em>, 13(2):13–21, 2011.</p>
-</dd>
-</dl>
+<section id="d-analysis">
+<h2>1D Analysis<a class="headerlink" href="#d-analysis" title="Link to this heading"></a></h2>
+</section>
+<section id="the-relationship-between-cross-sectional-analysis-outputs-and-the-1d-analysis">
+<h2>The Relationship between Cross-Sectional Analysis Outputs and the 1D Analysis<a class="headerlink" href="#the-relationship-between-cross-sectional-analysis-outputs-and-the-1d-analysis" title="Link to this heading"></a></h2>
+</section>
+<section id="recovery-relationships">
+<h2>Recovery Relationships<a class="headerlink" href="#recovery-relationships" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
 </div>
 </section>
 </section>

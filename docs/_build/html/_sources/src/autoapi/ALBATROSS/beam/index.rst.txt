@@ -32,6 +32,7 @@ Classes
 
 .. py:class:: Beam(beam_axis, xs_info, xs_type='EBPE', segment_type='CONSTANT')
 
+
    Bases: :py:obj:`ALBATROSS.axial.Axial`
 
    
@@ -120,6 +121,7 @@ Classes
 
 
 .. py:class:: Recovery(xsdisp, xs_id, nodal_coord)
+
 
    .. py:method:: _unpack()
 

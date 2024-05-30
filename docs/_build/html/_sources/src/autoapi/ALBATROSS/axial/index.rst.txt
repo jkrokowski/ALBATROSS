@@ -30,6 +30,7 @@ Classes
 
 .. py:class:: Axial(domain, xsinfo, orientation)
 
+
    
    Timoshenko shear deformable beam formulation
 
@@ -341,5 +342,6 @@ Classes
 
 
 .. py:class:: BeamAxis(points, ele, name)
+
 
 

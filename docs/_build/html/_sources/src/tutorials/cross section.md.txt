@@ -1,4 +1,8 @@
-# Advanced tutorials
+---
+title: Cross Sectional Analysis
+---
+
+# Basic tutorials
 
 These pages for each category of tutorials are optional 
 and are required only if you plan to classify your tutorials
@@ -11,5 +15,5 @@ tutorials page.
 ```{toctree}
 :maxdepth: 1
 
-../_temp/tutorials/advanced_tutorials/modopt_tutorial
+../_temp/tutorials/basic_tutorials/jupyter_tutorial
 ```

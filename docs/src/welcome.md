@@ -2,7 +2,9 @@
 
 **A**nalysis **L**ibrary for **B**eams **A**nd **T**hree-dimensional **R**epresentations **O**f **S**lender **S**tructures
 
-The package does:
+This package is a collection of various beam utilities based on FEniCSx. 
+
+Currently supported tasks:
 
 * Cross-sectional analysis of generic 2D cross-sections
 * Static analysis beams with variable and arbitrary cross-sections
@@ -32,7 +34,7 @@ The package does:
 src/getting_started
 src/background
 src/tutorials
-src/custom_1
+<!-- src/custom_1 -->
 <!-- src/custom_2 -->
 src/examples
 src/api

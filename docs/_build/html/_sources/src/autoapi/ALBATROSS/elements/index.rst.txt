@@ -30,6 +30,7 @@ Classes
 
 .. py:class:: LinearTimoshenkoElement(domain, element_type=None, quad_data=None)
 
+
    .. py:method:: getQuadratureRule(quad_data)
 
       

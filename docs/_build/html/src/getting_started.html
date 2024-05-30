@@ -1,29 +1,28 @@
 <!DOCTYPE html>
-<html class="writer-html5" lang="en">
+<html class="writer-html5" lang="en" data-content_root="../">
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Getting started &mdash; ALBATROSS  documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
-      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css" />
-      <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
-      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css" />
-      <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=19f00094" />
+      <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+      <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css?v=be8a1c11" />
 
   
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
   <![endif]-->
   
-        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
-        <script src="../_static/jquery.js"></script>
-        <script src="../_static/underscore.js"></script>
-        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="../_static/doctools.js"></script>
-        <script src="../_static/sphinx_highlight.js"></script>
-        <script src="../_static/clipboard.min.js"></script>
-        <script src="../_static/copybutton.js"></script>
+        <script src="../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+        <script src="../_static/copybutton.js?v=f281be69"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -56,13 +55,7 @@
               <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="background.html">Background</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tutorials.html">Tutorials</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="tutorials/basic.html">1. Basic tutorials</a><ul class="simple">
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="tutorials/advanced.html">2. Advanced tutorials</a><ul class="simple">
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials.html">Tutorials</a><ul class="simple">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="custom_1.html">Custom feature 1</a></li>
@@ -105,12 +98,12 @@
            <div itemprop="articleBody">
              
   <section class="tex2jax_ignore mathjax_ignore" id="getting-started">
-<h1>Getting started<a class="headerlink" href="#getting-started" title="Permalink to this heading"></a></h1>
+<h1>Getting started<a class="headerlink" href="#getting-started" title="Link to this heading"></a></h1>
 <section id="installation">
-<h2>Installation:<a class="headerlink" href="#installation" title="Permalink to this heading"></a></h2>
+<h2>Installation:<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
 <p>The main requirements are FEniCSx, beyond the typical numpy, scipy, etc requirements.
-For cross-sectional analysis, a python wrapped implementation of a sparse QR decomposition is used which can be installed from PyPi
-Usage of a <a class="reference external" href="https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html">conda</a> (or for even faster installation, <a class="reference external" href="https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html">mamba</a>) enviroment is recommended.</p>
+For cross-sectional analysis, a python wrapped implementation of a sparse QR decomposition is used which can be installed from PyPi.</p>
+<p>Usage of a <a class="reference external" href="https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html">conda</a> (or for even faster installation, <a class="reference external" href="https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html">mamba</a>) enviroment is recommended.</p>
 <p>First, install the package dependencies. Then clone the repository and pip install:</p>
 <ol class="arabic simple">
 <li><p>Install <a class="reference external" href="https://numpy.org/">Numpy</a> and <a class="reference external" href="https://scipy.org/">SciPy</a></p></li>
@@ -120,9 +113,13 @@ Usage of a <a class="reference external" href="https://docs.conda.io/projects/co
 <li><p>From the top level ALBATROSS directory, run <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">.</span></code></p></li>
 </ol>
 </section>
-<section id="a-simple-example">
-<h2>A Simple Example<a class="headerlink" href="#a-simple-example" title="Permalink to this heading"></a></h2>
-<p>Run ex1_cantilever_beam.py here</p>
+<section id="understanding-the-theory">
+<h2>Understanding the theory<a class="headerlink" href="#understanding-the-theory" title="Link to this heading"></a></h2>
+<p>If you are unfamiliar with the theory behind beam models and their place within the solid mechanics world, we suggest you start at the <a class="reference internal" href="background.html"><span class="std std-doc">background</span></a> page.</p>
+</section>
+<section id="running-your-first-analysis">
+<h2>Running your first analysis<a class="headerlink" href="#running-your-first-analysis" title="Link to this heading"></a></h2>
+<p>For the “hello world” example of a beam model, start with the <a class="reference internal" href="#./tutorials/hello_beam"><span class="xref myst">hello beam tutorial</span></a></p>
 </section>
 </section>
 

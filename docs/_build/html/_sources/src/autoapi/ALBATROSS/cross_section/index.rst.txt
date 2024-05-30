@@ -28,6 +28,7 @@ Attributes
 
 .. py:class:: CrossSection(msh, materials, celltags=None)
 
+
    .. py:attribute:: msh
 
       
@@ -99,6 +100,7 @@ Attributes
 
 
 .. py:class:: CrossSectionAnalytical(params)
+
 
    .. py:method:: compute_stiffness()
 
