@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="3.0" xmlns:xi="https://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="ex_1_axial_pos_mesh" GridType="Uniform">
+      <Topology TopologyType="PolyLine" NumberOfElements="1" NodesPerElement="2">
+        <DataItem Dimensions="1 2" NumberType="Int" Format="HDF">ex_1_axial_pos_mesh.h5:/Mesh/ex_1_axial_pos_mesh/topology</DataItem>
+      </Topology>
+      <Geometry GeometryType="XYZ">
+        <DataItem Dimensions="2 3" Format="HDF">ex_1_axial_pos_mesh.h5:/Mesh/ex_1_axial_pos_mesh/geometry</DataItem>
+      </Geometry>
+    </Grid>
+  </Domain>
+</Xdmf>

@@ -8,13 +8,13 @@ stress solution field to be obtained
 
 '''
 
-from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Function,FunctionSpace
+from dolfinx.fem import Function,functionspace
 from ufl import sin,cos
 from ALBATROSS.cross_section import CrossSectionAnalytical
 from ALBATROSS.axial import Axial
 import numpy as np
 import pyvista
-from dolfinx.plot import create_vtk_mesh
+from dolfinx.plot import vtk_mesh
 
 class Beam(Axial):
     '''
@@ -110,23 +110,24 @@ class Beam(Axial):
         # (this must be done carefully and with respect to the location of the beam axis)
         #determine how the segments are constructed
         if self.segment_type == "CONSTANT":
-            element_type = ('DG',0)
+            element_type = ('DG',0,(3,))
             # num_vals_to_enter = self.numsegments
 
         elif self.segment_type == "VARIABLE":
-            element_type = ('CG',1)
+            element_type = ('CG',1,(3,))
             # num_vals_to_enter = self.numsegments + 1
             # self.orientations=self.orientations.append(self.orientations)
         
-        self.O2 = VectorFunctionSpace(self.axial_pos_mesh,element_type,dim=3)
+        self.O2 = functionspace(self.axial_pos_mesh,element_type)
         self.o2 = Function(self.O2)
         self.o2.vector.array = np.array(self.orientations)
-        self.o2.vector.destroy() #needed for PETSc garbage collection
+        # self.o2.vector.destroy() #needed for PETSc garbage collection
 
         #interpolate these orientations into the finer 1D analysis mesh
-        self.O = VectorFunctionSpace(self.axial_mesh,element_type,dim=3)
+        self.O = functionspace(self.axial_mesh,element_type)
         self.o = Function(self.O)
         self.o.interpolate(self.o2)
+        print("made it here :)")
 
     def _link_xs_to_axial(self):
         '''
@@ -139,19 +140,23 @@ class Beam(Axial):
         
         #determine how the segments are constructed
         if self.segment_type == "CONSTANT":
-            element_type = ('DG',0)
+            scalar_element = ('DG',0)
+            vector_element = ('DG',0,(3,))
+            tensor_element = ('DG',0,(6,6))
             num_vals_to_enter = self.numsegments
         elif self.segment_type == "VARIABLE":
-            element_type = ('CG',1)
+            scalar_element = ('CG',0)
+            vector_element = ('CG',0,(3,))
+            tensor_element = ('CG',0,(6,6))
             num_vals_to_enter = self.numsegments + 1
 
         #We need to construct a continuous field over the axial mesh 
         #   from the properties computed from each cross-section
         sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
         #initialize functions and functionspaces over axial positioning mesh            
-        T2_66 = TensorFunctionSpace(self.axial_pos_mesh,element_type,shape=(6,6),symmetry=sym_cond)
+        T2_66 = functionspace(self.axial_pos_mesh,tensor_element)
         k2 = Function(T2_66)
-        S2 = FunctionSpace(self.axial_pos_mesh,element_type)
+        S2 = functionspace(self.axial_pos_mesh,scalar_element)
         linear_density2 = Function(S2)
 
         #populate cross-sectional properties over axial positioning mesh
@@ -174,8 +179,8 @@ class Beam(Axial):
         #interpolate from axial_pos_mesh to axial_mesh 
 
         #initialize fxn spaces
-        self.T_66 = TensorFunctionSpace(self.axial_mesh,element_type,shape=(6,6),symmetry=sym_cond)
-        self.S = FunctionSpace(self.axial_mesh,element_type)
+        self.T_66 = functionspace(self.axial_mesh,tensor_element,shape=(6,6))
+        self.S = functionspace(self.axial_mesh,vector_element)
 
         #interpolate beam constitutive matrix
         self.k = Function(self.T_66)
@@ -191,140 +196,142 @@ class Beam(Axial):
 
         print("Done interpolating cross-sectional properties to axial mesh...")
     
-    def get_axial_props_from_K_list(self):
-        '''
-        FUNCTION TO POPULATE TENSOR FXN SPACE WITH BEAM CONSTITUITIVE MATRIX 
-        '''
+    #TODO: fix this list
+    # def get_axial_props_from_K_list(self):
+    #     '''
+    #     FUNCTION TO POPULATE TENSOR FXN SPACE WITH BEAM CONSTITUITIVE MATRIX 
+    #     '''
                
-        def get_flat_sym_stiff(K_mat):
-            K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
-            return K_flat
+    #     def get_flat_sym_stiff(K_mat):
+    #         K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
+    #         return K_flat
         
-        sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
-        T2_66 = TensorFunctionSpace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        k2 = Function(T2_66)
-        #TODO:same process for mass matrix
-        # S2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
-        # a2 = Function(S2)
-        # rho2 = Function(S2)
-        # # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
-        # V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
-        # c2 = Function(V2_2)
+    #     sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
+    #     T2_66 = functionspace(self.axial_pos_mesh,tensor_element)
+    #     k2 = Function(T2_66)
+    #     #TODO:same process for mass matrix
+    #     # S2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
+    #     # a2 = Function(S2)
+    #     # rho2 = Function(S2)
+    #     # # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
+    #     # V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
+    #     # c2 = Function(V2_2)
         
-        for i,K in enumerate(self.K_list):
-            print('    reading properties for XS '+str(i+1)+'/'+str(self.numxs)+'...')
-            #output stiffess matrix
-            if sym_cond:
-                #need to add fxn
-                print("symmetric mode not available yet,try again soon")
-                exit()
-                k2.vector.array[21*i,21*(i+1)] = self.xss[i].K.flatten()
-            elif not sym_cond:
-                k2.vector.array[36*i:36*(i+1)] = K.flatten()
-                # a2.vector.array[i] = self.xss[i].A
-                # rho2.vector.array[i] = self.xss[i].rho
-                # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
+    #     for i,K in enumerate(self.K_list):
+    #         print('    reading properties for XS '+str(i+1)+'/'+str(self.numxs)+'...')
+    #         #output stiffess matrix
+    #         if sym_cond:
+    #             #need to add fxn
+    #             print("symmetric mode not available yet,try again soon")
+    #             exit()
+    #             k2.vector.array[21*i,21*(i+1)] = self.xss[i].K.flatten()
+    #         elif not sym_cond:
+    #             k2.vector.array[36*i:36*(i+1)] = K.flatten()
+    #             # a2.vector.array[i] = self.xss[i].A
+    #             # rho2.vector.array[i] = self.xss[i].rho
+    #             # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
 
-        print("Done reading cross-sectional properties...")
+    #     print("Done reading cross-sectional properties...")
 
-        print("Interpolating cross-sectional properties to axial mesh...")
-        #interpolate from axial_pos_mesh to axial_mesh 
+    #     print("Interpolating cross-sectional properties to axial mesh...")
+    #     #interpolate from axial_pos_mesh to axial_mesh 
 
-        #initialize fxn spaces
-        self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        self.V_2 = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
-        self.S = FunctionSpace(self.axial_mesh,('CG',1))
+    #     #initialize fxn spaces
+    #     self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+    #     self.V_2 = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
+    #     self.S = FunctionSpace(self.axial_mesh,('CG',1))
         
-        #interpolate beam constitutive matrix
-        self.k = Function(self.T_66)
-        self.k.interpolate(k2)
+    #     #interpolate beam constitutive matrix
+    #     self.k = Function(self.T_66)
+    #     self.k.interpolate(k2)
 
-        # #interpolate xs area
-        # self.a = Function(self.S)
-        # self.a.interpolate(a2)
+    #     # #interpolate xs area
+    #     # self.a = Function(self.S)
+    #     # self.a.interpolate(a2)
 
-        # #interpolate xs density
-        # self.rho = Function(self.S)
-        # self.rho.interpolate(rho2)
+    #     # #interpolate xs density
+    #     # self.rho = Function(self.S)
+    #     # self.rho.interpolate(rho2)
 
-        # #interpolate centroidal location in g frame
-        # self.c = Function(self.V_2)
-        # self.c.interpolate(c2)
+    #     # #interpolate centroidal location in g frame
+    #     # self.c = Function(self.V_2)
+    #     # self.c.interpolate(c2)
 
-        # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
-        # a2.vector.destroy()
-        # c2.vector.destroy()
-        # rho2.vector.destroy()
+    #     # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+    #     k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
+    #     # a2.vector.destroy()
+    #     # c2.vector.destroy()
+    #     # rho2.vector.destroy()
 
-        print("Done interpolating cross-sectional properties to axial mesh...")
+    #     print("Done interpolating cross-sectional properties to axial mesh...")
     
-    def get_axial_props_from_analytic_formulae(self):
-        def get_flat_sym_stiff(K_mat):
-            K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
-            return K_flat
+    #TODO: UPDATE this fxn
+    # def get_axial_props_from_analytic_formulae(self):
+    #     def get_flat_sym_stiff(K_mat):
+    #         K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
+    #         return K_flat
         
-        sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
-        T2_66 = TensorFunctionSpace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        k2 = Function(T2_66)
-        #TODO:same process for mass matrix
-        S2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
-        # a2 = Function(S2)
-        rho2 = Function(S2)
-        # # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
-        # V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
-        # c2 = Function(V2_2)
-        self.xss = []
-        for i,xs in enumerate(self.xs_params):
-            print('    computing properties for ' + str(xs['shape'])+ ' XS: '+str(i+1)+'/'+str(self.numxs)+'...')
-            #get stiffess matrix
-            self.xss.append(CrossSectionAnalytical(xs))
-            self.xss[i].compute_stiffness()
-            print(self.xss[i].K)
-            if sym_cond:
-                #need to add fxn
-                print("symmetric mode not available yet,try again soon")
-                exit()
-                k2.vector.array[21*i,21*(i+1)] = self.xss[i].K.flatten()
-            elif not sym_cond:
-                k2.vector.array[36*i:36*(i+1)] = self.xss[i].K.flatten()
-                # a2.vector.array[i] = self.xss[i].A
-                rho2.vector.array[i] = self.xss[i].linear_density
-                # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
+    #     sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
+    #     T2_66 = functionspace(self.axial_pos_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+    #     k2 = Function(T2_66)
+    #     #TODO:same process for mass matrix
+    #     S2 = FunctionSpace(self.axial_pos_mesh,('CG',1))
+    #     # a2 = Function(S2)
+    #     rho2 = Function(S2)
+    #     # # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?
+    #     # V2_2 = VectorFunctionSpace(self.axial_pos_mesh,('CG',1),dim=2)
+    #     # c2 = Function(V2_2)
+    #     self.xss = []
+    #     for i,xs in enumerate(self.xs_params):
+    #         print('    computing properties for ' + str(xs['shape'])+ ' XS: '+str(i+1)+'/'+str(self.numxs)+'...')
+    #         #get stiffess matrix
+    #         self.xss.append(CrossSectionAnalytical(xs))
+    #         self.xss[i].compute_stiffness()
+    #         print(self.xss[i].K)
+    #         if sym_cond:
+    #             #need to add fxn
+    #             print("symmetric mode not available yet,try again soon")
+    #             exit()
+    #             k2.vector.array[21*i,21*(i+1)] = self.xss[i].K.flatten()
+    #         elif not sym_cond:
+    #             k2.vector.array[36*i:36*(i+1)] = self.xss[i].K.flatten()
+    #             # a2.vector.array[i] = self.xss[i].A
+    #             rho2.vector.array[i] = self.xss[i].linear_density
+    #             # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
 
-        print("Done finding cross-sectional properties...")
+    #     print("Done finding cross-sectional properties...")
 
-        print("Interpolating cross-sectional properties to axial mesh...")
-        #interpolate from axial_pos_mesh to axial_mesh 
+    #     print("Interpolating cross-sectional properties to axial mesh...")
+    #     #interpolate from axial_pos_mesh to axial_mesh 
 
-        #initialize fxn spaces
-        self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
-        # self.V_2 = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
-        # self.S = FunctionSpace(self.axial_mesh,('CG',1))
+    #     #initialize fxn spaces
+    #     self.T_66 = TensorFunctionSpace(self.axial_mesh,('CG',1),shape=(6,6),symmetry=sym_cond)
+    #     # self.V_2 = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=2)
+    #     # self.S = FunctionSpace(self.axial_mesh,('CG',1))
         
-        #interpolate beam constitutive matrix
-        self.k = Function(self.T_66)
-        self.k.interpolate(k2)
+    #     #interpolate beam constitutive matrix
+    #     self.k = Function(self.T_66)
+    #     self.k.interpolate(k2)
 
-        # #interpolate xs area
-        # self.a = Function(self.S)
-        # self.a.interpolate(a2)
+    #     # #interpolate xs area
+    #     # self.a = Function(self.S)
+    #     # self.a.interpolate(a2)
 
-        # #interpolate xs density
-        self.rho = Function(self.S)
-        self.rho.interpolate(rho2)
+    #     # #interpolate xs density
+    #     self.rho = Function(self.S)
+    #     self.rho.interpolate(rho2)
 
-        # #interpolate centroidal location in g frame
-        # self.c = Function(self.V_2)
-        # self.c.interpolate(c2)
+    #     # #interpolate centroidal location in g frame
+    #     # self.c = Function(self.V_2)
+    #     # self.c.interpolate(c2)
 
-        # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
-        # a2.vector.destroy()
-        # c2.vector.destroy()
-        # rho2.vector.destroy()
+    #     # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+    #     k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
+    #     # a2.vector.destroy()
+    #     # c2.vector.destroy()
+    #     # rho2.vector.destroy()
 
-        print("Done interpolating cross-sectional properties to axial mesh...")
+    #     print("Done interpolating cross-sectional properties to axial mesh...")
    
     def plot_xs_orientations(self):
         pyvista.global_theme.background = [255, 255, 255, 255]
@@ -333,7 +340,7 @@ class Beam(Axial):
 
         #plot Axial mesh
         tdim = self.axial_mesh.topology.dim
-        topology, cell_types, geom = create_vtk_mesh(self.axial_mesh,tdim)
+        topology, cell_types, geom = vtk_mesh(self.axial_mesh,tdim)
         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
         plotter = pyvista.Plotter()
         actor_0 = plotter.add_mesh(grid, style="wireframe", color="k",line_width=5)
@@ -347,7 +354,7 @@ class Beam(Axial):
 
         #plot xs placement mesh
         tdim = self.axial_pos_mesh.topology.dim
-        topology2, cell_types2, geom2 = create_vtk_mesh(self.axial_pos_mesh,tdim)
+        topology2, cell_types2, geom2 = vtk_mesh(self.axial_pos_mesh,tdim)
         grid2 = pyvista.UnstructuredGrid(topology2, cell_types2, geom2)
         actor_3 = plotter.add_mesh(grid2, style="wireframe", color="r")
         actor_4 = plotter.add_mesh(grid2, style='points',color='r')
@@ -454,7 +461,7 @@ class Beam(Axial):
                 # grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
                 # # grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)
                 # plotter = pyvista.Plotter()
-                topology, cell_types, geom = create_vtk_mesh(xs.msh, tdim)
+                topology, cell_types, geom = vtk_mesh(xs.msh, tdim)
                 grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
                 
                 actor0 = plotter.add_mesh(grid, show_edges=True,opacity=0.25)
@@ -478,7 +485,7 @@ class Beam(Axial):
         warp_factor = 1
 
         tdim = self.axial_mesh.topology.dim
-        topology, cell_types, geom = create_vtk_mesh(self.axial_mesh,tdim)
+        topology, cell_types, geom = vtk_mesh(self.axial_mesh,tdim)
         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
         plotter = pyvista.Plotter()
 
@@ -532,7 +539,7 @@ class Beam(Axial):
             transform_matrix2=np.concatenate((np.concatenate([RbA[:,:].T@RTb[:,:].T@self.RBG,trans_vec2],axis=1),np.array([[0,0,0,1]])))
 
             tdim = xs.msh.topology.dim
-            topology2, cell_types2, geom2 = create_vtk_mesh(xs.msh, tdim)
+            topology2, cell_types2, geom2 = vtk_mesh(xs.msh, tdim)
             grids.append(pyvista.UnstructuredGrid(topology2, cell_types2, geom2))
             grids2.append(pyvista.UnstructuredGrid(topology2, cell_types2, geom2))
 

@@ -9,8 +9,9 @@ using shear-deformable Timoshenko Beam Theory
 #TODO: upgrade to geometrically nonlinear capable models
 #TODO: include dynamics by adding mass properties
 
-from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Expression,Function,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
-# from dolfinx.fem.petsc import LinearProblem
+from dolfinx.fem import (functionspace,Expression,Function,Constant, 
+                        locate_dofs_geometrical,locate_dofs_topological,
+                        dirichletbc,form)
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,as_vector, sqrt, 
@@ -33,10 +34,12 @@ class BeamAxis:
         ele: number of element for each beam segment (array of size (len(points)-1,))
         name: name of the beam (string)
         '''
+        print("Constructing beam axis...")
         axial_pos_meshname = name+'_axial_pos_mesh'
         self.axial_pos_mesh = beam_interval_mesh_3D(points,np.ones((len(points)-1,1)),axial_pos_meshname)
         axial_meshname = name+'_axial_mesh'
         self.axial_mesh = beam_interval_mesh_3D(points,ele,axial_meshname)
+        print("DONE constructing beam axis")
 
 class Axial:
     
@@ -302,7 +305,7 @@ class Axial:
         '''
         points_on_proc,cells=get_pts_and_cells(self.domain,points)
         #get coordinate system at each mesh node
-        T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
+        T = functionspace(self.domain,('CG',1,(self.domain.geometry.cell_name(),)))
 
         t = Function(T)
         t.interpolate(Expression(self.t,T.element.interpolation_points()))
@@ -352,8 +355,8 @@ class Axial:
         This only works under the assumption of small displacments (e.g. linear beam theory)
         '''
         # self.RTb = 
-        T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
-        T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
+        T = functionspace(self.domain,('CG',1,(self.domain.geometry.cell_name(),)))
+        T2 =functionspace(self.domain,('CG',1),(3,3))
         grad_uh_interp = Function(T2)
         grad_uh = grad(self.uh.sub(0))
         grad_uh_0 = grad(self.uh.sub(0)[0])
@@ -458,7 +461,7 @@ class Axial:
         '''
         
         #Construct expression to evalute
-        R = VectorFunctionSpace(self.axial_mesh,('DG',0),dim=6)
+        R = functionspace(self.axial_mesh,('DG',0,(6,)))
         r = Function(R)
         r.interpolate(Expression(
                         self.generalized_stresses(self.uh),

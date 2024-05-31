@@ -1,9 +1,6 @@
 #simple example of cross-sectional analysis of an isotropic symmetric box:
 import ALBATROSS
 
-from dolfinx import mesh,plot
-import pyvista
-from mpi4py import MPI
 import numpy as np
 
 #create mesh

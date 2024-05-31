@@ -4,11 +4,14 @@ import numpy as np
 
 #cross-section mesh definition
 N = 5 #number of quad elements per side
-W = .1 #square height  
-H = .2 #square depth
-points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
+H = .1
+W= .1
+tf = 0.01
+tw = 0.01
 
-domain = ALBATROSS.mesh.create_rectangle(points,[N,2*N])
+dims = [H,W,tf,tw]
+num_el = [3,4]#number of elements through each wall thickness
+domain = ALBATROSS.mesh.create_I_section(dims,num_el,'I_section')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',

@@ -8,7 +8,7 @@ import scipy.io
 from scipy.sparse import csc_matrix,csr_matrix
 import meshio
 
-from dolfinx.geometry import BoundingBoxTree,compute_collisions,compute_colliding_cells
+from dolfinx.geometry import BoundingBoxTree,compute_collisions_trees,compute_colliding_cells
 from ufl import TestFunction,TrialFunction,inner,dx
 from dolfinx.fem.petsc import assemble_matrix,assemble_vector,apply_lifting,set_bc
 from dolfinx.fem import form
@@ -37,7 +37,7 @@ def get_vtx_to_dofs(domain,V):
                vertex_to_par_dof_map[vertex] = dofs[dof_layout.entity_dofs(0, i)]
 
      geometry_indices = dolfinx.cpp.mesh.entities_to_geometry(
-          domain, 0, np.arange(num_vertices, dtype=np.int32), False)
+          domain._cpp_object, 0, np.arange(num_vertices, dtype=np.int32), False)
      bs = V0.dofmap.bs
      vtx_to_dof = np.zeros((num_vertices,bs), dtype=np.int32)
      for vertex, geom_index in enumerate(geometry_indices):
@@ -94,7 +94,7 @@ def get_pts_and_cells(domain,points):
      cells = []
      points_on_proc = []
      # Find cells whose bounding-box collide with the the points
-     cell_candidates = compute_collisions(bb_tree, points)
+     cell_candidates = compute_collisions_trees(bb_tree, points)
      # Choose one of the cells that contains the point
      colliding_cells = compute_colliding_cells(domain, cell_candidates, points)
      for i, point in enumerate(points):
