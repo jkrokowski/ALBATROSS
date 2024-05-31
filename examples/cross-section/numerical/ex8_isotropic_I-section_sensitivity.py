@@ -47,7 +47,7 @@ print("Computed bending stiffness:")
 print(squareXS.K[4,4])
 
 import pyvista
-import dolfinx.plot as plot
+from dolfinx.plot import vtk_mesh
 
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
@@ -60,7 +60,7 @@ for i in range(6):
     plotter.subplot(row,col)
     #plot mesh
     tdim = domain.topology.dim
-    topology, cell_types, geom = plot.create_vtk_mesh(domain, tdim)
+    topology, cell_types, geom = vtk_mesh(domain, tdim)
     grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
 
     # sensitivity_to_plot = squareXS.dK1inv[5,5,:]

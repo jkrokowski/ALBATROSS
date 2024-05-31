@@ -97,7 +97,7 @@ class CrossSection:
         
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
-        self.VX = functionspace(self.msh,("CG",1,(self.d,)))
+        self.VX = functionspace(self.msh,("CG",1,(self.tdim,)))
         self.n = FacetNormal(self.msh)
         
         #compute cross-sectional area and linear density (used for body forces)
@@ -163,7 +163,7 @@ class CrossSection:
         
         print('Computing Beam Constitutive Matrix....')
         self._compute_xs_stiffness_matrix()
-        
+
         print("DONE computing Beam Constitutive Matrix")       
 
     def _apply_rotation(self,C,alpha,beta,gamma):
@@ -425,11 +425,7 @@ class CrossSection:
         #indices
         i,j,k,l=self.i,self.j,self.k,self.l
         a,B = self.a,self.B
-
-        #initialize matrices (elastic solution mode Jacobian and Hessian)
-        K1 = np.zeros((6,6))
-        K2 = np.zeros((6,6))
-      
+   
         #elastic solution mode function related to each warping fxn
         N_bar = self.N_bar
         N_hat = self.N_hat
@@ -509,10 +505,10 @@ class CrossSection:
         self.K = np.linalg.inv(self.S)
     
     def compute_xs_stiffness_matrix_sensitivities(self):
-        # args = self.K1_form[0][0].arguments()
-        # n = max(a.number() for a in args) if args else -1
-        # du = Argument(self.VX,n+1)
-        du = Argument(self.VX,0) #there are no arguments in any of these forms?
+        args = self.K1_form[0][0].arguments()
+        n = max(a.number() for a in args) if args else -1
+        du = Argument(self.VX,n+1)
+        # du = Argument(self.VX,0) #there are no arguments in any of these forms?
         self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du)
                             for idx1 in range(6)] 
                                 for idx2 in range(6)]

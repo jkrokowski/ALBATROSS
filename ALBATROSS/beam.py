@@ -8,7 +8,7 @@ stress solution field to be obtained
 
 '''
 
-from dolfinx.fem import Function,functionspace
+from dolfinx.fem import Function,functionspace,create_nonmatching_meshes_interpolation_data
 from ufl import sin,cos
 from ALBATROSS.cross_section import CrossSectionAnalytical
 from ALBATROSS.axial import Axial
@@ -129,7 +129,10 @@ class Beam(Axial):
         #TODO: need to update based on this syntax change: 
         # https://fenicsproject.discourse.group/t/segv-fault-when-interpolating-function-onto-different-mesh/13593
         # https://github.com/FEniCS/dolfinx/blob/v0.7.3/python/test/unit/fem/test_interpolation.py#L720-L765 
-        self.o.interpolate(self.o2)
+        self.o.interpolate(self.o2,nmm_interpolation_data=create_nonmatching_meshes_interpolation_data(
+            self.o.function_space.mesh._cpp_object,
+            self.o.function_space.element,
+            self.o2.function_space.mesh._cpp_object, padding=1e-14))
         print("made it here :)")
 
     def _link_xs_to_axial(self):
