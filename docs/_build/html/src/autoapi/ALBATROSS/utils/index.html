@@ -53,15 +53,7 @@
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../background.html">Background</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/hello%20beam.html">1. 1D Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/hello%20beam.html#advanced-tutorials">2. Advanced tutorials</a><ul class="simple">
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/cross%20section.html">3. Cross Sectional Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/cross%20section.html#basic-tutorials">4. Basic tutorials</a><ul class="simple">
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul class="simple">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a><ul>
@@ -135,7 +127,7 @@
 </table>
 <dl class="py function">
 <dt class="sig sig-object py" id="ALBATROSS.utils.get_pts_and_cells">
-<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">get_pts_and_cells</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">points</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.utils.get_pts_and_cells" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">get_pts_and_cells</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">points</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/utils.html#get_pts_and_cells"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.utils.get_pts_and_cells" title="Link to this definition"></a></dt>
 <dd><dl class="simple">
 <dt>ARGS:</dt><dd><p>point = tuple of (x,y,z) locations to return displacements and rotations</p>
 </dd>
@@ -144,7 +136,7 @@
 
 <dl class="py function">
 <dt class="sig sig-object py" id="ALBATROSS.utils.get_vtx_to_dofs">
-<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">get_vtx_to_dofs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">V</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.utils.get_vtx_to_dofs" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">get_vtx_to_dofs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">V</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/utils.html#get_vtx_to_dofs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.utils.get_vtx_to_dofs" title="Link to this definition"></a></dt>
 <dd><section id="solution-from-https-fenicsproject-discourse-group-t-application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs-9646">
 <h4>solution from <a class="reference external" href="https://fenicsproject.discourse.group/t/application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs/9646">https://fenicsproject.discourse.group/t/application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs/9646</a><a class="headerlink" href="#solution-from-https-fenicsproject-discourse-group-t-application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs-9646" title="Link to this heading"></a></h4>
 <p>input: subspace to find DOFs in
@@ -154,27 +146,27 @@ output: map of DOFs related to their corresponding vertices</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="ALBATROSS.utils.gmsh_to_xdmf">
-<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">gmsh_to_xdmf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mesh</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cell_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prune_z</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.utils.gmsh_to_xdmf" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">gmsh_to_xdmf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mesh</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cell_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prune_z</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/utils.html#gmsh_to_xdmf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.utils.gmsh_to_xdmf" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="ALBATROSS.utils.mat_to_mesh">
-<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">mat_to_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aux_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_xs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.utils.mat_to_mesh" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">mat_to_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aux_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_xs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/utils.html#mat_to_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.utils.mat_to_mesh" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="ALBATROSS.utils.plot_xdmf_mesh">
-<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">plot_xdmf_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msh</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">surface</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_nodes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.utils.plot_xdmf_mesh" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">plot_xdmf_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msh</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">surface</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_nodes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/utils.html#plot_xdmf_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.utils.plot_xdmf_mesh" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="ALBATROSS.utils.project">
-<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">v</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bcs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.utils.project" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">v</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bcs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/utils.html#project"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.utils.project" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="ALBATROSS.utils.sparseify">
-<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">sparseify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mat</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sparse_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'csr'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.utils.sparseify" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">ALBATROSS.utils.</span></span><span class="sig-name descname"><span class="pre">sparseify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mat</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sparse_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'csr'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/utils.html#sparseify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.utils.sparseify" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </section>

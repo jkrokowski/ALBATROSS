@@ -53,15 +53,7 @@
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../background.html">Background</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/hello%20beam.html">1. 1D Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/hello%20beam.html#advanced-tutorials">2. Advanced tutorials</a><ul class="simple">
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/cross%20section.html">3. Cross Sectional Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/cross%20section.html#basic-tutorials">4. Basic tutorials</a><ul class="simple">
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul class="simple">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a><ul>
@@ -130,7 +122,7 @@
 </table>
 <dl class="py class">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.cross_section.</span></span><span class="sig-name descname"><span class="pre">CrossSection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msh</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">materials</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">celltags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection" title="Link to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.cross_section.</span></span><span class="sig-name descname"><span class="pre">CrossSection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msh</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">materials</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">celltags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection" title="Link to this definition"></a></dt>
 <dd><dl class="py attribute">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.msh">
 <span class="sig-name descname"><span class="pre">msh</span></span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.msh" title="Link to this definition"></a></dt>
@@ -143,82 +135,102 @@ celltags = {‘mat_id’: [0, 0, 1,0], ‘orientation’: {0, 90, 90, 0}}</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._apply_rotation">
-<span class="sig-name descname"><span class="pre">_apply_rotation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">C</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._apply_rotation" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_apply_rotation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">C</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._apply_rotation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._apply_rotation" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._build_elastic_solution_modes">
-<span class="sig-name descname"><span class="pre">_build_elastic_solution_modes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._build_elastic_solution_modes" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_build_elastic_solution_modes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._build_elastic_solution_modes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._build_elastic_solution_modes" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._build_elastic_solution_modes_EB">
+<span class="sig-name descname"><span class="pre">_build_elastic_solution_modes_EB</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._build_elastic_solution_modes_EB"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._build_elastic_solution_modes_EB" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._compute_xs_stiffness_matrix">
-<span class="sig-name descname"><span class="pre">_compute_xs_stiffness_matrix</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._compute_xs_stiffness_matrix" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_compute_xs_stiffness_matrix</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._compute_xs_stiffness_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._compute_xs_stiffness_matrix" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._compute_xs_stiffness_matrix_EB">
+<span class="sig-name descname"><span class="pre">_compute_xs_stiffness_matrix_EB</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._compute_xs_stiffness_matrix_EB"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._compute_xs_stiffness_matrix_EB" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._construct_mat_orientation">
-<span class="sig-name descname"><span class="pre">_construct_mat_orientation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">orientation</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._construct_mat_orientation" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_construct_mat_orientation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">orientation</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._construct_mat_orientation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._construct_mat_orientation" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._construct_residual">
-<span class="sig-name descname"><span class="pre">_construct_residual</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._construct_residual" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_construct_residual</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._construct_residual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._construct_residual" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._decouple_modes">
-<span class="sig-name descname"><span class="pre">_decouple_modes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._decouple_modes" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_decouple_modes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._decouple_modes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._decouple_modes" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection._get_modes">
-<span class="sig-name descname"><span class="pre">_get_modes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._get_modes" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_get_modes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection._get_modes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection._get_modes" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.compute_xs_stiffness_matrix_sensitivities">
+<span class="sig-name descname"><span class="pre">compute_xs_stiffness_matrix_sensitivities</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.compute_xs_stiffness_matrix_sensitivities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.compute_xs_stiffness_matrix_sensitivities" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.getXSMassMatrix">
-<span class="sig-name descname"><span class="pre">getXSMassMatrix</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.getXSMassMatrix" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">getXSMassMatrix</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.getXSMassMatrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.getXSMassMatrix" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.get_von_mises_stress">
-<span class="sig-name descname"><span class="pre">get_von_mises_stress</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stress</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.get_von_mises_stress" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">get_von_mises_stress</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stress</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.get_von_mises_stress"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.get_von_mises_stress" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.get_xs_stiffness_matrix">
-<span class="sig-name descname"><span class="pre">get_xs_stiffness_matrix</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.get_xs_stiffness_matrix" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">get_xs_stiffness_matrix</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.get_xs_stiffness_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.get_xs_stiffness_matrix" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.get_xs_stiffness_matrix_EB">
+<span class="sig-name descname"><span class="pre">get_xs_stiffness_matrix_EB</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.get_xs_stiffness_matrix_EB"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.get_xs_stiffness_matrix_EB" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.plot_mesh">
-<span class="sig-name descname"><span class="pre">plot_mesh</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.plot_mesh" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">plot_mesh</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.plot_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.plot_mesh" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.recover_stress">
-<span class="sig-name descname"><span class="pre">recover_stress</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reactions</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.recover_stress" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">recover_stress</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reactions</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.recover_stress"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.recover_stress" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.strains_from_warping_fxns">
-<span class="sig-name descname"><span class="pre">strains_from_warping_fxns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ubar_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uhat_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">utilde_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ubreve_c</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.strains_from_warping_fxns" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">strains_from_warping_fxns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ubar_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uhat_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">utilde_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ubreve_c</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.strains_from_warping_fxns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.strains_from_warping_fxns" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSection.stress_from_warping_fxns">
-<span class="sig-name descname"><span class="pre">stress_from_warping_fxns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ubar_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uhat_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">utilde_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ubreve_c</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.stress_from_warping_fxns" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">stress_from_warping_fxns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ubar_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uhat_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">utilde_c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ubreve_c</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSection.stress_from_warping_fxns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSection.stress_from_warping_fxns" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSectionAnalytical">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.cross_section.</span></span><span class="sig-name descname"><span class="pre">CrossSectionAnalytical</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSectionAnalytical" title="Link to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.cross_section.</span></span><span class="sig-name descname"><span class="pre">CrossSectionAnalytical</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSectionAnalytical"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSectionAnalytical" title="Link to this definition"></a></dt>
 <dd><dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.cross_section.CrossSectionAnalytical.compute_stiffness">
-<span class="sig-name descname"><span class="pre">compute_stiffness</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.cross_section.CrossSectionAnalytical.compute_stiffness" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">compute_stiffness</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/cross_section.html#CrossSectionAnalytical.compute_stiffness"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.cross_section.CrossSectionAnalytical.compute_stiffness" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>

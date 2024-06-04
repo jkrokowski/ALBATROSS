@@ -81,30 +81,7 @@ Classes
    .. py:method:: _orient_xss()
 
 
-   .. py:method:: get_axial_props_from_K_list()
-
-      
-      FUNCTION TO POPULATE TENSOR FXN SPACE WITH BEAM CONSTITUITIVE MATRIX 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-      ..
-          !! processed by numpydoc !!
-
-   .. py:method:: get_axial_props_from_analytic_formulae()
+   .. py:method:: get_max_stress()
 
 
    .. py:method:: plot_xs_disp_3D()

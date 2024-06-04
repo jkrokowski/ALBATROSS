@@ -53,15 +53,7 @@
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../background.html">Background</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/hello%20beam.html">1. 1D Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/hello%20beam.html#advanced-tutorials">2. Advanced tutorials</a><ul class="simple">
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/cross%20section.html">3. Cross Sectional Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/cross%20section.html#basic-tutorials">4. Basic tutorials</a><ul class="simple">
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul class="simple">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a><ul>
@@ -121,15 +113,15 @@ and solving a model comprised of multiple different meshes</p>
 </table>
 <dl class="py class">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.frame.</span></span><span class="sig-name descname"><span class="pre">Frame</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Beams</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame" title="Link to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.frame.</span></span><span class="sig-name descname"><span class="pre">Frame</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Beams</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame" title="Link to this definition"></a></dt>
 <dd><dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame.add_beam">
-<span class="sig-name descname"><span class="pre">add_beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Beam</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame.add_beam" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">add_beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Beam</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame.add_beam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame.add_beam" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame.add_connection">
-<span class="sig-name descname"><span class="pre">add_connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cxn_members</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cxn_pt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cxn_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'rigid'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame.add_connection" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">add_connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cxn_members</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cxn_pt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cxn_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'rigid'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame.add_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame.add_connection" title="Link to this definition"></a></dt>
 <dd><dl class="simple">
 <dt>adds a dictionary to the list of connections with the following information:</dt><dd><dl class="simple">
 <dt>-key:value pairs detailing the index number of each member in the self.Members list</dt><dd><p>and the dofs associated with the connection at the point for each member</p>
@@ -150,32 +142,32 @@ This could be implemented with a penalty method, among other approaches</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame.create_frame_connectivity">
-<span class="sig-name descname"><span class="pre">create_frame_connectivity</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame.create_frame_connectivity" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">create_frame_connectivity</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame.create_frame_connectivity"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame.create_frame_connectivity" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame.plot_axial_displacement">
-<span class="sig-name descname"><span class="pre">plot_axial_displacement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">warp_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame.plot_axial_displacement" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">plot_axial_displacement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">warp_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame.plot_axial_displacement"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame.plot_axial_displacement" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame.plot_frame">
-<span class="sig-name descname"><span class="pre">plot_frame</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame.plot_frame" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">plot_frame</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame.plot_frame"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame.plot_frame" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame.recover_displacement">
-<span class="sig-name descname"><span class="pre">recover_displacement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plot_xss</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame.recover_displacement" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">recover_displacement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plot_xss</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame.recover_displacement"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame.recover_displacement" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame.recover_stress">
-<span class="sig-name descname"><span class="pre">recover_stress</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame.recover_stress" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">recover_stress</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame.recover_stress"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame.recover_stress" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.frame.Frame.solve">
-<span class="sig-name descname"><span class="pre">solve</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.frame.Frame.solve" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">solve</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/frame.html#Frame.solve"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.frame.Frame.solve" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>

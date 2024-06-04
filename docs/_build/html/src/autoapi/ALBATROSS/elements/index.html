@@ -53,15 +53,7 @@
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../getting_started.html">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../background.html">Background</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/hello%20beam.html">1. 1D Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/hello%20beam.html#advanced-tutorials">2. Advanced tutorials</a><ul class="simple">
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/cross%20section.html">3. Cross Sectional Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../tutorials/cross%20section.html#basic-tutorials">4. Basic tutorials</a><ul class="simple">
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials.html">Tutorials</a><ul class="simple">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a><ul>
@@ -124,10 +116,10 @@ Defines the finite element spaces with user-defined element type and</p>
 </table>
 <dl class="py class">
 <dt class="sig sig-object py" id="ALBATROSS.elements.LinearTimoshenkoElement">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.elements.</span></span><span class="sig-name descname"><span class="pre">LinearTimoshenkoElement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">element_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quad_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.elements.LinearTimoshenkoElement" title="Link to this definition"></a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">ALBATROSS.elements.</span></span><span class="sig-name descname"><span class="pre">LinearTimoshenkoElement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">element_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quad_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/elements.html#LinearTimoshenkoElement"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.elements.LinearTimoshenkoElement" title="Link to this definition"></a></dt>
 <dd><dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.elements.LinearTimoshenkoElement.getQuadratureRule">
-<span class="sig-name descname"><span class="pre">getQuadratureRule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">quad_data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.elements.LinearTimoshenkoElement.getQuadratureRule" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">getQuadratureRule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">quad_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/elements.html#LinearTimoshenkoElement.getQuadratureRule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.elements.LinearTimoshenkoElement.getQuadratureRule" title="Link to this definition"></a></dt>
 <dd><p>Returns a list of the cell integrals for 3 displacement
 and 3  energy with given quadrature degrees.</p>
 <p>Shear locking is possible, so we use reduced integration by
@@ -140,7 +132,7 @@ ordered by: [ux,uy,uz,thetax,thetay,thetaz] (similar to the default case below)<
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ALBATROSS.elements.LinearTimoshenkoElement.setUpFunctionSpace">
-<span class="sig-name descname"><span class="pre">setUpFunctionSpace</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ALBATROSS.elements.LinearTimoshenkoElement.setUpFunctionSpace" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">setUpFunctionSpace</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/ALBATROSS/elements.html#LinearTimoshenkoElement.setUpFunctionSpace"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ALBATROSS.elements.LinearTimoshenkoElement.setUpFunctionSpace" title="Link to this definition"></a></dt>
 <dd><p>Set up function space and the order of integration, with the first
 vector element being nodal displacement, and the second vector
 element being linearized rotation.</p>

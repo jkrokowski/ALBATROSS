@@ -54,15 +54,7 @@
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="src/getting_started.html">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="src/background.html">Background</a></li>
-<li class="toctree-l1"><a class="reference internal" href="src/tutorials.html">Tutorials</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="src/tutorials/hello%20beam.html">1. 1D Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="src/tutorials/hello%20beam.html#advanced-tutorials">2. Advanced tutorials</a><ul class="simple">
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="src/tutorials/cross%20section.html">3. Cross Sectional Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="src/tutorials/cross%20section.html#basic-tutorials">4. Basic tutorials</a><ul class="simple">
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="src/tutorials.html">Tutorials</a><ul class="simple">
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="src/examples.html">Examples</a><ul>
@@ -106,13 +98,18 @@
   <section class="tex2jax_ignore mathjax_ignore" id="welcome-to-albatross">
 <h1>Welcome to ALBATROSS<a class="headerlink" href="#welcome-to-albatross" title="Link to this heading"></a></h1>
 <p><strong>A</strong>nalysis <strong>L</strong>ibrary for <strong>B</strong>eams <strong>A</strong>nd <strong>T</strong>hree-dimensional <strong>R</strong>epresentations <strong>O</strong>f <strong>S</strong>lender <strong>S</strong>tructures</p>
-<p>This package is a collection of various beam utilities based on FEniCSx.</p>
+<p>This package is a collection of various beam utilities using <a class="reference external" href="https://fenicsproject.org/">FEniCSx</a>.</p>
 <p>Currently supported tasks:</p>
 <ul class="simple">
 <li><p>Cross-sectional analysis of generic 2D cross-sections</p></li>
 <li><p>Static analysis beams with variable and arbitrary cross-sections</p></li>
-<li><p>Displacement and stress recovery at any specified cross-section</p></li>
+<li><p>Displacement and stress recovery at any defined cross-section</p></li>
 </ul>
+<p>When cross-sectional analysis is paired with an appropriate 1D model, stress and displacement results computational work can be reduced my multiple orders of magnitude.</p>
+<p>Below is are post processed results for a cantilever beam with an applied tip load.</p>
+<p><img alt="figure" src="_images/cantilever_beam.png" /></p>
+<p>The von_mises stress can be plotted over the cross-section for this same example:</p>
+<p><img alt="figure" src="_images/von_mises.png" /></p>
 <!-- # Cite us
 ```none
 @article{lsdo2023,

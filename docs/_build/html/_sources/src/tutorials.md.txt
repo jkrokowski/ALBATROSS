@@ -20,6 +20,6 @@ and add the tutorial files directly into the toctree of this main tutorials page
 :numbered: 1
 :includehidden:
 
-tutorials/hello beam
-tutorials/cross section
+./_temp/tutorials/tu_hello beam
+./_temp/tutorials/cross section
 ```

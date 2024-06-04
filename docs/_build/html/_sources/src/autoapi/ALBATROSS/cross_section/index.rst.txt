@@ -62,7 +62,13 @@ Attributes
    .. py:method:: _build_elastic_solution_modes()
 
 
+   .. py:method:: _build_elastic_solution_modes_EB()
+
+
    .. py:method:: _compute_xs_stiffness_matrix()
+
+
+   .. py:method:: _compute_xs_stiffness_matrix_EB()
 
 
    .. py:method:: _construct_mat_orientation(orientation)
@@ -77,6 +83,9 @@ Attributes
    .. py:method:: _get_modes()
 
 
+   .. py:method:: compute_xs_stiffness_matrix_sensitivities()
+
+
    .. py:method:: getXSMassMatrix()
 
 
@@ -84,6 +93,9 @@ Attributes
 
 
    .. py:method:: get_xs_stiffness_matrix()
+
+
+   .. py:method:: get_xs_stiffness_matrix_EB()
 
 
    .. py:method:: plot_mesh()

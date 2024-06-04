@@ -11,9 +11,11 @@ First, install the package dependencies. Then clone the repository and pip insta
 
 1. Install [Numpy](https://numpy.org/) and [SciPy](https://scipy.org/)
 2. Install [FEniCS](https://fenicsproject.org/download/) and [pyvista](https://docs.pyvista.org/version/stable/) for visualization
-3. Install [sparseqr](https://github.com/yig/PySPQR)
-4. run ```git clone https://github.com/jkrokowski/ALBATROSS.git```
-5. From the top level ALBATROSS directory, run ```pip install .```
+3. Install [sparseqr](https://github.com/yig/PySPQR) from github (not the PyPi package as this is missing key functionality)
+4. Install mesh handling package [meshio]https://github.com/nschloe/meshio 
+5. Install the python api for [gmsh]https://gmsh.info/ via pip
+6. run ```git clone https://github.com/jkrokowski/ALBATROSS.git```
+7. From the top level ALBATROSS directory, run ```pip install .```
 
 ## Understanding the theory
 If you are unfamiliar with the theory behind beam models and their place within the solid mechanics world, we suggest you start at the [background](./background.md) page. 
