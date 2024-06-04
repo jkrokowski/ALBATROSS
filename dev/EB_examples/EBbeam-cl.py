@@ -1,15 +1,16 @@
 # static 1D Cantilever Beam with a rectangular cross section
 # this example uses Euler-Bernoulli ("classical") beam theory
-import matplotlib.pyplot as plt
+# import basix.ufl_wrapper
 import numpy as np
 from mpi4py import MPI
 import basix
-from dolfinx.fem import (Function, FunctionSpace, dirichletbc,
+from dolfinx.fem import (Function, dirichletbc,functionspace,
                          locate_dofs_topological,Constant,Expression)
 from dolfinx.io import VTKFile
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import locate_entities_boundary,create_interval
-from ufl import (SpatialCoordinate,inner, TestFunction, TrialFunction, div, grad, dx,derivative)
+from ufl import (SpatialCoordinate,inner, TestFunction, TrialFunction, div, grad, dx)
+import matplotlib.pyplot as plt
 
 ########## GEOMETRIC INPUT ####################
 E = 70e3
@@ -23,7 +24,7 @@ g = 9.81
 #################################################################
 ########### CONSTRUCT BEAM MESH #################################
 #################################################################
-NUM_ELEM = 100
+NUM_ELEM = 10
 domain = create_interval(MPI.COMM_WORLD, NUM_ELEM, [0, L])
 
 #################################################################
@@ -44,24 +45,11 @@ EI = (E*width*thick**3)/12
 q=-rho*A*g
 
 #################################################################
-########### EXACT SOLUTIONS FOR VARIOUS BCS #####################
+########### EXACT SOLUTIONS FOR CANTILEVER BEAM #################
 #################################################################
-#pinned-pinned
-w_pp = q/EI * ( (x[0]**4)/24 -(L*x[0]**3)/12 +((L**3)*x[0])/24 )
-
-#fixed-fixed
-w_ff = q/EI * ( (x[0]**4)/24 -(L*x[0]**3)/12 +((L**2)*x[0]**2)/24 )
-
-#fixed-pinned
-w_fp = q/EI * ( (x[0]**4)/24 -(5*L*x[0]**3)/48 +((L**2)*x[0]**2)/16)
-
 #cantilever
 w_cl = q/EI * ( (x[0]**4)/24 -(L*x[0]**3)/6 +((L**2)*x[0]**2)/4 )
-rot_cl = grad(w_cl)
-moment_cl = grad(rot_cl)
-shear_cl = grad(moment_cl)
 
-# rot_cl = q/EI * ((x[0]**3)/6 -(L*x[0]**2)/2 +((L**2)*x[0])/2 )
 #################################################################
 ########### COMPUTE STATIC SOLUTION #############################
 #################################################################
@@ -70,12 +58,12 @@ shear_cl = grad(moment_cl)
 def M(u):
     return EI*div(grad(u))
 
-# Create Hermite order 3 on a interval (for more informations see:
+# Create Hermite order 3 on a interval (for more informations see:
 #    https://defelement.com/elements/examples/interval-Hermite-3.html )
-beam_element = basix.ufl_wrapper.create_element(basix.ElementFamily.Hermite, basix.CellType.interval, 3)
+beam_element=basix.ufl.element(basix.ElementFamily.Hermite, basix.CellType.interval, 3)
 
 #finite element function space on domain, with trial and test fxns
-W = FunctionSpace(domain,beam_element)
+W = functionspace(domain,beam_element)
 print("Number of DOFs: %d" % W.dofmap.index_map.size_global)
 print("Number of elements (intervals): %d" % NUM_ELEM)
 print("Number of nodes: %d" % (NUM_ELEM+1))
@@ -103,8 +91,8 @@ startdof=locate_dofs_topological(W,0,startpt)
 enddof=locate_dofs_topological(W,0,endpt)
 
 #fix displacement of start point and rotation as well
-fixed_disp = dirichletbc(ubc,[startdof[0]])
-fixed_rot = dirichletbc(ubc,[startdof[1]])
+fixed_disp = dirichletbc(ubc,np.array([startdof[0]]))
+fixed_rot = dirichletbc(ubc,np.array([startdof[1]]))
 
 #SOLVE VARIATIONAL PROBLEM
 #initialize function in functionspace for beam properties
@@ -115,7 +103,6 @@ problem = LinearProblem(k_form, l_form, u=u, bcs=[fixed_disp,fixed_rot])
 uh=problem.solve()
 uh.name = "Displacement and Rotation "
 
-M = EI*div(grad(uh))
 #################################################################
 ########### SAVE AND VISUALIZE RESULTS ##########################
 #################################################################
@@ -124,16 +111,9 @@ M = EI*div(grad(uh))
 #  as the rotation DOFs are included in this  )
 with VTKFile(domain.comm, "output/output.pvd", "w") as vtk:
     vtk.write([uh._cpp_object])
-    # vtk.write([theta._cpp_object])
-    # vtk.write([moment._cpp_object])
-    # vtk.write([shear._cpp_object])
-
-# print("Maximum displacement: %e" % np.min(uh.x.array))
-
+    
 #NOTE: The solution uh contains both the rotation and the displacement solutions
 #The rotation and displacment solutions can be separated as follows:
-#TODO: there is likely a much easier way to separate these DOFs and do so in a 
-
 disp = np.empty(0)
 rot = np.empty(0)
 for i,x in enumerate(uh.x.array):
@@ -143,63 +123,32 @@ for i,x in enumerate(uh.x.array):
         disp = np.append(disp,x)
 
 #evaluate derivatives and interpolate to higher order function space
-T = FunctionSpace(domain,("CG",1))
+T = functionspace(domain,("CG",1))
 
 #interpolate exact ufl expression onto high-order function space
 disp_expr = Expression(w_cl,T.element.interpolation_points())
 disp_exact = Function(T)
 disp_exact.interpolate(disp_expr)
 
-rot_expr = Expression(rot_cl,T.element.interpolation_points())
-rot_exact = Function(T)
-rot_exact.interpolate(rot_expr)
-
-mom_expr = Expression(moment_cl,T.element.interpolation_points())
-mom_exact = Function(T)
-mom_exact.interpolate(mom_expr)
-
-shr_expr = Expression(shear_cl,T.element.interpolation_points())
-shr_exact = Function(T)
-shr_exact.interpolate(shr_exact)
-
 #extract numpy arrays for plotting
 exact_disp = disp_exact.x.array
-exact_rot = rot_exact.x.array
-exact_mom = mom_exact.x.array
-exact_shr = shr_exact.x.array
 
 x_exact = np.linspace(0,1,exact_disp.shape[0])
 
 x_fem = np.linspace(0,1,disp.shape[0])
 
-figure, axis = plt.subplots(2, 2)
+figure, axis = plt.subplots(1,1)
 
 print("Maximum magnitude displacement (cantilever exact solution) is: %e" % np.min(exact_disp))
 print("Maximum magnitude displacement (cantilever FEM solution) is: %e" % np.min(disp))
 
 ####PLOTTING####
 #Displacement
-axis[0,0].plot(x_exact,exact_disp,label='exact')
-axis[0,0].plot(x_fem, disp,label='FEM')
-axis[0,0].set_title("Displacement")
-axis[0,0].legend()
-
-#Rotation
-axis[0,1].plot(x_exact,exact_rot,label='exact')
-axis[0,1].plot(x_fem, rot,label='FEM')
-axis[0,1].set_title("Rotation")
-axis[0,1].legend()
-
-#Moment
-axis[1,0].plot(x_exact,exact_mom,label='exact')
-# axis[1,0].plot(x_fem, rot,label='FEM')
-axis[1,0].set_title("Moment")
-axis[1,0].legend()
-
-#Shear
-axis[1,1].plot(x_exact,exact_shr,label='exact')
-# axis[1,1].plot(x_fem, rot,label='FEM')
-axis[1,1].set_title("Shear")
-axis[1,1].legend()
+axis.plot(x_exact,exact_disp,label='exact')
+axis.plot(x_fem, disp,marker='x',linestyle=':',label='FEM')
+axis.set_xlabel('x (location along beam)')
+axis.set_ylabel('u(x) (transverse displacement)')
+axis.set_title("Displacement of FEM vs EB theory")
+axis.legend()
 
 plt.show()

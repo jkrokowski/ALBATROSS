@@ -9,8 +9,9 @@ using shear-deformable Timoshenko Beam Theory
 #TODO: upgrade to geometrically nonlinear capable models
 #TODO: include dynamics by adding mass properties
 
-from dolfinx.fem import TensorFunctionSpace,VectorFunctionSpace,Expression,Function,Constant, locate_dofs_geometrical,locate_dofs_topological,dirichletbc,form
-# from dolfinx.fem.petsc import LinearProblem
+from dolfinx.fem import (functionspace,Expression,Function,Constant, 
+                        locate_dofs_geometrical,locate_dofs_topological,
+                        dirichletbc,form)
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,as_vector, sqrt, 
@@ -18,7 +19,7 @@ from ufl import (Jacobian, TestFunction,TrialFunction,as_vector, sqrt,
 from ALBATROSS.elements import LinearTimoshenkoElement
 from petsc4py.PETSc import ScalarType
 import numpy as np
-from dolfinx import plot
+from dolfinx import plot,default_scalar_type
 import pyvista
 
 from ALBATROSS.utils import get_pts_and_cells
@@ -33,10 +34,12 @@ class BeamAxis:
         ele: number of element for each beam segment (array of size (len(points)-1,))
         name: name of the beam (string)
         '''
+        print("Constructing beam axis...")
         axial_pos_meshname = name+'_axial_pos_mesh'
         self.axial_pos_mesh = beam_interval_mesh_3D(points,np.ones((len(points)-1)),axial_pos_meshname)
         axial_meshname = name+'_axial_mesh'
         self.axial_mesh = beam_interval_mesh_3D(points,ele,axial_meshname)
+        print("DONE constructing beam axis")
 
 class Axial:
     
@@ -123,8 +126,11 @@ class Axial:
         '''
         
         print("Adding distributed load....")
-        f_vec = self.linear_density*Constant(self.domain,ScalarType(f))
-
+        # f_vec = as_vector([self.linear_density[i]*Constant(self.domain,default_scalar_type(f[i])) for i in range(3)])
+        f_vec = self.linear_density*Constant(self.domain,default_scalar_type(f))
+        print(f_vec.ufl_shape)
+        print(self.u_.ufl_shape)
+        print(dot(f_vec,self.u_).ufl_shape)
         if self.L_form is None:
             self.L_form = dot(f_vec,self.u_)*self.dx
         else:
@@ -155,6 +161,7 @@ class Axial:
     def xyz_to_span(self,pt):
         #TODO: method to convert an xyz coordinate to the length along the beam
         return
+    
     def span_to_xyz(self,l):
         #TODO: method to convert spanwise coordinate l to an xyz location
         return
@@ -175,6 +182,7 @@ class Axial:
         ksp.setOperators(self.A_mat)
         # ksp.setFromOptions()
         ksp.solve(self.b,uvec)
+
     def _solve_simple(self):    
         # --------
         # between these lines is the vastly simplified solution in the case of:
@@ -197,9 +205,7 @@ class Axial:
         if self.L_form is None:
             f0 = Constant(self.domain,ScalarType((0,0,0)))
             self.L_form = -dot(f0,self.u_)*self.dx
-            # self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx
         
-        # form(self.L_form)
         self.b=create_vector(form(self.L_form))
         with self.b.localForm() as b_loc:
                     b_loc.set(0)
@@ -224,18 +230,23 @@ class Axial:
                                                   np.isclose(x[2],pt[2])))
                 f_dofs = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),locate_dofs)
                 self.b.array[f_dofs[0]] = f
+        if bool(self.m_pt):
+            W1, rot_dofs = self.beam_element.W.sub(1).collapse()
+            for m_pt in self.m_pt:
+                m = m_pt[0]
+                pt = m_pt[1]
+                def locate_dofs(x):
+                    return np.logical_and.reduce((np.isclose(x[0],pt[0]),
+                                                  np.isclose(x[1],pt[1]),
+                                                  np.isclose(x[2],pt[2])))
+                m_dofs = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),locate_dofs)
+                self.b.array[m_dofs[0]] = m
 
     def add_clamped_point(self,pt):
         '''
         pt = x,y,z location of clamped point
         '''
         print("Adding clamped point...")
-        # #marker fxn
-        # def clamped_point(x):
-        #     x_check = np.isclose(x[0],pt[0])
-        #     y_check = np.isclose(x[1],pt[1])
-        #     z_check = np.isclose(x[2],pt[2])
-        #     return np.logical_and.reduce([x_check,y_check,z_check])
         #function for bc application
         ubc = Function(self.beam_element.W)
         with ubc.vector.localForm() as uloc:
@@ -243,14 +254,7 @@ class Axial:
         
         clamped_disp_dofs = self._get_dofs(pt,'disp')
         clamped_rot_dofs = self._get_dofs(pt,'rot')
-        # #find displacement DOFs
-        # W0, disp_dofs = self.beam_element.W.sub(0).collapse()
-        # clamped_disp_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),clamped_point)
 
-        # #find rotation DOFs
-        # W1, rot_dofs = self.beam_element.W.sub(1).collapse()
-        # clamped_rot_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),clamped_point)
-        
         clamped_dofs= np.concatenate([clamped_disp_dofs,clamped_rot_dofs])
         clamped_bc = dirichletbc(ubc,clamped_dofs)
         self.bcs.append(clamped_bc)
@@ -304,7 +308,7 @@ class Axial:
         '''
         points_on_proc,cells=get_pts_and_cells(self.domain,points)
         #get coordinate system at each mesh node
-        T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
+        T = functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
 
         t = Function(T)
         t.interpolate(Expression(self.t,T.element.interpolation_points()))
@@ -316,11 +320,7 @@ class Axial:
         a2 = Function(T)
         a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
         z = a2.eval(points_on_proc,cells)
-        # print('before:')
-        # print(np.array([tangent,y,z]))
-        # print('after:')
-        # print(np.moveaxis(np.array([tangent,y,z]),0,1))
-        # print('------')
+
         return np.moveaxis(np.array([tangent,y,z]),0,1)
     
     def get_local_disp(self,points):
@@ -358,8 +358,8 @@ class Axial:
         This only works under the assumption of small displacments (e.g. linear beam theory)
         '''
         # self.RTb = 
-        T = VectorFunctionSpace(self.domain,('CG',1),dim=3)
-        T2 =TensorFunctionSpace(self.domain,('CG',1),shape=(3,3))
+        T = functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
+        T2 =functionspace(self.domain,('CG',1,(3,3)))
         grad_uh_interp = Function(T2)
         grad_uh = grad(self.uh.sub(0))
         grad_uh_0 = grad(self.uh.sub(0)[0])
@@ -432,7 +432,7 @@ class Axial:
         pyvista.global_theme.font.color = 'black'
 
         tdim = self.domain.topology.dim
-        topology, cell_types, geom = plot.create_vtk_mesh(self.domain,tdim)
+        topology, cell_types, geom = plot.vtk_mesh(self.domain,tdim)
         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
         plotter = pyvista.Plotter()
         sargs = dict(
@@ -464,7 +464,7 @@ class Axial:
         '''
         
         #Construct expression to evalute
-        R = VectorFunctionSpace(self.axial_mesh,('CG',1),dim=6)
+        R = functionspace(self.axial_mesh,('DG',0,(6,)))
         r = Function(R)
         r.interpolate(Expression(
                         self.generalized_stresses(self.uh),
@@ -475,40 +475,3 @@ class Axial:
         Reactions = r.eval(points_on_proc,cells)
 
         return Reactions
-
-    # def solve2(self):
-    #     self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
-    #     self.A_mat.assemble()
-
-    #     if self.L_form == None:
-    #         f = Constant(self.domain,ScalarType((0,0,0)))
-    #         # self.L_form = -dot(f,self.u_)*self.dx
-    #         self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx
-        
-    #     form(self.L_form)
-    #     self.b=create_vector(form(self.L_form))
-    #     with self.b.localForm() as b_loc:
-    #                 b_loc.set(0)
-    #     assemble_vector(self.b,form(self.L_form))
-
-    #     # APPLY dirchelet bc: these steps are directly pulled from the 
-    #     # petsc.py LinearProblem().solve() method
-    #     self.a_form = form(self.a_form)
-    #     apply_lifting(self.b,[self.a_form],bcs=self.bcs)
-    #     self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-    #     set_bc(self.b,self.bcs)
-
-    #     uh_ptld = Function(self.beam_element.W)
-    #     uvec = uh_ptld.vector
-    #     uvec.setUp()
-    #     ksp = PETSc.KSP().create()
-    #     ksp.setType(PETSc.KSP.Type.CG)
-    #     ksp.setTolerances(rtol=1e-15)
-    #     ksp.setOperators(self.A_mat)
-    #     ksp.setFromOptions()
-    #     ksp.solve(self.b,uvec)
-
-
-
-
-

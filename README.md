@@ -19,6 +19,8 @@ First, install the package dependencies. Then clone the repository and pip insta
 
 1. Install [Numpy](https://numpy.org/) and [SciPy](https://scipy.org/)
 2. Install [FEniCS](https://fenicsproject.org/download/) and [pyvista](https://docs.pyvista.org/version/stable/) for visualization
-3. Install [sparseqr](https://github.com/yig/PySPQR)
-4. run ```git clone https://github.com/jkrokowski/ALBATROSS.git```
-5. From the top level ALBATROSS directory, run ```pip install .```
+3. Install [meshio](https://github.com/nschloe/meshio)
+4. Install [gmsh](https://gmsh.info/) using ```pip install gmsh``` (conda installing gmsh does not provide the python API)
+5. Install [sparseqr](https://github.com/yig/PySPQR) by running ```git clone https://github.com/yig/PySPQR.git```, specifically the latest branch on github (current pypi version will not work) and then ```pip install .``` in the top level PySPQR directory
+6. run ```git clone https://github.com/jkrokowski/ALBATROSS.git```
+7. From the top level ALBATROSS directory, run ```pip install .```

@@ -19,41 +19,37 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 10 #number of quad elements per side on xc mesh
+N = 20 #number of quad elements per side on xc mesh
 W = .1 #xs width
 H = .1 #xs height
 A = W*H #xs area
-L = 20 
+L = 2 
 
 #define distributed load magnitude (gravitational force)
-g = 9.81
+g = 5000*9.81
 
 #beam endpoint locations
 p1 = (0,0,0)
 p2 = (L,0,0)
 
-#create cross-sectional mesh
-points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
-squareXSmesh = ALBATROSS.mesh.create_rectangle(points,[N,N])
+mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+meshes2D = 2*[mesh2d_0] #duplicate the mesh for endpoint
 
-#initialize material object
-unobtainium = ALBATROSS.material.Material(name='unobtainium',
-                                           mat_type='ISOTROPIC',
-                                           mech_props={'E':10e6,'nu':0.2},
-                                           density=.42)
+#define material parameters
+mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
+                        'MECH_PROPS':{'E':10e6,'nu':0.2} ,
+                        'DENSITY':2.7e-3}
+                        }
 
-#initialize and run cross-sectional analysis
-squareXS = ALBATROSS.cross_section.CrossSection(squareXSmesh,[unobtainium])
-squareXS.get_xs_stiffness_matrix()
-xs_list = [squareXS]
+#1D mesh for locating beam cross-sections along beam axis
+meshname_axial_pos = 'axial_postion_mesh'
+ne_2D = len(meshes2D)-1 # number of xs's used
+axial_pos_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
 
-#create a beam axis
-meshname = 'ex_3'
-nodal_points = [p1,p2]
-# number of segments of the beams that use different cross-sections
-num_segments = len(nodal_points)-1 
-num_ele = [100] #number of subdivisions for each beam segment
-beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
+#1D mesh used for 1D analysis
+meshname_axial = 'axial_mesh'
+ne_1D = 100 #number of elements for 1D mesh
+axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 
 #define orientation of each xs with a vector
 orientations = np.tile([0,1,0],num_segments)
@@ -67,13 +63,10 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 #################################################################
 
 #initialize beam object using 1D mesh and definition of xs's
-CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
+CantileverBeam = BeamModel(axial_mesh,xs_info)
 
 #show the orientation of each xs and the interpolated orientation along the beam
 CantileverBeam.plot_xs_orientations()
-
-#add distributed load
-CantileverBeam.add_dist_load((0,0,-g))
 
 #applied fixed bc to first endpoint
 CantileverBeam.add_clamped_point(p1)
@@ -91,20 +84,28 @@ CantileverBeam.plot_axial_displacement(warp_factor=1)
 #recovers the 3D displacement field over each xs
 CantileverBeam.recover_displacement(plot_xss=True)
 
-#shows plot of stress over cross-section 
-CantileverBeam.recover_stress() # currently only axial component sigma11 plotted
-
 #plots both 1D and 2D solutions together
 CantileverBeam.plot_xs_disp_3D()
+
+#shows plot of stress over cross-section 
+CantileverBeam.recover_stress() # currently only axial component sigma11 plotted
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
 print('Max Deflection for point load (EB analytical analytical solution)')
-E = unobtainium.E
-rho = unobtainium.density
+E = mats['Unobtainium']['MECH_PROPS']['E']
+rho = mats['Unobtainium']['DENSITY']
 I = H**4/12
 q = rho*A*g
 print( (-q*L**4)/(8*E*I) )
 
-print('Max vertical deflection of centroid:')
+print('ALBATROSS computed value:')
 print(CantileverBeam.get_local_disp([p2])[0][2])
+print('------')
+
+print('Maximum Stress for point load (at root of beam)')
+print('EB analytical solution:')
+M = ( -q*L**2 ) / 2 #maximum moment
+print( (-H/2)* (M) / I  )
+print('ALBATROSS computed value:')
+print( CantileverBeam.get_max_stress() )

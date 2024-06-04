@@ -17,7 +17,7 @@ from matplotlib import cm
 
 # Scaled variable
 L = 1
-W = 0.2
+W = 0.1
 mu = 1
 rho = 1
 delta = W/L
@@ -25,6 +25,8 @@ gamma = 0.4*delta**2
 beta = 1.25
 lambda_ = beta
 g = gamma
+
+N = 6
 
 import numpy as np
 import ufl
@@ -34,7 +36,7 @@ from dolfinx import mesh, fem, plot, io
 
 # Mesh and function space:
 domain = mesh.create_box(MPI.COMM_WORLD, [np.array([0,0,0]), np.array([L, W, W])],
-                  [20,6,6], cell_type=mesh.CellType.hexahedron)
+                  [int(L/W)*N,N,N], cell_type=mesh.CellType.hexahedron)
 V = fem.VectorFunctionSpace(domain, ("CG", 1))
 
 # BCs:

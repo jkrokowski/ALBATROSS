@@ -1,8 +1,6 @@
 #simple example of cross-sectional analysis of an isotropic hollow circle:
 import ALBATROSS
 
-from dolfinx import mesh
-from mpi4py import MPI
 import numpy as np
 
 #cross-section mesh definition

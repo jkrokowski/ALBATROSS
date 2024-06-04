@@ -2,9 +2,12 @@
 # In this numerical tour, we show how to formulate and solve a 3D nonlinear beam model in large displacements and  rotations. We however consider here slender structures for which local strains will remain small. We therefore adopt an infinitesimal strain linear elastic model. The main difficulty here is related to the fact that finite rotations cannot be described using a simple rotation vector as in the infinitesimal rotation case but must be handled through rotation matrices. 
 #from:
 # https://comet-fenics.readthedocs.io/en/latest/demo/finite_rotation_beam/finite_rotation_nonlinear_beam.html
-from dolfinx import fem,plot,io,nls,mesh,geometry
+from dolfinx import fem,plot,io,mesh,geometry
+from dolfinx.fem.petsc import NonlinearProblem
+from dolfinx.nls.petsc import NewtonSolver
 import numpy as np
-from ufl import sqrt,dot,grad,derivative,Measure,as_vector,diag, Jacobian, MixedElement,TrialFunction,TestFunction,split,VectorElement,pi
+from ufl import sqrt,dot,grad,derivative,Measure,as_vector,diag, Jacobian,TrialFunction,TestFunction,split,pi
+from basix.ufl import element,mixed_element
 from rotation_parametrization import ExponentialMap
 import meshio
 from mpi4py import MPI
@@ -74,9 +77,13 @@ method = "incremental"
 # function space for keeping track of the previous rotation matrix as well
 # as the previous curvature strain for implementing the `incremental` approach.
 # We also keep track of the total displacement vector.
-Ue = VectorElement("CG", domain.ufl_cell(), 2, dim=3)
-Te = VectorElement("CG", domain.ufl_cell(), 1, dim=3)
-V = fem.FunctionSpace(domain, MixedElement([Ue, Te]))
+print(domain.ufl_cell())
+Ue = element("CG", domain.topology.cell_name(), 2, shape=(domain.geometry.dim,))
+Te = element("CG", domain.topology.cell_name(), 1, shape=(domain.geometry.dim,))
+
+# Ue = VectorElement("CG", domain.ufl_cell(), 2, dim=3)
+# Te = VectorElement("CG", domain.ufl_cell(), 1, dim=3)
+V = fem.functionspace(domain, mixed_element([Ue, Te]))
 
 v_ = TestFunction(V)
 u_, theta_ = split(v_)
@@ -84,14 +91,16 @@ dv = TrialFunction(V)
 v = fem.Function(V, name="Generalized_displacement")
 u, theta = split(v)
 
-VR = fem.TensorFunctionSpace(domain, ("DG",0), shape=(3, 3))
+VR = fem.functionspace(domain, ("DG",0, (3, 3)))
+# VR = fem.TensorFunctionSpace(domain, ("DG",0), shape=(3, 3))
 R_old = fem.Function(VR, name="Previous_rotation_matrix")
 R_old.interpolate(fem.Expression(fem.Constant(domain,((1., 0., 0.),
                                                       (0., 1., 0.), 
                                                       (0., 0., 1.))),
                                          VR.element.interpolation_points()))
 
-V0 = fem.VectorFunctionSpace(domain, ("DG",0), dim=3)
+V0 = fem.functionspace(domain, ("DG",0, (domain.geometry.dim,)))
+# V0 = fem.VectorFunctionSpace(domain, ("DG",0), dim=3)
 curv_old = fem.Function(V0, name="Previous_curvature_strain")
 
 Vu,Vu_to_V = V.sub(0).collapse()
@@ -101,7 +110,8 @@ Vr,Vr_to_V = V.sub(1).collapse()
 rotation_vector = fem.Function(Vr,name='rotation_vector')
 
 #add DG0 space for updating load step
-V1 = fem.FunctionSpace(domain,("DG",0))
+V1 = fem.functionspace(domain,("DG",0))
+# V1 = fem.FunctionSpace(domain,("DG",0))
 load = fem.Function(V1,name='load')
 
 # We now define the rotation parametrization and the corresponding rotation 
@@ -132,8 +142,9 @@ elif method == "incremental":
     defo = dot(R_new.T, t0 + tgrad(total_displ + u)) - t0
     curv = curv_old + dot(R_old.T * H.T, tgrad(theta))
     
-C_N = diag(as_vector([ES, GS_2, GS_3]))
-C_M = diag(as_vector([GJ, EI_2, EI_3]))
+# C_N = diag(as_vector([ES, GS_2, GS_3]))
+# C_M = diag(as_vector([GJ, EI_2, EI_3]))
+C = diag(as_vector([ES, GS_2, GS_3,GJ, EI_2, EI_3]))
 
 # We first define a uniform quadrature degree of 4 for integrating the various 
 # nonlinear forms.
@@ -153,7 +164,10 @@ facet_tag = mesh.meshtags(domain,fdim,end_pt_node,np.full(len(end_pt_node),2,dty
 ds = Measure("ds", domain=domain, subdomain_data=facet_tag, metadata=metadata)
 dx = Measure("dx", domain=domain, metadata=metadata)
 
-elastic_energy = 0.5 * (dot(defo, dot(C_N, defo)) + dot(curv, dot(C_M, curv))) * dx
+gen_eps = as_vector([defo[0],defo[1],defo[2],curv[0],curv[1],curv[2]])
+
+elastic_energy = 0.5 * (dot(gen_eps, dot(C, gen_eps))) * dx
+# elastic_energy = 0.5 * (dot(defo, dot(C_N, defo)) + dot(curv, dot(C_M, curv))) * dx
 
 residual = derivative(elastic_energy, v, v_)
 residual += load * (M_max* dot(H, theta_)[1] - F_max * u_[1]) * ds(2)
@@ -178,8 +192,8 @@ bc2 = fem.dirichletbc(ubc, start_pt_facets2,V.sub(1))
 bcs = [bc1,bc2]
 
 # problem = fem.petsc.NonlinearProblem(residual, v, [bcs], tangent_form)
-problem = fem.petsc.NonlinearProblem(residual, v, bcs,tangent_form)
-solver = nls.petsc.NewtonSolver(MPI.COMM_WORLD,problem)
+problem = NonlinearProblem(residual, v, bcs,tangent_form)
+solver = NewtonSolver(MPI.COMM_WORLD,problem)
 solver.convergence_criterion = "incremental"
 solver.rtol = 1e-6
 solver.atol = 1e-6
@@ -204,8 +218,8 @@ points_list_array = np.array([endpt, ])
 # for each point, compute a colliding cells and append to the lists
 points_on_proc = []
 cells = []
-bbtree = geometry.BoundingBoxTree(domain, domain.topology.dim)
-cell_candidates = geometry.compute_collisions(bbtree, points_list_array)  # get candidates
+bbtree = geometry.bb_tree(domain, domain.topology.dim)
+cell_candidates = geometry.compute_collisions_points(bbtree, points_list_array)  # get candidates
 colliding_cells = geometry.compute_colliding_cells(domain, cell_candidates, points_list_array)  # get actual
 for _i, point in enumerate(points_list_array):
     if len(colliding_cells.links(_i)) > 0:
@@ -238,7 +252,7 @@ for (i, t) in enumerate(Tlist[1:]):
 
     if i % 10 == 0:
         p = pyvista.Plotter(window_size=[800, 800])
-        topology,cell_types,x = plot.create_vtk_mesh(Vu)
+        topology,cell_types,x = plot.vtk_mesh(Vu)
         grid = pyvista.UnstructuredGrid(topology, cell_types, x)
         
         grid.point_data['u'] = total_displ.x.array.reshape((x.shape[0],3))
