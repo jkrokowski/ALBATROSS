@@ -7,8 +7,9 @@ This script demonstrates:
     -cross-section (2D) analysis
     -(1D) <--> (2D) connection functionality 
 '''
-import ALBATROSS
 import numpy as np
+
+import ALBATROSS 
 
 #################################################################
 ########### DEFINE THE INPUTS FOR THE BEAM PROBLEM ##############
@@ -33,30 +34,36 @@ p1 = (0,0,0)
 midpoint = (L/2,0,0)
 p2 = (L,0,0)
 
-mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
-meshes2D = 2*[mesh2d_0] #duplicate the mesh for endpoint
+#create cross-sectional mesh
+points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
+squareXSmesh = ALBATROSS.mesh.create_rectangle(points,[N,N])
 
-#define material parameters
-mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
-                        'MECH_PROPS':{'E':10e6,'nu':0.2} ,
-                        'DENSITY':2.7e-3}
-                        }
+# initialize material object
+unobtainium = ALBATROSS.material.Material(name='unobtainium',
+                                           mat_type='ISOTROPIC',
+                                           mech_props={'E':10e6,'nu':0.2},
+                                           density=2700)
 
-#1D mesh for locating beam cross-sections along beam axis
-meshname_axial_pos = 'axial_postion_mesh'
-ne_2D = len(meshes2D)-1 # number of xs's used
-axial_pos_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
+#initialize and run cross-sectional analysis
+squareXS = ALBATROSS.cross_section.CrossSection(squareXSmesh,[unobtainium])
+squareXS.get_xs_stiffness_matrix()
+xs_list = [squareXS]
 
-#1D mesh used for 1D analysis
-meshname_axial = 'axial_mesh'
-ne_1D = 100 #number of elements for 1D mesh
-axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
+
+#create a beam axis
+meshname = 'ex_1'
+nodal_points = [p1,p2]
+# number of segments of the beams that use different cross-sections
+num_segments = len(nodal_points)-1 
+num_ele = [100] #number of subdivisions for each beam segment
+beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
 
 #define orientation of each xs with a vector
 orientations = np.tile([0,1,0],num_segments)
 
 #collect all xs information
-xs_info = [meshes2D,mats2D,axial_pos_mesh,orientations]
+xs_adjacency_list = [[0,0]] #this is the trivial connectivity for a uniform beam
+xs_info = [xs_list,orientations,xs_adjacency_list]
 
 #################################################################
 ######### INITIALIZE BEAM OBJECT, APPLY BCs, & SOLVE ############
@@ -88,18 +95,18 @@ FixedFixedBeam.plot_axial_displacement(warp_factor=10)
 #plots both 1D and 2D solutions together
 FixedFixedBeam.recover_displacement(plot_xss=True)
 
+#computes stress over cross-sections and plots 
+FixedFixedBeam.recover_stress()
+
 #plots both 1D and 2D solutions together
 FixedFixedBeam.plot_xs_disp_3D()
 
-#computes stress over cross-sections and plots 
-FixedFixedBeam.recover_stress() # currently plots only axial component sigma11
-
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
-print('Max Deflection for point load (EB analytical analytical solution)')
-E = mats['Unobtainium']['MECH_PROPS']['E']
-rho = mats['Unobtainium']['DENSITY']
-I = H**4/12
+print('Max Deflection for point load')
+print('EB analytical solution:')
+E=unobtainium.E
+I = W*H**3/12
 print( (-F*(L**3))/(192*E*I) )
 
 print('ALBATROSS computed value:')
