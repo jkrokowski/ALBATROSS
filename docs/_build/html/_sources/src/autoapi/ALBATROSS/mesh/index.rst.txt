@@ -1,0 +1,160 @@
+:py:mod:`ALBATROSS.mesh`
+========================
+
+.. py:module:: ALBATROSS.mesh
+
+
+Module Contents
+---------------
+
+
+Functions
+~~~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.mesh.beam_interval_mesh_3D
+   ALBATROSS.mesh.create_I_section
+   ALBATROSS.mesh.create_circle
+   ALBATROSS.mesh.create_hollow_box
+   ALBATROSS.mesh.create_hollow_circle
+   ALBATROSS.mesh.create_rectangle
+
+
+
+.. py:function:: beam_interval_mesh_3D(pts, ne, meshname)
+
+   
+   pts = list of nx (x,y,z) locations of a beam nodes (np)
+   ne = list of number of elements for each segment between nodes (np-1)
+   meshname = name of mesh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+
+.. py:function:: create_I_section(dims, num_el, meshname)
+
+   
+   dims = [height,width,flange1,flange2,web]
+   num_el = [numel_flange1,numel_flange2,numel_web]
+   meshname = name of mesh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+
+.. py:function:: create_circle(radius, num_el, meshname)
+
+   
+   radius = outer radius of circle
+   num_el = number of elements along radial direction 
+   meshname = name of mesh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+
+.. py:function:: create_hollow_box(pts, thicknesses, num_el, meshname)
+
+   
+   pts = list of 4 corners of hollow box in (x,y) locations 
+        provide in clockwise order starting from upper left:
+             [(pt1=upper left x,y), (pt2 = upper right x,y), 
+             (pt3=bottom right x,y), (pt4=bottom left x,y) ]
+   thicknesses = list of wall thicknesses for walls:
+                  [(pt1 to pt2 thickness),(pt2 to pt3 thickness),
+                  (pt3 to pt4 thickness),(pt4 to pt1 thickness)]
+   num_el = list of number of elements through thickness for 
+                  each specified thickness
+   meshname = name of mesh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+
+.. py:function:: create_hollow_circle(radius, thickness, num_el, meshname)
+
+   
+   radius = outer radius of circle
+   thicknesses = wall thickness
+   num_el = number of elements through thickness
+   meshname = name of mesh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+
+.. py:function:: create_rectangle(pts, num_el)
+
+

@@ -6,9 +6,8 @@ This script is nearly identical to example 1, but demonstrates that the
 1D beam axis need not be aligned with a cartesian direction, yet we can
 still produce the same answer:
 '''
-import numpy as np
-
 import ALBATROSS
+import numpy as np
 
 #################################################################
 ########### DEFINE THE INPUTS FOR THE BEAM PROBLEM ##############
@@ -71,7 +70,7 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
 
 #show the orientation of each xs and the interpolated orientation along the beam
-CantileverBeam.plot_xs_orientations()
+# CantileverBeam.plot_xs_orientations()
 
 #applied fixed bc to first endpoint
 CantileverBeam.add_clamped_point(p1)
@@ -89,29 +88,17 @@ CantileverBeam.solve()
 CantileverBeam.plot_axial_displacement(warp_factor=10)
 
 #recovers the 3D displacement field over each xs
-CantileverBeam.recover_displacement()
-
-#shows plot of stress over cross-section 
-CantileverBeam.recover_stress()
+CantileverBeam.recover_displacement(plot_xss=True)
 
 #plots both 1D and 2D solutions together
 CantileverBeam.plot_xs_disp_3D()
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
-print('Max Tip Deflection for point load')
-print('EB analytical solution:')
-E=unobtainium.E
-I = W*H**3/12
+print('Max Deflection for point load (EB analytical analytical solution)')
+E = mats['Unobtainium']['MECH_PROPS']['E']
+I = H**4/12
 print( (-F*L**3)/(3*E*I) )
 
-print('ALBATROSS computed value:')
+print('Max vertical deflection of centroid:')
 print(CantileverBeam.get_local_disp([p2])[0][2])
-print('------')
-
-print('Maximum Stress for point load (at root of beam)')
-print('EB analytical solution:')
-M = -F*L #maximum moment
-print( (-H/2)* (M) / I  )
-print('ALBATROSS computed value:')
-print( CantileverBeam.get_max_stress() )

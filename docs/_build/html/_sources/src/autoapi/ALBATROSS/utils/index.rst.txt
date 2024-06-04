@@ -1,0 +1,90 @@
+:py:mod:`ALBATROSS.utils`
+=========================
+
+.. py:module:: ALBATROSS.utils
+
+
+Module Contents
+---------------
+
+
+Functions
+~~~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.utils.get_pts_and_cells
+   ALBATROSS.utils.get_vtx_to_dofs
+   ALBATROSS.utils.gmsh_to_xdmf
+   ALBATROSS.utils.mat_to_mesh
+   ALBATROSS.utils.plot_xdmf_mesh
+   ALBATROSS.utils.project
+   ALBATROSS.utils.sparseify
+
+
+
+.. py:function:: get_pts_and_cells(domain, points)
+
+   
+   ARGS:
+        point = tuple of (x,y,z) locations to return displacements and rotations
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+
+.. py:function:: get_vtx_to_dofs(domain, V)
+
+   
+   solution from https://fenicsproject.discourse.group/t/application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs/9646
+   --------------
+   input: subspace to find DOFs in
+   output: map of DOFs related to their corresponding vertices
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+
+.. py:function:: gmsh_to_xdmf(mesh, cell_type, prune_z=False)
+
+
+.. py:function:: mat_to_mesh(filename, aux_data=None, plot_xs=False)
+
+
+.. py:function:: plot_xdmf_mesh(msh, surface=True, add_nodes=False)
+
+
+.. py:function:: project(v, target_func, bcs=[])
+
+
+.. py:function:: sparseify(mat, sparse_format='csr')
+
+

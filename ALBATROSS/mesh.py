@@ -13,7 +13,10 @@ def beam_interval_mesh_3D(pts,ne,meshname):
      meshname = name of mesh
      '''
      filename = 'output/'+meshname+'.xdmf'
-
+     print('points shape:')
+     print(np.array(pts).shape)
+     print('element number shape')
+     print(np.array(ne).shape)
      gdim = 3
      tdim = 1
 
@@ -33,7 +36,12 @@ def beam_interval_mesh_3D(pts,ne,meshname):
           line_tag = gmsh.model.geo.addLine(pt_tags[i],pt_tags[i+1])
           line_tags.append(line_tag)
           gmsh.model.geo.mesh.setTransfiniteCurve(line_tag, int(n + 1))
-
+     print('num pts:')
+     print(pt_tags)
+     print(len(pt_tags))
+     print('num lines:')
+     print(line_tags)
+     print(len(line_tags))
      # Synchronize model representation with gmsh model
      gmsh.model.geo.synchronize()
 
@@ -49,7 +57,7 @@ def beam_interval_mesh_3D(pts,ne,meshname):
      msh.name = meshname
      cell_markers.name = f"{msh.name}_cells"
      facet_markers.name = f"{msh.name}_facets"
-
+     gmsh.fltk.run()
      # close gmsh API
      gmsh.finalize()
 

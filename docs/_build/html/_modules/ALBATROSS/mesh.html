@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ALBATROSS.mesh &mdash; lsdo_project_template  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            lsdo_project_template
+          </a>
+              <div class="version">
+                0.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../src/getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/background.html">Background</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/tutorials.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/basic.html">1. Basic tutorials</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/advanced.html">2. Advanced tutorials</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_1.html">Custom feature 1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_2.html">Custom feature 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/basic.html">1. Basic examples</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/advanced.html">2. Advanced examples</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/api.html">API reference</a><ul class="simple">
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">lsdo_project_template</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ALBATROSS.mesh</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ALBATROSS.mesh</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">dolfinx</span> <span class="kn">import</span> <span class="n">mesh</span>
+<span class="kn">import</span> <span class="nn">gmsh</span>
+<span class="kn">from</span> <span class="nn">dolfinx.io</span> <span class="kn">import</span> <span class="n">gmshio</span><span class="p">,</span><span class="n">XDMFFile</span>
+<span class="kn">from</span> <span class="nn">mpi4py</span> <span class="kn">import</span> <span class="n">MPI</span>
+<span class="kn">import</span> <span class="nn">meshio</span>
+<span class="kn">from</span> <span class="nn">ALBATROSS.utils</span> <span class="kn">import</span> <span class="n">gmsh_to_xdmf</span>
+
+<div class="viewcode-block" id="beam_interval_mesh_3D"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/mesh/index.html#ALBATROSS.mesh.beam_interval_mesh_3D">[docs]</a><span class="k">def</span> <span class="nf">beam_interval_mesh_3D</span><span class="p">(</span><span class="n">pts</span><span class="p">,</span><span class="n">ne</span><span class="p">,</span><span class="n">meshname</span><span class="p">):</span>
+<span class="w">     </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">     pts = list of nx (x,y,z) locations of a beam nodes (np)</span>
+<span class="sd">     ne = list of number of elements for each segment between nodes (np-1)</span>
+<span class="sd">     meshname = name of mesh</span>
+<span class="sd">     &#39;&#39;&#39;</span>
+     <span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;output/&#39;</span><span class="o">+</span><span class="n">meshname</span><span class="o">+</span><span class="s1">&#39;.xdmf&#39;</span>
+
+     <span class="n">gdim</span> <span class="o">=</span> <span class="mi">3</span>
+     <span class="n">tdim</span> <span class="o">=</span> <span class="mi">1</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+     <span class="c1">#construct line in 3D space</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">meshname</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">setCurrent</span><span class="p">(</span><span class="n">meshname</span><span class="p">)</span>
+     
+     <span class="n">pt_tags</span> <span class="o">=</span> <span class="p">[]</span>
+     <span class="k">for</span> <span class="n">pt</span> <span class="ow">in</span> <span class="n">pts</span><span class="p">:</span>
+          <span class="n">pt_tag</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">pt</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">pt</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">pt</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+          <span class="n">pt_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pt_tag</span><span class="p">)</span>
+     <span class="n">line_tags</span> <span class="o">=</span> <span class="p">[]</span>
+     <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">n</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ne</span><span class="p">):</span>
+          <span class="n">line_tag</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">pt_tags</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="n">pt_tags</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span>
+          <span class="n">line_tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line_tag</span><span class="p">)</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">line_tag</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+
+     <span class="c1"># Synchronize model representation with gmsh model</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+
+     <span class="c1"># add physical marker</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add_physical_group</span><span class="p">(</span><span class="n">tdim</span><span class="p">,</span><span class="n">line_tags</span><span class="p">)</span>
+
+     <span class="c1">#generate the mesh and optionally write the gmsh mesh file</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">gdim</span><span class="p">)</span>
+     <span class="c1"># gmsh.write(filename)</span>
+
+     <span class="c1">#use meshio to convert msh file to xdmf</span>
+     <span class="n">msh</span><span class="p">,</span> <span class="n">cell_markers</span><span class="p">,</span> <span class="n">facet_markers</span> <span class="o">=</span> <span class="n">gmshio</span><span class="o">.</span><span class="n">model_to_mesh</span><span class="p">(</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_SELF</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+     <span class="n">msh</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">meshname</span>
+     <span class="n">cell_markers</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">msh</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_cells&quot;</span>
+     <span class="n">facet_markers</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">msh</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">_facets&quot;</span>
+
+     <span class="c1"># close gmsh API</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+
+     <span class="c1">#write xdmf mesh file</span>
+     <span class="k">with</span> <span class="n">XDMFFile</span><span class="p">(</span><span class="n">msh</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+          <span class="n">file</span><span class="o">.</span><span class="n">write_mesh</span><span class="p">(</span><span class="n">msh</span><span class="p">)</span>
+
+     <span class="c1">#return mesh</span>
+     <span class="k">with</span> <span class="n">XDMFFile</span><span class="p">(</span><span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">xdmf</span><span class="p">:</span>
+          <span class="k">return</span> <span class="n">xdmf</span><span class="o">.</span><span class="n">read_mesh</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">meshname</span><span class="p">)</span></div>
+     
+<div class="viewcode-block" id="create_rectangle"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/mesh/index.html#ALBATROSS.mesh.create_rectangle">[docs]</a><span class="k">def</span> <span class="nf">create_rectangle</span><span class="p">(</span><span class="n">pts</span><span class="p">,</span><span class="n">num_el</span><span class="p">):</span>
+     <span class="n">pts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pts</span><span class="p">)</span>
+     <span class="k">return</span> <span class="n">mesh</span><span class="o">.</span><span class="n">create_rectangle</span><span class="p">(</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="p">,</span><span class="n">pts</span><span class="p">,</span><span class="n">num_el</span><span class="p">,</span> <span class="n">cell_type</span><span class="o">=</span><span class="n">mesh</span><span class="o">.</span><span class="n">CellType</span><span class="o">.</span><span class="n">quadrilateral</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="create_hollow_box"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/mesh/index.html#ALBATROSS.mesh.create_hollow_box">[docs]</a><span class="k">def</span> <span class="nf">create_hollow_box</span><span class="p">(</span><span class="n">pts</span><span class="p">,</span><span class="n">thicknesses</span><span class="p">,</span><span class="n">num_el</span><span class="p">,</span><span class="n">meshname</span><span class="p">):</span>
+<span class="w">     </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">     pts = list of 4 corners of hollow box in (x,y) locations </span>
+<span class="sd">          provide in clockwise order starting from upper left:</span>
+<span class="sd">               [(pt1=upper left x,y), (pt2 = upper right x,y), </span>
+<span class="sd">               (pt3=bottom right x,y), (pt4=bottom left x,y) ]</span>
+<span class="sd">     thicknesses = list of wall thicknesses for walls:</span>
+<span class="sd">                    [(pt1 to pt2 thickness),(pt2 to pt3 thickness),</span>
+<span class="sd">                    (pt3 to pt4 thickness),(pt4 to pt1 thickness)]</span>
+<span class="sd">     num_el = list of number of elements through thickness for </span>
+<span class="sd">                    each specified thickness</span>
+<span class="sd">     meshname = name of mesh</span>
+<span class="sd">     &#39;&#39;&#39;</span>
+
+     <span class="c1">#unpack input </span>
+     <span class="c1"># t: top, b:bottom, l:left, r:right, i: inside</span>
+     <span class="c1"># e.g. tlicx is the top left inside corner&#39;s x coordinate)</span>
+     <span class="p">[(</span><span class="n">tlcx</span><span class="p">,</span><span class="n">tlcy</span><span class="p">),(</span><span class="n">trcx</span><span class="p">,</span><span class="n">trcy</span><span class="p">),(</span><span class="n">brcx</span><span class="p">,</span><span class="n">brcy</span><span class="p">),(</span><span class="n">blcx</span><span class="p">,</span><span class="n">blcy</span><span class="p">)]</span><span class="o">=</span><span class="n">pts</span>
+     <span class="p">[</span><span class="n">t1</span><span class="p">,</span><span class="n">t2</span><span class="p">,</span><span class="n">t3</span><span class="p">,</span><span class="n">t4</span><span class="p">]</span><span class="o">=</span><span class="n">thicknesses</span>
+     <span class="p">[</span><span class="n">n1</span><span class="p">,</span><span class="n">n2</span><span class="p">,</span><span class="n">n3</span><span class="p">,</span><span class="n">n4</span><span class="p">]</span><span class="o">=</span><span class="n">num_el</span>
+     <span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;output/&#39;</span><span class="o">+</span><span class="n">meshname</span><span class="o">+</span><span class="s1">&#39;.xdmf&#39;</span>
+
+     <span class="c1">#get inside corners ()</span>
+     <span class="p">(</span><span class="n">tlicx</span><span class="p">,</span><span class="n">tlicy</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="n">tlcx</span><span class="o">+</span><span class="n">t4</span><span class="p">,</span><span class="n">tlcy</span><span class="o">-</span><span class="n">t1</span><span class="p">)</span>
+     <span class="p">(</span><span class="n">tricx</span><span class="p">,</span><span class="n">tricy</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="n">trcx</span><span class="o">-</span><span class="n">t2</span><span class="p">,</span><span class="n">trcy</span><span class="o">-</span><span class="n">t1</span><span class="p">)</span>
+     <span class="p">(</span><span class="n">bricx</span><span class="p">,</span><span class="n">bricy</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="n">brcx</span><span class="o">-</span><span class="n">t2</span><span class="p">,</span><span class="n">brcy</span><span class="o">+</span><span class="n">t3</span><span class="p">)</span>
+     <span class="p">(</span><span class="n">blicx</span><span class="p">,</span><span class="n">blicy</span><span class="p">)</span><span class="o">=</span><span class="p">(</span><span class="n">blcx</span><span class="o">+</span><span class="n">t4</span><span class="p">,</span><span class="n">blcy</span><span class="o">+</span><span class="n">t3</span><span class="p">)</span>
+     
+     <span class="c1">#choose number of elements between corners for height and width:</span>
+     <span class="n">width</span> <span class="o">=</span> <span class="n">trcx</span><span class="o">-</span><span class="n">tlcx</span>
+     <span class="n">height</span> <span class="o">=</span> <span class="n">tlcy</span><span class="o">-</span><span class="n">blcy</span>
+     <span class="n">avg_cell_size</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">thicknesses</span><span class="p">)</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">num_el</span><span class="p">))</span>
+
+     <span class="n">nw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">((</span><span class="n">width</span><span class="o">-</span><span class="n">t2</span><span class="o">-</span><span class="n">t4</span><span class="p">)</span><span class="o">/</span><span class="n">avg_cell_size</span><span class="p">))</span>
+     <span class="n">nh</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">((</span><span class="n">height</span><span class="o">-</span><span class="n">t1</span><span class="o">-</span><span class="n">t3</span><span class="p">)</span><span class="o">/</span><span class="n">avg_cell_size</span><span class="p">))</span>
+     
+     <span class="c1">#for 2 xs mesh, gdim=tdim=2</span>
+     <span class="n">gdim</span> <span class="o">=</span> <span class="mi">2</span>
+     <span class="n">tdim</span> <span class="o">=</span> <span class="mi">2</span>
+
+     <span class="c1">#initialize, add model and activate</span>
+     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating 2D box xs mesh...&quot;</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">option</span><span class="o">.</span><span class="n">setNumber</span><span class="p">(</span><span class="s2">&quot;General.Terminal&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span> <span class="c1">#suppress gmsh output</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">meshname</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">setCurrent</span><span class="p">(</span><span class="n">meshname</span><span class="p">)</span>
+     
+     <span class="c1">#list of coordinates for each sub-section of box xs</span>
+     <span class="n">box_nodes</span> <span class="o">=</span> <span class="p">[[</span><span class="n">tlcx</span><span class="p">,</span><span class="n">tlicy</span><span class="p">,</span><span class="n">tlicx</span><span class="p">,</span><span class="n">tlcy</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">tlicx</span><span class="p">,</span><span class="n">tlicy</span><span class="p">,</span><span class="n">tricx</span><span class="p">,</span><span class="n">trcy</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">tricx</span><span class="p">,</span><span class="n">tricy</span><span class="p">,</span><span class="n">trcx</span><span class="p">,</span><span class="n">trcy</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">bricx</span><span class="p">,</span><span class="n">bricy</span><span class="p">,</span><span class="n">trcx</span><span class="p">,</span><span class="n">tricy</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">bricx</span><span class="p">,</span><span class="n">brcy</span><span class="p">,</span><span class="n">brcx</span><span class="p">,</span><span class="n">bricy</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">blicx</span><span class="p">,</span><span class="n">blcy</span><span class="p">,</span><span class="n">bricx</span><span class="p">,</span><span class="n">bricy</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">blcx</span><span class="p">,</span><span class="n">blcy</span><span class="p">,</span><span class="n">blicx</span><span class="p">,</span><span class="n">blicy</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">blcx</span><span class="p">,</span><span class="n">blicy</span><span class="p">,</span><span class="n">tlicx</span><span class="p">,</span><span class="n">tlicy</span><span class="p">]]</span>
+     
+     <span class="c1">#number of elements in x and y directions for each sub-section</span>
+     <span class="n">box_el_num</span> <span class="o">=</span> <span class="p">[[</span><span class="n">n4</span><span class="p">,</span><span class="n">n1</span><span class="p">],</span>
+               <span class="p">[</span><span class="n">nw</span><span class="p">,</span><span class="n">n1</span><span class="p">],</span>
+               <span class="p">[</span><span class="n">n2</span><span class="p">,</span><span class="n">n1</span><span class="p">],</span>
+               <span class="p">[</span><span class="n">n2</span><span class="p">,</span><span class="n">nh</span><span class="p">],</span>
+               <span class="p">[</span><span class="n">n2</span><span class="p">,</span><span class="n">n3</span><span class="p">],</span>
+               <span class="p">[</span><span class="n">nw</span><span class="p">,</span><span class="n">n3</span><span class="p">],</span>
+               <span class="p">[</span><span class="n">n4</span><span class="p">,</span><span class="n">n3</span><span class="p">],</span>
+               <span class="p">[</span><span class="n">n4</span><span class="p">,</span><span class="n">nh</span><span class="p">]]</span>
+     
+     <span class="c1">#loop to build all 8 subsections of the hollow box</span>
+     <span class="k">for</span> <span class="n">box</span><span class="p">,</span><span class="n">el_num</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">box_nodes</span><span class="p">,</span><span class="n">box_el_num</span><span class="p">):</span>
+          <span class="n">x1</span><span class="p">,</span><span class="n">y1</span><span class="p">,</span><span class="n">x2</span><span class="p">,</span><span class="n">y2</span> <span class="o">=</span> <span class="n">box</span>
+          <span class="n">num_el_x</span><span class="p">,</span> <span class="n">num_el_y</span> <span class="o">=</span> <span class="n">el_num</span>
+
+          <span class="n">p1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span><span class="n">y1</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+          <span class="n">p2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span><span class="n">y2</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+          <span class="n">p3</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span><span class="n">y2</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+          <span class="n">p4</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span><span class="n">y1</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+          <span class="n">l1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">p1</span><span class="p">,</span> <span class="n">p2</span><span class="p">)</span>
+          <span class="n">l2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">p2</span><span class="p">,</span> <span class="n">p3</span><span class="p">)</span>
+          <span class="n">l3</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">p3</span><span class="p">,</span> <span class="n">p4</span><span class="p">)</span>
+          <span class="n">l4</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">p4</span><span class="p">,</span> <span class="n">p1</span><span class="p">)</span>
+
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_y</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l2</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_x</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l3</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_y</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l4</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_x</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+
+          <span class="n">cl1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addCurveLoop</span><span class="p">([</span><span class="n">p1</span><span class="p">,</span> <span class="n">p2</span><span class="p">,</span> <span class="n">p3</span><span class="p">,</span> <span class="n">p4</span><span class="p">])</span>
+          <span class="n">rect</span> <span class="o">=</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPlaneSurface</span><span class="p">([</span><span class="n">cl1</span><span class="p">])</span>
+
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteSurface</span><span class="p">(</span><span class="n">rect</span><span class="p">)</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setRecombine</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">rect</span><span class="p">)</span>
+     
+     <span class="c1">#get list of tags of all box nodes</span>
+     <span class="n">tags</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">box_nodes</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+
+     <span class="c1">#remove duplicate points to ensure closed section </span>
+     <span class="c1"># (not guaranteed to be closed otherwise!)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">remove_all_duplicates</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add_physical_group</span><span class="p">(</span><span class="n">tdim</span><span class="p">,</span><span class="n">tags</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="s2">&quot;rect&quot;</span><span class="p">)</span>
+
+     <span class="c1">#generate the mesh and optionally write the gmsh mesh file</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">gdim</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span> <span class="o">+</span><span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.msh&quot;</span><span class="p">)</span>
+
+     <span class="c1">#uncomment this below if you want to run gmsh window for debug, etc</span>
+     <span class="c1"># gmsh.fltk.run()</span>
+
+     <span class="c1"># close gmsh API</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+
+     <span class="c1">#read gmsh file and write and xdmf</span>
+     <span class="k">if</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+          <span class="c1"># Read in mesh</span>
+          <span class="n">msh</span> <span class="o">=</span> <span class="n">meshio</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span> <span class="o">+</span><span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.msh&quot;</span><span class="p">)</span>
+
+          <span class="c1"># Create and save one file for the mesh, and one file for the facets </span>
+          <span class="n">mesh</span> <span class="o">=</span> <span class="n">gmsh_to_xdmf</span><span class="p">(</span><span class="n">msh</span><span class="p">,</span> <span class="s2">&quot;quad&quot;</span><span class="p">,</span> <span class="n">prune_z</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+          <span class="n">meshio</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;output/&quot;</span><span class="o">+</span><span class="n">meshname</span><span class="o">+</span><span class="s2">&quot;.xdmf&quot;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">)</span>
+
+     <span class="n">fileName</span> <span class="o">=</span> <span class="s2">&quot;output/&quot;</span><span class="o">+</span> <span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.xdmf&quot;</span>
+
+     <span class="c1">#read xdmf and return dolfinx mesh object</span>
+     <span class="k">with</span> <span class="n">XDMFFile</span><span class="p">(</span><span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="p">,</span> <span class="n">fileName</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">xdmf</span><span class="p">:</span>
+          <span class="c1">#mesh generation with meshio seems to have difficulty renaming the mesh name</span>
+          <span class="c1"># (but not the file, hence the &quot;Grid&quot; name property)</span>
+          <span class="n">domain</span> <span class="o">=</span> <span class="n">xdmf</span><span class="o">.</span><span class="n">read_mesh</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Grid&quot;</span><span class="p">)</span>
+          <span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">create_connectivity</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+          <span class="c1"># print(&quot;Finished meshing 2D with %i elements&quot; % (domain.num_cells))</span>
+          <span class="k">return</span> <span class="n">domain</span></div>
+     
+<div class="viewcode-block" id="create_I_section"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/mesh/index.html#ALBATROSS.mesh.create_I_section">[docs]</a><span class="k">def</span> <span class="nf">create_I_section</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span><span class="n">num_el</span><span class="p">,</span><span class="n">meshname</span><span class="p">):</span>
+<span class="w">     </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">     dims = [height,width,flange1,flange2,web]</span>
+<span class="sd">     num_el = [numel_flange1,numel_flange2,numel_web]</span>
+<span class="sd">     meshname = name of mesh</span>
+<span class="sd">     &#39;&#39;&#39;</span>
+
+     <span class="c1">#unpack input </span>
+     <span class="p">[</span><span class="n">H</span><span class="p">,</span><span class="n">W</span><span class="p">,</span><span class="n">tf</span><span class="p">,</span><span class="n">tw</span><span class="p">]</span><span class="o">=</span><span class="n">dims</span>
+     <span class="p">[</span><span class="n">nf</span><span class="p">,</span><span class="n">nweb</span><span class="p">]</span><span class="o">=</span><span class="n">num_el</span>
+     <span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;output/&#39;</span><span class="o">+</span><span class="n">meshname</span><span class="o">+</span><span class="s1">&#39;.xdmf&#39;</span>
+  
+     <span class="c1">#choose number of elements between corners for height and width:</span>
+     <span class="n">avg_cell_size</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">tf</span><span class="p">,</span><span class="n">tw</span><span class="p">])</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">num_el</span><span class="p">))</span>
+
+     <span class="n">nw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">((</span><span class="mf">0.5</span><span class="o">*</span><span class="p">(</span><span class="n">W</span><span class="o">-</span><span class="n">tw</span><span class="p">))</span><span class="o">/</span><span class="n">avg_cell_size</span><span class="p">))</span>
+     <span class="n">nh</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">((</span><span class="n">H</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="n">tf</span><span class="p">)</span><span class="o">/</span><span class="n">avg_cell_size</span><span class="p">))</span>
+     
+     <span class="c1">#for 2D xs mesh, gdim=tdim=2</span>
+     <span class="n">gdim</span> <span class="o">=</span> <span class="mi">2</span>
+     <span class="n">tdim</span> <span class="o">=</span> <span class="mi">2</span>
+
+     <span class="c1">#initialize, add model and activate</span>
+     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generating 2D I-section mesh...&quot;</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">option</span><span class="o">.</span><span class="n">setNumber</span><span class="p">(</span><span class="s2">&quot;General.Terminal&quot;</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span> <span class="c1">#suppress gmsh output</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">meshname</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">setCurrent</span><span class="p">(</span><span class="n">meshname</span><span class="p">)</span>
+     
+     <span class="c1">#repeated dims</span>
+     <span class="n">H2</span> <span class="o">=</span> <span class="n">H</span><span class="o">/</span><span class="mi">2</span>
+     <span class="n">W2</span> <span class="o">=</span> <span class="n">W</span><span class="o">/</span><span class="mi">2</span>
+     <span class="n">H2mtf</span> <span class="o">=</span> <span class="n">H</span><span class="o">/</span><span class="mi">2</span> <span class="o">-</span> <span class="n">tf</span>
+     <span class="n">tw2</span> <span class="o">=</span> <span class="n">tw</span><span class="o">/</span><span class="mi">2</span>
+     <span class="c1">#list of coordinates for each sub-section of I-section</span>
+     <span class="n">box_nodes</span> <span class="o">=</span> <span class="p">[[</span><span class="o">-</span><span class="n">W2</span><span class="p">,</span><span class="n">H2mtf</span><span class="p">,</span><span class="o">-</span><span class="n">tw2</span><span class="p">,</span><span class="n">H2</span><span class="p">],</span>
+                  <span class="p">[</span><span class="o">-</span><span class="n">tw2</span><span class="p">,</span><span class="n">H2mtf</span><span class="p">,</span><span class="n">tw2</span><span class="p">,</span><span class="n">H2</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">tw2</span><span class="p">,</span><span class="n">H2mtf</span><span class="p">,</span><span class="n">W2</span><span class="p">,</span><span class="n">H2</span><span class="p">],</span>
+                  <span class="p">[</span><span class="o">-</span><span class="n">tw2</span><span class="p">,</span><span class="o">-</span><span class="n">H2mtf</span><span class="p">,</span><span class="n">tw2</span><span class="p">,</span><span class="n">H2mtf</span><span class="p">],</span>
+                  <span class="p">[</span><span class="o">-</span><span class="n">W2</span><span class="p">,</span><span class="o">-</span><span class="n">H2</span><span class="p">,</span><span class="o">-</span><span class="n">tw2</span><span class="p">,</span><span class="o">-</span><span class="n">H2mtf</span><span class="p">],</span>
+                  <span class="p">[</span><span class="o">-</span><span class="n">tw2</span><span class="p">,</span><span class="o">-</span><span class="n">H2</span><span class="p">,</span><span class="n">tw2</span><span class="p">,</span><span class="o">-</span><span class="n">H2mtf</span><span class="p">],</span>
+                  <span class="p">[</span><span class="n">tw2</span><span class="p">,</span><span class="o">-</span><span class="n">H2</span><span class="p">,</span><span class="n">W2</span><span class="p">,</span><span class="o">-</span><span class="n">H2mtf</span><span class="p">]]</span>
+     
+     <span class="c1">#number of elements in x and y directions for each sub-section</span>
+     <span class="n">box_el_num</span> <span class="o">=</span> <span class="p">[[</span><span class="n">nw</span><span class="p">,</span><span class="n">nf</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">nweb</span><span class="p">,</span><span class="n">nf</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">nw</span><span class="p">,</span><span class="n">nf</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">nweb</span><span class="p">,</span><span class="n">nh</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">nw</span><span class="p">,</span><span class="n">nf</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">nweb</span><span class="p">,</span><span class="n">nf</span><span class="p">],</span>
+                    <span class="p">[</span><span class="n">nw</span><span class="p">,</span><span class="n">nf</span><span class="p">]]</span>
+     
+     <span class="c1">#loop to build all 8 subsections of the hollow box</span>
+     <span class="k">for</span> <span class="n">box</span><span class="p">,</span><span class="n">el_num</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">box_nodes</span><span class="p">,</span><span class="n">box_el_num</span><span class="p">):</span>
+          <span class="n">x1</span><span class="p">,</span><span class="n">y1</span><span class="p">,</span><span class="n">x2</span><span class="p">,</span><span class="n">y2</span> <span class="o">=</span> <span class="n">box</span>
+          <span class="n">num_el_x</span><span class="p">,</span> <span class="n">num_el_y</span> <span class="o">=</span> <span class="n">el_num</span>
+
+          <span class="n">p1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span><span class="n">y1</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+          <span class="n">p2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">x1</span><span class="p">,</span><span class="n">y2</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+          <span class="n">p3</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span><span class="n">y2</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+          <span class="n">p4</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPoint</span><span class="p">(</span><span class="n">x2</span><span class="p">,</span><span class="n">y1</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+          <span class="n">l1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">p1</span><span class="p">,</span> <span class="n">p2</span><span class="p">)</span>
+          <span class="n">l2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">p2</span><span class="p">,</span> <span class="n">p3</span><span class="p">)</span>
+          <span class="n">l3</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">p3</span><span class="p">,</span> <span class="n">p4</span><span class="p">)</span>
+          <span class="n">l4</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addLine</span><span class="p">(</span><span class="n">p4</span><span class="p">,</span> <span class="n">p1</span><span class="p">)</span>
+
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_y</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l2</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_x</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l3</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_y</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l4</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_x</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+
+          <span class="n">cl1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addCurveLoop</span><span class="p">([</span><span class="n">p1</span><span class="p">,</span> <span class="n">p2</span><span class="p">,</span> <span class="n">p3</span><span class="p">,</span> <span class="n">p4</span><span class="p">])</span>
+          <span class="n">rect</span> <span class="o">=</span><span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPlaneSurface</span><span class="p">([</span><span class="n">cl1</span><span class="p">])</span>
+
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteSurface</span><span class="p">(</span><span class="n">rect</span><span class="p">)</span>
+          <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setRecombine</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">rect</span><span class="p">)</span>
+     
+     <span class="c1">#get list of tags of all box nodes</span>
+     <span class="n">tags</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">box_nodes</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+
+     <span class="c1">#remove duplicate points to ensure closed section </span>
+     <span class="c1"># (not guaranteed to be closed otherwise!)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">remove_all_duplicates</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add_physical_group</span><span class="p">(</span><span class="n">tdim</span><span class="p">,</span><span class="n">tags</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="s2">&quot;rect&quot;</span><span class="p">)</span>
+
+     <span class="c1">#generate the mesh and optionally write the gmsh mesh file</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">gdim</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span> <span class="o">+</span><span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.msh&quot;</span><span class="p">)</span>
+
+     <span class="c1">#uncomment this below if you want to run gmsh window for debug, etc</span>
+     <span class="c1"># gmsh.fltk.run()</span>
+
+     <span class="c1"># close gmsh API</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+
+     <span class="c1">#read gmsh file and write and xdmf</span>
+     <span class="k">if</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+          <span class="c1"># Read in mesh</span>
+          <span class="n">msh</span> <span class="o">=</span> <span class="n">meshio</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span> <span class="o">+</span><span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.msh&quot;</span><span class="p">)</span>
+
+          <span class="c1"># Create and save one file for the mesh, and one file for the facets </span>
+          <span class="n">mesh</span> <span class="o">=</span> <span class="n">gmsh_to_xdmf</span><span class="p">(</span><span class="n">msh</span><span class="p">,</span> <span class="s2">&quot;quad&quot;</span><span class="p">,</span> <span class="n">prune_z</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+          <span class="n">meshio</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;output/&quot;</span><span class="o">+</span><span class="n">meshname</span><span class="o">+</span><span class="s2">&quot;.xdmf&quot;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">)</span>
+
+     <span class="n">fileName</span> <span class="o">=</span> <span class="s2">&quot;output/&quot;</span><span class="o">+</span> <span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.xdmf&quot;</span>
+
+     <span class="c1">#read xdmf and return dolfinx mesh object</span>
+     <span class="k">with</span> <span class="n">XDMFFile</span><span class="p">(</span><span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="p">,</span> <span class="n">fileName</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">xdmf</span><span class="p">:</span>
+          <span class="c1">#mesh generation with meshio seems to have difficulty renaming the mesh name</span>
+          <span class="c1"># (but not the file, hence the &quot;Grid&quot; name property)</span>
+          <span class="n">domain</span> <span class="o">=</span> <span class="n">xdmf</span><span class="o">.</span><span class="n">read_mesh</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Grid&quot;</span><span class="p">)</span>
+          <span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">create_connectivity</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+          <span class="c1"># print(&quot;Finished meshing 2D with %i elements&quot; % (domain.num_cells))</span>
+          <span class="k">return</span> <span class="n">domain</span></div>
+     
+<div class="viewcode-block" id="create_circle"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/mesh/index.html#ALBATROSS.mesh.create_circle">[docs]</a><span class="k">def</span> <span class="nf">create_circle</span><span class="p">(</span><span class="n">radius</span><span class="p">,</span><span class="n">num_el</span><span class="p">,</span><span class="n">meshname</span><span class="p">):</span>
+<span class="w">     </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">     radius = outer radius of circle</span>
+<span class="sd">     num_el = number of elements along radial direction </span>
+<span class="sd">     meshname = name of mesh</span>
+<span class="sd">     &#39;&#39;&#39;</span>
+     <span class="c1">#mesh parameters</span>
+     <span class="n">gdim</span><span class="o">=</span><span class="mi">2</span>
+     <span class="n">tdim</span><span class="o">=</span><span class="mi">2</span>
+
+     <span class="c1">#cross section properties</span>
+     <span class="n">xcName</span> <span class="o">=</span> <span class="n">meshname</span>
+     <span class="n">R</span><span class="o">=</span><span class="n">radius</span> 
+     <span class="n">num_el_thick</span> <span class="o">=</span> <span class="n">num_el</span>
+     <span class="c1">#TODO: use transfinite interpolation to control mesh number...</span>
+     <span class="c1">#set number of elements along circumference proportional to the </span>
+     <span class="c1"># number of elements through the thickness</span>
+     <span class="n">num_el_circum</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">num_el_thick</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">xcName</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">setCurrent</span><span class="p">(</span><span class="n">xcName</span><span class="p">)</span>
+
+     <span class="c1">#meshtags</span>
+     <span class="n">d1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">add_disk</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">R</span><span class="p">,</span><span class="n">R</span><span class="p">)</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">occ</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add_physical_group</span><span class="p">(</span><span class="n">tdim</span><span class="p">,[</span><span class="n">d1</span><span class="p">])</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">option</span><span class="o">.</span><span class="n">setNumber</span><span class="p">(</span><span class="s1">&#39;Mesh.MeshSizeMin&#39;</span><span class="p">,</span> <span class="n">R</span><span class="o">/</span><span class="n">num_el_thick</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">option</span><span class="o">.</span><span class="n">setNumber</span><span class="p">(</span><span class="s1">&#39;Mesh.MeshSizeMax&#39;</span><span class="p">,</span> <span class="n">R</span><span class="o">/</span><span class="n">num_el_thick</span><span class="p">)</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">gdim</span><span class="p">)</span>
+
+     <span class="c1">#uncomment this below if you want to run gmsh window for debug, etc</span>
+     <span class="c1"># gmsh.fltk.run()</span>
+
+     <span class="c1">#write xdmf mesh file</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span> <span class="o">+</span><span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.msh&quot;</span><span class="p">)</span>
+
+     <span class="c1"># close gmsh API</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+
+     <span class="c1">#read gmsh file and write and xdmf</span>
+     <span class="k">if</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+          <span class="c1"># Read in mesh</span>
+          <span class="n">msh</span> <span class="o">=</span> <span class="n">meshio</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span> <span class="o">+</span><span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.msh&quot;</span><span class="p">)</span>
+
+          <span class="c1"># Create and save one file for the mesh, and one file for the facets </span>
+          <span class="n">mesh</span> <span class="o">=</span> <span class="n">gmsh_to_xdmf</span><span class="p">(</span><span class="n">msh</span><span class="p">,</span> <span class="s2">&quot;triangle&quot;</span><span class="p">,</span> <span class="n">prune_z</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+          <span class="n">meshio</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;output/&quot;</span><span class="o">+</span><span class="n">meshname</span><span class="o">+</span><span class="s2">&quot;.xdmf&quot;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">)</span>
+
+     <span class="n">fileName</span> <span class="o">=</span> <span class="s2">&quot;output/&quot;</span><span class="o">+</span> <span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.xdmf&quot;</span>
+
+     <span class="c1">#read xdmf and return dolfinx mesh object</span>
+     <span class="k">with</span> <span class="n">XDMFFile</span><span class="p">(</span><span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="p">,</span> <span class="n">fileName</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">xdmf</span><span class="p">:</span>
+          <span class="c1">#mesh generation with meshio seems to have difficulty renaming the mesh name</span>
+          <span class="c1"># (but not the file, hence the &quot;Grid&quot; name property)</span>
+          <span class="n">domain</span> <span class="o">=</span> <span class="n">xdmf</span><span class="o">.</span><span class="n">read_mesh</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Grid&quot;</span><span class="p">)</span>
+          <span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">create_connectivity</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+          <span class="c1"># print(&quot;Finished meshing 2D with %i elements&quot; % (domain.num_cells))</span>
+          <span class="k">return</span> <span class="n">domain</span></div>
+     
+<div class="viewcode-block" id="create_hollow_circle"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/mesh/index.html#ALBATROSS.mesh.create_hollow_circle">[docs]</a><span class="k">def</span> <span class="nf">create_hollow_circle</span><span class="p">(</span><span class="n">radius</span><span class="p">,</span><span class="n">thickness</span><span class="p">,</span><span class="n">num_el</span><span class="p">,</span><span class="n">meshname</span><span class="p">):</span>
+<span class="w">     </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">     radius = outer radius of circle</span>
+<span class="sd">     thicknesses = wall thickness</span>
+<span class="sd">     num_el = number of elements through thickness</span>
+<span class="sd">     meshname = name of mesh</span>
+<span class="sd">     &#39;&#39;&#39;</span>
+     <span class="c1">#mesh parameters</span>
+     <span class="n">gdim</span><span class="o">=</span><span class="mi">2</span>
+     <span class="n">tdim</span><span class="o">=</span><span class="mi">2</span>
+
+     <span class="c1">#cross section properties</span>
+     <span class="n">xcName</span> <span class="o">=</span> <span class="n">meshname</span>
+     <span class="n">R</span><span class="o">=</span><span class="n">radius</span> 
+     <span class="n">t</span> <span class="o">=</span> <span class="n">thickness</span>
+     <span class="n">num_el_thick</span> <span class="o">=</span> <span class="n">num_el</span>
+     <span class="c1">#set number of elements along circumference proportional to the </span>
+     <span class="c1"># number of elements through the thickness</span>
+     <span class="n">num_el_circum</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="mi">2</span><span class="o">*</span><span class="n">R</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="n">t</span><span class="p">))</span> <span class="o">*</span> <span class="n">num_el_thick</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">xcName</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">setCurrent</span><span class="p">(</span><span class="n">xcName</span><span class="p">)</span>
+
+     <span class="c1">#meshtags</span>
+     <span class="n">markerId</span> <span class="o">=</span> <span class="mi">1</span>
+     <span class="n">p1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+     <span class="n">p2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">R</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+     <span class="n">p3</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">R</span><span class="o">-</span><span class="n">t</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+     <span class="n">p4</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="o">-</span><span class="n">R</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+     <span class="n">p5</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="o">-</span><span class="p">(</span><span class="n">R</span><span class="o">-</span><span class="n">t</span><span class="p">),</span><span class="mi">0</span><span class="p">)</span>
+
+     <span class="n">ca1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_circle_arc</span><span class="p">(</span><span class="n">p2</span><span class="p">,</span><span class="n">p1</span><span class="p">,</span><span class="n">p4</span><span class="p">)</span>
+     <span class="n">ca2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_circle_arc</span><span class="p">(</span><span class="n">p3</span><span class="p">,</span><span class="n">p1</span><span class="p">,</span><span class="n">p5</span><span class="p">)</span>
+     <span class="n">ca3</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_circle_arc</span><span class="p">(</span><span class="n">p4</span><span class="p">,</span><span class="n">p1</span><span class="p">,</span><span class="n">p2</span><span class="p">)</span>
+     <span class="n">ca4</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_circle_arc</span><span class="p">(</span><span class="n">p5</span><span class="p">,</span><span class="n">p1</span><span class="p">,</span><span class="n">p3</span><span class="p">)</span>
+     <span class="n">l1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_line</span><span class="p">(</span><span class="n">p2</span><span class="p">,</span><span class="n">p3</span><span class="p">)</span>
+     <span class="n">l2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">add_line</span><span class="p">(</span><span class="n">p4</span><span class="p">,</span><span class="n">p5</span><span class="p">)</span>
+
+     <span class="n">edges1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addCurveLoop</span><span class="p">([</span><span class="n">ca1</span><span class="p">,</span><span class="n">l2</span><span class="p">,</span><span class="o">-</span><span class="n">ca2</span><span class="p">,</span><span class="o">-</span><span class="n">l1</span><span class="p">],</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+     <span class="n">hollow_disk1</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPlaneSurface</span><span class="p">([</span><span class="n">edges1</span><span class="p">],</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+     <span class="n">edges2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addCurveLoop</span><span class="p">([</span><span class="n">ca3</span><span class="p">,</span><span class="o">-</span><span class="n">l2</span><span class="p">,</span><span class="o">-</span><span class="n">ca4</span><span class="p">,</span><span class="n">l1</span><span class="p">],</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+     <span class="n">hollow_disk2</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addPlaneSurface</span><span class="p">([</span><span class="n">edges2</span><span class="p">],</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">ca1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_circum</span><span class="p">))</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">ca2</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_circum</span><span class="p">))</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">ca3</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_circum</span><span class="p">))</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">ca4</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_el_circum</span><span class="p">))</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l1</span><span class="p">,</span><span class="nb">int</span><span class="p">(</span><span class="n">num_el_thick</span><span class="p">))</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteCurve</span><span class="p">(</span><span class="n">l2</span><span class="p">,</span><span class="nb">int</span><span class="p">(</span><span class="n">num_el_thick</span><span class="p">))</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteSurface</span><span class="p">(</span><span class="n">hollow_disk1</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setTransfiniteSurface</span><span class="p">(</span><span class="n">hollow_disk2</span><span class="p">)</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add_physical_group</span><span class="p">(</span><span class="n">tdim</span><span class="p">,[</span><span class="n">hollow_disk1</span><span class="p">,</span><span class="n">hollow_disk2</span><span class="p">],</span><span class="mi">0</span><span class="p">,</span><span class="n">xcName</span><span class="p">)</span>
+
+     <span class="c1">#generate the mesh and optionally write the gmsh mesh file</span>
+     <span class="c1"># gmsh.model.geo.remove_all_duplicates()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setRecombine</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">hollow_disk1</span><span class="p">)</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">setRecombine</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">hollow_disk2</span><span class="p">)</span>
+
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">gdim</span><span class="p">)</span>
+     <span class="c1"># gmsh.model.mesh.removeDuplicateElements()</span>
+     <span class="c1"># gmsh.model.mesh.removeDuplicateNodes()</span>
+
+     <span class="c1">#uncomment this below if you want to run gmsh window for debug, etc</span>
+     <span class="c1"># gmsh.fltk.run()</span>
+
+     <span class="c1">#write xdmf mesh file</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span> <span class="o">+</span><span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.msh&quot;</span><span class="p">)</span>
+
+     <span class="c1"># close gmsh API</span>
+     <span class="n">gmsh</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+
+     <span class="c1">#read gmsh file and write and xdmf</span>
+     <span class="k">if</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+          <span class="c1"># Read in mesh</span>
+          <span class="n">msh</span> <span class="o">=</span> <span class="n">meshio</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;output/&quot;</span> <span class="o">+</span><span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.msh&quot;</span><span class="p">)</span>
+
+          <span class="c1"># Create and save one file for the mesh, and one file for the facets </span>
+          <span class="n">mesh</span> <span class="o">=</span> <span class="n">gmsh_to_xdmf</span><span class="p">(</span><span class="n">msh</span><span class="p">,</span> <span class="s2">&quot;quad&quot;</span><span class="p">,</span> <span class="n">prune_z</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+          <span class="n">meshio</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;output/&quot;</span><span class="o">+</span><span class="n">meshname</span><span class="o">+</span><span class="s2">&quot;.xdmf&quot;</span><span class="p">,</span> <span class="n">mesh</span><span class="p">)</span>
+
+     <span class="n">fileName</span> <span class="o">=</span> <span class="s2">&quot;output/&quot;</span><span class="o">+</span> <span class="n">meshname</span> <span class="o">+</span> <span class="s2">&quot;.xdmf&quot;</span>
+
+     <span class="c1">#read xdmf and return dolfinx mesh object</span>
+     <span class="k">with</span> <span class="n">XDMFFile</span><span class="p">(</span><span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span><span class="p">,</span> <span class="n">fileName</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">xdmf</span><span class="p">:</span>
+          <span class="c1">#mesh generation with meshio seems to have difficulty renaming the mesh name</span>
+          <span class="c1"># (but not the file, hence the &quot;Grid&quot; name property)</span>
+          <span class="n">domain</span> <span class="o">=</span> <span class="n">xdmf</span><span class="o">.</span><span class="n">read_mesh</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Grid&quot;</span><span class="p">)</span>
+          <span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">create_connectivity</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+          <span class="c1"># print(&quot;Finished meshing 2D with %i elements&quot; % (domain.num_cells))</span>
+          <span class="k">return</span> <span class="n">domain</span></div>
+     
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Anugrah.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

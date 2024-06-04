@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ALBATROSS.beam &mdash; lsdo_project_template  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            lsdo_project_template
+          </a>
+              <div class="version">
+                0.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../src/getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/background.html">Background</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/tutorials.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/basic.html">1. Basic tutorials</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/advanced.html">2. Advanced tutorials</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_1.html">Custom feature 1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_2.html">Custom feature 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/basic.html">1. Basic examples</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/advanced.html">2. Advanced examples</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/api.html">API reference</a><ul class="simple">
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">lsdo_project_template</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ALBATROSS.beam</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ALBATROSS.beam</h1><div class="highlight"><pre>
+<span></span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">The beam module</span>
+<span class="sd">---------------------</span>
+<span class="sd">This module connects an Axial model and (&gt;=1) Cross-Section models</span>
+<span class="sd">allowing for a complete beam model to be constructed, analyzed,</span>
+<span class="sd">and (given the appropriate cross-section) a full 3D displacement and </span>
+<span class="sd">stress solution field to be obtained</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">from</span> <span class="nn">dolfinx.fem</span> <span class="kn">import</span> <span class="n">TensorFunctionSpace</span><span class="p">,</span><span class="n">VectorFunctionSpace</span><span class="p">,</span><span class="n">Function</span><span class="p">,</span><span class="n">FunctionSpace</span>
+<span class="kn">from</span> <span class="nn">ufl</span> <span class="kn">import</span> <span class="n">sin</span><span class="p">,</span><span class="n">cos</span>
+<span class="kn">from</span> <span class="nn">ALBATROSS.cross_section</span> <span class="kn">import</span> <span class="n">CrossSectionAnalytical</span>
+<span class="kn">from</span> <span class="nn">ALBATROSS.axial</span> <span class="kn">import</span> <span class="n">Axial</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pyvista</span>
+<span class="kn">from</span> <span class="nn">dolfinx.plot</span> <span class="kn">import</span> <span class="n">create_vtk_mesh</span>
+
+<div class="viewcode-block" id="Beam"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam">[docs]</a><span class="k">class</span> <span class="nc">Beam</span><span class="p">(</span><span class="n">Axial</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Class that combines both 1D and 2D analysis</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">beam_axis</span><span class="p">,</span><span class="n">xs_info</span><span class="p">,</span><span class="n">xs_type</span><span class="o">=</span><span class="s1">&#39;EBPE&#39;</span><span class="p">,</span><span class="n">segment_type</span><span class="o">=</span><span class="s1">&#39;CONSTANT&#39;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        beam_axis: object containing axial mesh (used for 1D analysis) </span>
+<span class="sd">            and cross-section positioning mesh (used to locate xs&#39;s along the</span>
+<span class="sd">            beam axis)</span>
+
+<span class="sd">        xs_info = (xs_list,xs_orientations,xs_adj_list)</span>
+<span class="sd">            xs_list : list of 2D xdmf meshes for each cross-section</span>
+<span class="sd">            xs_orientations: list of vectors defining orientation of </span>
+<span class="sd">                primary orthogonal axis used in xs analysis</span>
+<span class="sd">            xs_adj_list: adjacency list mapping segment[i] of the axial position</span>
+<span class="sd">                mesh to xs[j] of xs_list. This allows cross-section analysis to </span>
+<span class="sd">                be run once for each cross-section and then mapped to each section</span>
+<span class="sd">        OPTIONAL ARGS: </span>
+<span class="sd">        segment_type: determines whether interpolation or </span>
+<span class="sd">            constant properties are used within segments</span>
+<span class="sd">        xs_type: determines if xs analysis is to be run. </span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span> <span class="o">=</span> <span class="n">beam_axis</span><span class="o">.</span><span class="n">axial_mesh</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span> <span class="o">=</span> <span class="n">beam_axis</span><span class="o">.</span><span class="n">axial_pos_mesh</span>
+
+        <span class="c1">#define rotation matrices for rotating between beam reference axis and xs reference frame</span>
+        <span class="c1">#note: </span>
+        <span class="c1">#   RGB=Rgb and RBG=Rbg</span>
+        <span class="c1">#   &quot;mixed case&quot; frame transformations are not equivalent as RBb != identity(3x3)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">RBG</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span> <span class="mi">0</span><span class="p">,</span>  <span class="mi">0</span><span class="p">,</span>  <span class="mi">1</span><span class="p">],</span>
+                             <span class="p">[</span> <span class="mi">1</span><span class="p">,</span>  <span class="mi">0</span><span class="p">,</span>  <span class="mi">0</span><span class="p">],</span>
+                             <span class="p">[</span> <span class="mi">0</span><span class="p">,</span>  <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">RGB</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span> <span class="mi">0</span><span class="p">,</span>  <span class="mi">1</span><span class="p">,</span>  <span class="mi">0</span><span class="p">],</span>
+                             <span class="p">[</span> <span class="mi">0</span><span class="p">,</span>  <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+                             <span class="p">[</span> <span class="mi">1</span><span class="p">,</span>  <span class="mi">0</span><span class="p">,</span>  <span class="mi">0</span><span class="p">]])</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">segment_type</span> <span class="o">=</span> <span class="n">segment_type</span>
+        
+        <span class="k">if</span> <span class="n">xs_type</span> <span class="o">==</span> <span class="s1">&#39;EBPE&#39;</span><span class="p">:</span>
+            <span class="c1">#EBPE: Energy Based Polynomial Expansion</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_list</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">orientations</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_adj_list</span><span class="p">]</span> <span class="o">=</span> <span class="n">xs_info</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_adj_list</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">xs_adj_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_adj_list</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">numxs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_list</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">numsegments</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_adj_list</span><span class="p">)</span>
+
+            <span class="c1">#check that all the adjacency list and the xs list contain the same number of xs&#39;s</span>
+            <span class="k">assert</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numxs</span><span class="p">))</span><span class="o">==</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_adj_list</span><span class="o">.</span><span class="n">flatten</span><span class="p">()))</span>
+            
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Orienting XSs along beam axis....&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_orient_xss</span><span class="p">()</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Linking cross-sectional properties to axial mesh...&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_link_xs_to_axial</span><span class="p">()</span>
+
+        <span class="k">elif</span> <span class="n">xs_type</span> <span class="o">==</span> <span class="s1">&#39;precomputed&#39;</span><span class="p">:</span>
+            <span class="c1">#For usage with fully populated beam constitutive matrices</span>
+            <span class="c1">#   for example, from VABS</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">K_list</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">orientations</span><span class="p">]</span> <span class="o">=</span> <span class="n">xs_info</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">numxs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">K_list</span><span class="p">)</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Orienting XSs along beam axis....&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_orient_xss</span><span class="p">()</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Reading XS Stiffness Matrices...&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_axial_props_from_K_list</span><span class="p">()</span>
+
+        <span class="k">elif</span> <span class="n">xs_type</span><span class="o">==</span> <span class="s1">&#39;analytical&#39;</span><span class="p">:</span>
+            <span class="c1"># xs_info consists of a list of dictionaries of the relevant xs parameter</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_params</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">orientations</span><span class="p">]</span> <span class="o">=</span> <span class="n">xs_info</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">numxs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_params</span><span class="p">)</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Orienting XSs along beam axis....&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_orient_xss</span><span class="p">()</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Computing analytical cross section properties ...&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_axial_props_from_analytic_formulae</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;please use one of the documented methods&quot;</span><span class="p">)</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Initializing Axial Model (1D Analysis)&quot;</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">o</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Computing Elastic Energy...&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">elastic_energy</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Beam._orient_xss"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam._orient_xss">[docs]</a>    <span class="k">def</span> <span class="nf">_orient_xss</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1">#define orientation of the x2 axis w.r.t. the beam axis x1 to allow for </span>
+        <span class="c1"># matching the orientation of the xs with that of the axial mesh</span>
+        <span class="c1"># (this must be done carefully and with respect to the location of the beam axis)</span>
+        <span class="c1">#determine how the segments are constructed</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">segment_type</span> <span class="o">==</span> <span class="s2">&quot;CONSTANT&quot;</span><span class="p">:</span>
+            <span class="n">element_type</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;DG&#39;</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+            <span class="c1"># num_vals_to_enter = self.numsegments</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">segment_type</span> <span class="o">==</span> <span class="s2">&quot;VARIABLE&quot;</span><span class="p">:</span>
+            <span class="n">element_type</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+            <span class="c1"># num_vals_to_enter = self.numsegments + 1</span>
+            <span class="c1"># self.orientations=self.orientations.append(self.orientations)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">O2</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="p">,</span><span class="n">element_type</span><span class="p">,</span><span class="n">dim</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">o2</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">O2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">o2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">orientations</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">o2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span> <span class="c1">#needed for PETSc garbage collection</span>
+
+        <span class="c1">#interpolate these orientations into the finer 1D analysis mesh</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">O</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,</span><span class="n">element_type</span><span class="p">,</span><span class="n">dim</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">o</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">O</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">o</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">o2</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Beam._link_xs_to_axial"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam._link_xs_to_axial">[docs]</a>    <span class="k">def</span> <span class="nf">_link_xs_to_axial</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        CORE FUNCTION FOR PROCESSING MULTIPLE 2D XSs TO PREPARE A 1D MODEL</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="c1"># def get_flat_sym_stiff(K_mat):</span>
+        <span class="c1">#     K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])</span>
+        <span class="c1">#     return K_flat</span>
+        
+        <span class="c1">#determine how the segments are constructed</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">segment_type</span> <span class="o">==</span> <span class="s2">&quot;CONSTANT&quot;</span><span class="p">:</span>
+            <span class="n">element_type</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;DG&#39;</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">num_vals_to_enter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">numsegments</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">segment_type</span> <span class="o">==</span> <span class="s2">&quot;VARIABLE&quot;</span><span class="p">:</span>
+            <span class="n">element_type</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">num_vals_to_enter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">numsegments</span> <span class="o">+</span> <span class="mi">1</span>
+
+        <span class="c1">#We need to construct a continuous field over the axial mesh </span>
+        <span class="c1">#   from the properties computed from each cross-section</span>
+        <span class="n">sym_cond</span> <span class="o">=</span> <span class="kc">False</span> <span class="c1">#there is an issue with symmetric tensor fxn spaces in dolfinx at the moment</span>
+        <span class="c1">#initialize functions and functionspaces over axial positioning mesh            </span>
+        <span class="n">T2_66</span> <span class="o">=</span> <span class="n">TensorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="p">,</span><span class="n">element_type</span><span class="p">,</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">),</span><span class="n">symmetry</span><span class="o">=</span><span class="n">sym_cond</span><span class="p">)</span>
+        <span class="n">k2</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">T2_66</span><span class="p">)</span>
+        <span class="n">S2</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="p">,</span><span class="n">element_type</span><span class="p">)</span>
+        <span class="n">linear_density</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">S2</span><span class="p">)</span>
+
+        <span class="c1">#populate cross-sectional properties over axial positioning mesh</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_vals_to_enter</span><span class="p">):</span>
+            <span class="c1">#TODO: think a bit more about how to build up the xs properties over the beam</span>
+            <span class="n">xs_idx</span> <span class="o">=</span>  <span class="bp">self</span><span class="o">.</span><span class="n">xs_adj_list</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">xs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_list</span><span class="p">[</span><span class="n">xs_idx</span><span class="p">]</span>
+            <span class="c1">#output stiffess matrix</span>
+            <span class="k">if</span> <span class="n">sym_cond</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;symmetric mode not available yet,try again soon&quot;</span><span class="p">)</span>
+                <span class="n">exit</span><span class="p">()</span>
+                <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="mi">21</span><span class="o">*</span><span class="n">i</span><span class="p">,</span><span class="mi">21</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">K</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">sym_cond</span><span class="p">:</span>
+                <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="mi">36</span><span class="o">*</span><span class="n">i</span><span class="p">:</span><span class="mi">36</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">K</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+                <span class="n">linear_density</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">lin_density</span>
+                <span class="c1"># a2.vector.array[i] = xs.A</span>
+                <span class="c1"># rho2.vector.array[i] = xs.rho</span>
+                <span class="c1"># c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]</span>
+
+        <span class="c1">#interpolate from axial_pos_mesh to axial_mesh </span>
+
+        <span class="c1">#initialize fxn spaces</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">T_66</span> <span class="o">=</span> <span class="n">TensorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,</span><span class="n">element_type</span><span class="p">,</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">),</span><span class="n">symmetry</span><span class="o">=</span><span class="n">sym_cond</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">S</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,</span><span class="n">element_type</span><span class="p">)</span>
+
+        <span class="c1">#interpolate beam constitutive matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">T_66</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">k2</span><span class="p">)</span>
+
+        <span class="c1">#interpolate linear density area</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">linear_density</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">S</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">linear_density</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">linear_density</span><span class="p">)</span>
+
+        <span class="c1"># see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111</span>
+        <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>     <span class="c1">#need to add to prevent PETSc memory leak from garbage collection issues</span>
+        <span class="n">linear_density</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Done interpolating cross-sectional properties to axial mesh...&quot;</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Beam.get_axial_props_from_K_list"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam.get_axial_props_from_K_list">[docs]</a>    <span class="k">def</span> <span class="nf">get_axial_props_from_K_list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        FUNCTION TO POPULATE TENSOR FXN SPACE WITH BEAM CONSTITUITIVE MATRIX </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+               
+        <span class="k">def</span> <span class="nf">get_flat_sym_stiff</span><span class="p">(</span><span class="n">K_mat</span><span class="p">):</span>
+            <span class="n">K_flat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">K_mat</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">i</span><span class="p">:]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">)])</span>
+            <span class="k">return</span> <span class="n">K_flat</span>
+        
+        <span class="n">sym_cond</span> <span class="o">=</span> <span class="kc">False</span> <span class="c1">#there is an issue with symmetric tensor fxn spaces in dolfinx at the moment</span>
+        <span class="n">T2_66</span> <span class="o">=</span> <span class="n">TensorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">),</span><span class="n">symmetry</span><span class="o">=</span><span class="n">sym_cond</span><span class="p">)</span>
+        <span class="n">k2</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">T2_66</span><span class="p">)</span>
+        <span class="c1">#TODO:same process for mass matrix</span>
+        <span class="c1"># S2 = FunctionSpace(self.axial_pos_mesh,(&#39;CG&#39;,1))</span>
+        <span class="c1"># a2 = Function(S2)</span>
+        <span class="c1"># rho2 = Function(S2)</span>
+        <span class="c1"># # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?</span>
+        <span class="c1"># V2_2 = VectorFunctionSpace(self.axial_pos_mesh,(&#39;CG&#39;,1),dim=2)</span>
+        <span class="c1"># c2 = Function(V2_2)</span>
+        
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">K</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">K_list</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;    reading properties for XS &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;/&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numxs</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;...&#39;</span><span class="p">)</span>
+            <span class="c1">#output stiffess matrix</span>
+            <span class="k">if</span> <span class="n">sym_cond</span><span class="p">:</span>
+                <span class="c1">#need to add fxn</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;symmetric mode not available yet,try again soon&quot;</span><span class="p">)</span>
+                <span class="n">exit</span><span class="p">()</span>
+                <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="mi">21</span><span class="o">*</span><span class="n">i</span><span class="p">,</span><span class="mi">21</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">xss</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">K</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">sym_cond</span><span class="p">:</span>
+                <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="mi">36</span><span class="o">*</span><span class="n">i</span><span class="p">:</span><span class="mi">36</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="n">K</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+                <span class="c1"># a2.vector.array[i] = self.xss[i].A</span>
+                <span class="c1"># rho2.vector.array[i] = self.xss[i].rho</span>
+                <span class="c1"># c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Done reading cross-sectional properties...&quot;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Interpolating cross-sectional properties to axial mesh...&quot;</span><span class="p">)</span>
+        <span class="c1">#interpolate from axial_pos_mesh to axial_mesh </span>
+
+        <span class="c1">#initialize fxn spaces</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">T_66</span> <span class="o">=</span> <span class="n">TensorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">),</span><span class="n">symmetry</span><span class="o">=</span><span class="n">sym_cond</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">V_2</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">S</span> <span class="o">=</span> <span class="n">FunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
+        
+        <span class="c1">#interpolate beam constitutive matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">T_66</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">k2</span><span class="p">)</span>
+
+        <span class="c1"># #interpolate xs area</span>
+        <span class="c1"># self.a = Function(self.S)</span>
+        <span class="c1"># self.a.interpolate(a2)</span>
+
+        <span class="c1"># #interpolate xs density</span>
+        <span class="c1"># self.rho = Function(self.S)</span>
+        <span class="c1"># self.rho.interpolate(rho2)</span>
+
+        <span class="c1"># #interpolate centroidal location in g frame</span>
+        <span class="c1"># self.c = Function(self.V_2)</span>
+        <span class="c1"># self.c.interpolate(c2)</span>
+
+        <span class="c1"># see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111</span>
+        <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>     <span class="c1">#need to add to prevent PETSc memory leak from garbage collection issues</span>
+        <span class="c1"># a2.vector.destroy()</span>
+        <span class="c1"># c2.vector.destroy()</span>
+        <span class="c1"># rho2.vector.destroy()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Done interpolating cross-sectional properties to axial mesh...&quot;</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Beam.get_axial_props_from_analytic_formulae"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam.get_axial_props_from_analytic_formulae">[docs]</a>    <span class="k">def</span> <span class="nf">get_axial_props_from_analytic_formulae</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">get_flat_sym_stiff</span><span class="p">(</span><span class="n">K_mat</span><span class="p">):</span>
+            <span class="n">K_flat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">K_mat</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">i</span><span class="p">:]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">)])</span>
+            <span class="k">return</span> <span class="n">K_flat</span>
+        
+        <span class="n">sym_cond</span> <span class="o">=</span> <span class="kc">False</span> <span class="c1">#there is an issue with symmetric tensor fxn spaces in dolfinx at the moment</span>
+        <span class="n">T2_66</span> <span class="o">=</span> <span class="n">TensorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">),</span><span class="n">symmetry</span><span class="o">=</span><span class="n">sym_cond</span><span class="p">)</span>
+        <span class="n">k2</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">T2_66</span><span class="p">)</span>
+        <span class="c1">#TODO:same process for mass matrix</span>
+        <span class="c1"># S2 = FunctionSpace(self.axial_pos_mesh,(&#39;CG&#39;,1))</span>
+        <span class="c1"># a2 = Function(S2)</span>
+        <span class="c1"># rho2 = Function(S2)</span>
+        <span class="c1"># # TODO: should this be a dim=3 vector? mght be easier to transform btwn frames?</span>
+        <span class="c1"># V2_2 = VectorFunctionSpace(self.axial_pos_mesh,(&#39;CG&#39;,1),dim=2)</span>
+        <span class="c1"># c2 = Function(V2_2)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">xss</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">xs</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_params</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;    computing properties for &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">xs</span><span class="p">[</span><span class="s1">&#39;shape&#39;</span><span class="p">])</span><span class="o">+</span> <span class="s1">&#39; XS: &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;/&#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numxs</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;...&#39;</span><span class="p">)</span>
+            <span class="c1">#get stiffess matrix</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">xss</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CrossSectionAnalytical</span><span class="p">(</span><span class="n">xs</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">xss</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">compute_stiffness</span><span class="p">()</span>
+            <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xss</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">K</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">sym_cond</span><span class="p">:</span>
+                <span class="c1">#need to add fxn</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;symmetric mode not available yet,try again soon&quot;</span><span class="p">)</span>
+                <span class="n">exit</span><span class="p">()</span>
+                <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="mi">21</span><span class="o">*</span><span class="n">i</span><span class="p">,</span><span class="mi">21</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">xss</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">K</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">sym_cond</span><span class="p">:</span>
+                <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="mi">36</span><span class="o">*</span><span class="n">i</span><span class="p">:</span><span class="mi">36</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">xss</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">K</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+                <span class="c1"># a2.vector.array[i] = self.xss[i].A</span>
+                <span class="c1"># rho2.vector.array[i] = self.xss[i].rho</span>
+                <span class="c1"># c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Done finding cross-sectional properties...&quot;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Interpolating cross-sectional properties to axial mesh...&quot;</span><span class="p">)</span>
+        <span class="c1">#interpolate from axial_pos_mesh to axial_mesh </span>
+
+        <span class="c1">#initialize fxn spaces</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">T_66</span> <span class="o">=</span> <span class="n">TensorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span><span class="mi">6</span><span class="p">),</span><span class="n">symmetry</span><span class="o">=</span><span class="n">sym_cond</span><span class="p">)</span>
+        <span class="c1"># self.V_2 = VectorFunctionSpace(self.axial_mesh,(&#39;CG&#39;,1),dim=2)</span>
+        <span class="c1"># self.S = FunctionSpace(self.axial_mesh,(&#39;CG&#39;,1))</span>
+        
+        <span class="c1">#interpolate beam constitutive matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">T_66</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">k2</span><span class="p">)</span>
+
+        <span class="c1"># #interpolate xs area</span>
+        <span class="c1"># self.a = Function(self.S)</span>
+        <span class="c1"># self.a.interpolate(a2)</span>
+
+        <span class="c1"># #interpolate xs density</span>
+        <span class="c1"># self.rho = Function(self.S)</span>
+        <span class="c1"># self.rho.interpolate(rho2)</span>
+
+        <span class="c1"># #interpolate centroidal location in g frame</span>
+        <span class="c1"># self.c = Function(self.V_2)</span>
+        <span class="c1"># self.c.interpolate(c2)</span>
+
+        <span class="c1"># see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111</span>
+        <span class="n">k2</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>     <span class="c1">#need to add to prevent PETSc memory leak from garbage collection issues</span>
+        <span class="c1"># a2.vector.destroy()</span>
+        <span class="c1"># c2.vector.destroy()</span>
+        <span class="c1"># rho2.vector.destroy()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Done interpolating cross-sectional properties to axial mesh...&quot;</span><span class="p">)</span></div>
+   
+<div class="viewcode-block" id="Beam.plot_xs_orientations"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam.plot_xs_orientations">[docs]</a>    <span class="k">def</span> <span class="nf">plot_xs_orientations</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">background</span> <span class="o">=</span> <span class="p">[</span><span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">]</span>
+        <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">font</span><span class="o">.</span><span class="n">color</span> <span class="o">=</span> <span class="s1">&#39;black&#39;</span>
+        <span class="n">warp_factor</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="c1">#plot Axial mesh</span>
+        <span class="n">tdim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span>
+        <span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span> <span class="o">=</span> <span class="n">create_vtk_mesh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,</span><span class="n">tdim</span><span class="p">)</span>
+        <span class="n">grid</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span>
+        <span class="n">plotter</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">Plotter</span><span class="p">()</span>
+        <span class="n">actor_0</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;wireframe&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;k&quot;</span><span class="p">,</span><span class="n">line_width</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">actor_1</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">&#39;points&#39;</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;k&#39;</span><span class="p">,</span><span class="n">point_size</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">segment_type</span> <span class="o">==</span><span class="s1">&#39;CONSTANT&#39;</span><span class="p">:</span>
+            <span class="n">grid</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;u&quot;</span><span class="p">]</span><span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">o</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">)),[</span><span class="bp">self</span><span class="o">.</span><span class="n">o</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">:]]],</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">grid</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;u&quot;</span><span class="p">]</span><span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">o</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span>
+        <span class="n">glyphs</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">glyph</span><span class="p">(</span><span class="n">orient</span><span class="o">=</span><span class="s2">&quot;u&quot;</span><span class="p">,</span><span class="n">factor</span><span class="o">=</span><span class="mf">.2</span><span class="p">,</span><span class="n">scale</span><span class="o">=</span><span class="s1">&#39;u&#39;</span><span class="p">)</span>
+        <span class="n">actor_2</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">glyphs</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;b&#39;</span><span class="p">)</span>
+
+        <span class="c1">#plot xs placement mesh</span>
+        <span class="n">tdim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span>
+        <span class="n">topology2</span><span class="p">,</span> <span class="n">cell_types2</span><span class="p">,</span> <span class="n">geom2</span> <span class="o">=</span> <span class="n">create_vtk_mesh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="p">,</span><span class="n">tdim</span><span class="p">)</span>
+        <span class="n">grid2</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology2</span><span class="p">,</span> <span class="n">cell_types2</span><span class="p">,</span> <span class="n">geom2</span><span class="p">)</span>
+        <span class="n">actor_3</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid2</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;wireframe&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">)</span>
+        <span class="n">actor_4</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid2</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s1">&#39;points&#39;</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;r&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">segment_type</span> <span class="o">==</span><span class="s1">&#39;CONSTANT&#39;</span><span class="p">:</span>
+            <span class="n">grid2</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;u&quot;</span><span class="p">]</span><span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">o2</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom2</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">)),[</span><span class="bp">self</span><span class="o">.</span><span class="n">o2</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">:]]],</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">grid2</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;u&quot;</span><span class="p">]</span><span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">o2</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom2</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span>
+
+        <span class="n">glyphs2</span> <span class="o">=</span> <span class="n">grid2</span><span class="o">.</span><span class="n">glyph</span><span class="p">(</span><span class="n">orient</span><span class="o">=</span><span class="s2">&quot;u&quot;</span><span class="p">,</span><span class="n">factor</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span><span class="n">scale</span><span class="o">=</span><span class="s1">&#39;u&#39;</span><span class="p">)</span>
+        <span class="n">actor_5</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">glyphs2</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;g&#39;</span><span class="p">)</span>
+
+        <span class="n">plotter</span><span class="o">.</span><span class="n">view_isometric</span><span class="p">()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">show_axes</span><span class="p">()</span>
+
+        <span class="c1"># if not pyvista.OFF_SCREEN:</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+        <span class="c1"># else:</span>
+        <span class="c1">#     pyvista.start_xvfb()</span>
+        <span class="c1">#     figure = plot.screenshot(&quot;beam_mesh.png&quot;)</span>
+
+<div class="viewcode-block" id="Beam.recover_displacement"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam.recover_displacement">[docs]</a>    <span class="k">def</span> <span class="nf">recover_displacement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">plot_xss</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="c1">#get local displacements</span>
+        <span class="p">[</span><span class="n">u_local</span><span class="p">,</span><span class="n">theta_local</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_local_disp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
+                
+        <span class="k">def</span> <span class="nf">apply_disp_to_xs</span><span class="p">(</span><span class="n">xsdisp</span><span class="p">,</span><span class="n">u_local</span><span class="p">):</span>
+            <span class="n">numdofs</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">xsdisp</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="mi">3</span><span class="p">)</span>
+            <span class="n">xsdisp</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">RGB</span><span class="nd">@u_local</span><span class="p">,</span><span class="n">numdofs</span><span class="p">)</span>
+            
+            <span class="c1">#needed for PETSc garbage collection</span>
+            <span class="n">xsdisp</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+
+        <span class="k">def</span> <span class="nf">apply_rot_to_xs</span><span class="p">(</span><span class="n">xsdisp</span><span class="p">,</span><span class="n">centroid</span><span class="p">,</span><span class="n">theta_local</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">rotation_to_disp</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+                <span class="p">[[</span><span class="n">alpha</span><span class="p">],[</span><span class="n">beta</span><span class="p">],[</span><span class="n">gamma</span><span class="p">]]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">RGB</span><span class="nd">@theta_local</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
+                <span class="c1"># rotation about X-axis</span>
+                <span class="n">Rx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span>         <span class="mi">0</span><span class="p">,</span>         <span class="mi">0</span><span class="p">],</span>
+                                <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">cos</span><span class="p">(</span><span class="n">alpha</span><span class="p">),</span><span class="o">-</span><span class="n">sin</span><span class="p">(</span><span class="n">alpha</span><span class="p">)],</span>
+                                <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">sin</span><span class="p">(</span><span class="n">alpha</span><span class="p">),</span><span class="n">cos</span><span class="p">(</span><span class="n">alpha</span><span class="p">)]])</span>
+                <span class="c1"># rotation about Y-axis</span>
+                <span class="n">Ry</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">cos</span><span class="p">(</span><span class="n">beta</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span><span class="n">sin</span><span class="p">(</span><span class="n">beta</span><span class="p">)],</span>
+                                <span class="p">[</span><span class="mi">0</span><span class="p">,</span>         <span class="mi">1</span><span class="p">,</span>        <span class="mi">0</span><span class="p">],</span>
+                                <span class="p">[</span><span class="o">-</span><span class="n">sin</span><span class="p">(</span><span class="n">beta</span><span class="p">),</span><span class="mi">0</span><span class="p">,</span><span class="n">cos</span><span class="p">(</span><span class="n">beta</span><span class="p">)]])</span>
+                <span class="c1">#rotation about Z-axis</span>
+                <span class="n">Rz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">cos</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="o">-</span><span class="n">sin</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="mi">0</span><span class="p">],</span>
+                                <span class="p">[</span><span class="n">sin</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="n">cos</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span> <span class="mi">0</span><span class="p">],</span>
+                                <span class="p">[</span><span class="mi">0</span><span class="p">,</span>         <span class="mi">0</span><span class="p">,</span>          <span class="mi">1</span><span class="p">]])</span>
+
+                <span class="c1">#TODO: think about how this rotation matrix could be stored?</span>
+                <span class="c1"># 3D rotation matrix for applying twist and transverse disp</span>
+                <span class="n">RGg</span> <span class="o">=</span> <span class="n">Rz</span><span class="nd">@Ry@Rx</span>
+
+                <span class="c1">#centroid location in g frame (same as RgB@np.array([0,yavg,zavg]))</span>
+                <span class="c1"># centroid = np.array([[xs.yavg,xs.zavg,0]]).T</span>
+
+                <span class="k">return</span> <span class="p">((</span><span class="n">RGg</span><span class="o">@</span><span class="p">(</span><span class="n">centroid</span><span class="o">-</span><span class="n">x</span><span class="p">)</span><span class="o">+</span><span class="n">x</span><span class="p">)</span><span class="o">-</span><span class="n">centroid</span><span class="p">)</span>
+                <span class="c1"># return ((RGg@(x-centroid)-x)+centroid)</span>
+
+            <span class="n">xsdisp</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">rotation_to_disp</span><span class="p">)</span>
+        
+        <span class="c1">#construct a series of recovery objects in the shape of the xs_adj_list:</span>
+        <span class="c1">#these recovery objects include:</span>
+        <span class="c1">#       -link to the original xs_id</span>
+        <span class="c1">#       -the coordinates of the xs location along the beam</span>
+        <span class="c1">#       -the displacement of the cross-section</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">recovery</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">axial_coords</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">x</span>
+        <span class="n">nodal_coords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">axial_coords</span><span class="p">[:</span><span class="mi">1</span><span class="p">,:],</span><span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">axial_coords</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,:],</span><span class="mi">2</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span><span class="n">axial_coords</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">:,:]))</span>
+        <span class="n">xs_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">xs_adj_list</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">plot_xss</span><span class="p">:</span>
+            <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">background</span> <span class="o">=</span> <span class="p">[</span><span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">]</span>
+            <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">font</span><span class="o">.</span><span class="n">color</span> <span class="o">=</span> <span class="s1">&#39;black&#39;</span>
+            <span class="n">tdim</span> <span class="o">=</span> <span class="mi">2</span>
+            <span class="c1"># grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)</span>
+            <span class="n">plotter</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">Plotter</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">xs_id</span><span class="p">,</span><span class="n">nodal_coord</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">xs_ids</span><span class="p">,</span><span class="n">nodal_coords</span><span class="p">):</span>
+            <span class="n">xs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">xs_list</span><span class="p">[</span><span class="n">xs_id</span><span class="p">]</span>
+            <span class="n">xsdisp</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">xs</span><span class="o">.</span><span class="n">recovery_V</span><span class="p">)</span>
+            <span class="p">[</span><span class="n">u_local</span><span class="p">,</span><span class="n">theta_local</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_local_disp</span><span class="p">([</span><span class="n">nodal_coord</span><span class="p">])</span>
+            <span class="n">centroid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]])</span><span class="o">.</span><span class="n">T</span>
+            <span class="c1"># centroid = np.array([[xs.yavg,xs.zavg,0]]).T</span>
+            <span class="n">apply_rot_to_xs</span><span class="p">(</span><span class="n">xsdisp</span><span class="p">,</span><span class="n">centroid</span><span class="p">,</span><span class="n">theta_local</span><span class="p">)</span>
+            <span class="n">apply_disp_to_xs</span><span class="p">(</span><span class="n">xsdisp</span><span class="p">,</span><span class="n">u_local</span><span class="p">)</span>
+
+            <span class="c1">#initialize a Recovery object of the cross-section</span>
+            <span class="n">recovery</span> <span class="o">=</span> <span class="n">Recovery</span><span class="p">(</span><span class="n">xsdisp</span><span class="p">,</span><span class="n">xs_id</span><span class="p">,</span><span class="n">nodal_coord</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">recovery</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">recovery</span><span class="p">)</span>
+            
+            <span class="c1"># #compute xs displacement functions</span>
+            <span class="c1"># for i,xs in enumerate(self.xs_list):</span>
+            <span class="c1">#     xs.V = VectorFunctionSpace(xs.msh,(&#39;CG&#39;,1),dim=3)</span>
+            <span class="c1">#     xs.xsdisp = Function(xs.V)</span>
+                
+            <span class="c1">#     apply_rot_to_xs(xs,theta_local[i])</span>
+            <span class="c1">#     apply_disp_to_xs(xs,u_local[i])</span>
+
+            <span class="k">if</span> <span class="n">plot_xss</span><span class="p">:</span>
+                <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">background</span> <span class="o">=</span> <span class="p">[</span><span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">]</span>
+                <span class="c1"># pyvista.global_theme.font.color = &#39;black&#39;</span>
+                <span class="c1"># tdim = xs.msh.topology.dim</span>
+                <span class="c1"># topology, cell_types, geom = create_vtk_mesh(xs.msh, tdim)</span>
+                <span class="c1"># grid = pyvista.UnstructuredGrid(topology, cell_types, geom)</span>
+                <span class="c1"># # grid = pyvista.UnstructuredGrid(topology, cell_types, geom).rotate_z(90).rotate_y(90)</span>
+                <span class="c1"># plotter = pyvista.Plotter()</span>
+                <span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span> <span class="o">=</span> <span class="n">create_vtk_mesh</span><span class="p">(</span><span class="n">xs</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span> <span class="n">tdim</span><span class="p">)</span>
+                <span class="n">grid</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span>
+                
+                <span class="n">actor0</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">opacity</span><span class="o">=</span><span class="mf">0.25</span><span class="p">)</span>
+                <span class="c1"># grid.rotate_z(90).rotate_y(90)</span>
+                <span class="c1"># plotter.add_mesh(grid, show_edges=True,opacity=0.25)</span>
+                <span class="c1"># have to be careful about how displacement data is populated into grid before or after rotations for visualization</span>
+                <span class="n">grid</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;u&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">xsdisp</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span>
+                <span class="c1"># new_grid = grid.transform(transform_matrix)</span>
+
+                <span class="n">warped</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">warp_by_vector</span><span class="p">(</span><span class="s2">&quot;u&quot;</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">actor_1</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">warped</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">plot_xss</span><span class="p">:</span>
+            <span class="n">plotter</span><span class="o">.</span><span class="n">show_axes</span><span class="p">()</span>
+            <span class="c1"># if add_nodes==True:</span>
+            <span class="c1">#     plotter.add_mesh(grid, style=&#39;points&#39;)</span>
+            <span class="n">plotter</span><span class="o">.</span><span class="n">view_isometric</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">OFF_SCREEN</span><span class="p">:</span>
+                <span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Beam.plot_xs_disp_3D"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam.plot_xs_disp_3D">[docs]</a>    <span class="k">def</span> <span class="nf">plot_xs_disp_3D</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">warp_factor</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="n">tdim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span>
+        <span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span> <span class="o">=</span> <span class="n">create_vtk_mesh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,</span><span class="n">tdim</span><span class="p">)</span>
+        <span class="n">grid</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span>
+        <span class="n">plotter</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">Plotter</span><span class="p">()</span>
+
+        <span class="n">grid</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;Beam axis displacement&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">collapse</span><span class="p">()</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span>
+        <span class="n">sargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">title_font_size</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+            <span class="n">label_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+            <span class="n">shadow</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">n_labels</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+            <span class="n">italic</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">%.3f</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">font_family</span><span class="o">=</span><span class="s2">&quot;arial&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        
+        <span class="n">actor_0</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;wireframe&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;k&quot;</span><span class="p">,</span><span class="n">line_width</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+        <span class="n">warped</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">warp_by_vector</span><span class="p">(</span><span class="s2">&quot;Beam axis displacement&quot;</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="n">warp_factor</span><span class="p">)</span>
+        <span class="n">actor_1</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">warped</span><span class="p">,</span><span class="n">line_width</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="n">scalar_bar_args</span><span class="o">=</span><span class="n">sargs</span><span class="p">)</span>
+        <span class="c1"># Controlling the text properties</span>
+        <span class="c1"># plotter.add_scalar_bar(&#39;u&#39;,interactive=True)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+        <span class="c1"># self.plot_axial_displacement()</span>
+        
+        <span class="n">grids</span> <span class="o">=</span> <span class="p">[]</span> <span class="c1">#used for rotated xs</span>
+        <span class="n">grids2</span> <span class="o">=</span> <span class="p">[]</span> <span class="c1">#used for rotated and warping solution disp</span>
+        
+        <span class="c1">#get rotation matrices from global frame to reference beam frame</span>
+        <span class="c1"># RbA = self.get_local_basis(self.axial_pos_mesh.geometry.x)</span>
+        <span class="c1"># RTb = self.get_deformed_basis(self.axial_pos_mesh.geometry.x)</span>
+        
+        <span class="c1">#plot xs meshes:</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">section</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">recovery</span><span class="p">):</span>
+            <span class="c1">#unpack section for </span>
+            <span class="n">xsdisp</span><span class="p">,</span><span class="n">xs_id</span><span class="p">,</span><span class="n">nodal_coord</span> <span class="o">=</span> <span class="n">section</span><span class="o">.</span><span class="n">_unpack</span><span class="p">()</span>
+            <span class="n">xs</span> <span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_list</span><span class="p">[</span><span class="n">xs_id</span><span class="p">]</span>
+
+            <span class="n">RbA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_local_basis</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">nodal_coord</span><span class="p">]))</span>
+            <span class="n">RTb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_deformed_basis</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">nodal_coord</span><span class="p">]))</span>
+
+
+            <span class="c1">#compute translation vector (transform centroid offset to relevant coordinates)</span>
+            <span class="n">trans_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">nodal_coord</span><span class="p">])</span><span class="o">.</span><span class="n">T</span><span class="o">-</span><span class="n">RbA</span><span class="p">[:,:]</span><span class="o">.</span><span class="n">T</span><span class="o">@</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]])</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+            <span class="c1"># trans_vec = np.array([nodal_coord]).T-RbA[:,:].T@(np.array([[0,xs.yavg,xs.zavg]]).T)</span>
+            
+            <span class="n">transform_matrix</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">RbA</span><span class="p">[:,:]</span><span class="o">.</span><span class="n">T</span><span class="nd">@self</span><span class="o">.</span><span class="n">RBG</span><span class="p">,</span><span class="n">trans_vec</span><span class="p">],</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]])))</span>
+
+            <span class="c1">#compute translation vector (transform centroid offset to relevant coordinates)</span>
+            <span class="n">global_disp</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_global_disp</span><span class="p">([</span><span class="n">nodal_coord</span><span class="p">])</span>
+            <span class="c1"># trans_vec2 = np.array([nodal_coord]).T-RbA[:,:].T@RTb[:,:].T@(np.array([[0,xs.yavg,xs.zavg]]).T) + np.array([global_disp]).T</span>
+            <span class="n">trans_vec2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">nodal_coord</span><span class="p">])</span><span class="o">.</span><span class="n">T</span><span class="o">-</span><span class="n">RbA</span><span class="p">[:,:]</span><span class="o">.</span><span class="n">T</span><span class="nd">@RTb</span><span class="p">[:,:]</span><span class="o">.</span><span class="n">T</span><span class="o">@</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]])</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">global_disp</span><span class="p">])</span><span class="o">.</span><span class="n">T</span>
+
+            <span class="n">transform_matrix2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">RbA</span><span class="p">[:,:]</span><span class="o">.</span><span class="n">T</span><span class="nd">@RTb</span><span class="p">[:,:]</span><span class="o">.</span><span class="n">T</span><span class="nd">@self</span><span class="o">.</span><span class="n">RBG</span><span class="p">,</span><span class="n">trans_vec2</span><span class="p">],</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">]])))</span>
+
+            <span class="n">tdim</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">msh</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span>
+            <span class="n">topology2</span><span class="p">,</span> <span class="n">cell_types2</span><span class="p">,</span> <span class="n">geom2</span> <span class="o">=</span> <span class="n">create_vtk_mesh</span><span class="p">(</span><span class="n">xs</span><span class="o">.</span><span class="n">msh</span><span class="p">,</span> <span class="n">tdim</span><span class="p">)</span>
+            <span class="n">grids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology2</span><span class="p">,</span> <span class="n">cell_types2</span><span class="p">,</span> <span class="n">geom2</span><span class="p">))</span>
+            <span class="n">grids2</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology2</span><span class="p">,</span> <span class="n">cell_types2</span><span class="p">,</span> <span class="n">geom2</span><span class="p">))</span>
+
+            <span class="n">grids</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">transform_matrix</span><span class="p">)</span>
+            <span class="n">grids2</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">transform_matrix2</span><span class="p">)</span>
+            <span class="c1">#only need to transform the displacement into the deformed frame</span>
+            <span class="c1">#RTb[i,:,:]@</span>
+            <span class="n">actor2</span><span class="o">=</span><span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grids</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">opacity</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span><span class="n">show_scalar_bar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">grids</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;cross-section displacement&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">RbA</span><span class="p">[:,:]</span><span class="o">.</span><span class="n">T</span><span class="nd">@self</span><span class="o">.</span><span class="n">RBG</span><span class="nd">@xsdisp</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom2</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span><span class="o">.</span><span class="n">T</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+            <span class="n">actor4</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grids2</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">opacity</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span><span class="n">show_scalar_bar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="c1"># #add mesh for Tangential frame:</span>
+            <span class="c1"># copied_mesh = actor2.copy(deep=True)</span>
+            <span class="c1"># copied_mesh.transform(transform_matrix)</span>
+            
+            <span class="n">sargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+                <span class="n">title_font_size</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+                <span class="n">label_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+                <span class="n">shadow</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">n_labels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                <span class="n">italic</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">%1.0f</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">font_family</span><span class="o">=</span><span class="s2">&quot;arial&quot;</span><span class="p">,</span>
+                <span class="c1"># width=2,</span>
+                <span class="c1"># color = [1,1,1]</span>
+            <span class="p">)</span>
+            <span class="n">warped</span> <span class="o">=</span> <span class="n">grids</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">warp_by_vector</span><span class="p">(</span><span class="s2">&quot;cross-section displacement&quot;</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="n">warp_factor</span><span class="p">)</span>
+            <span class="n">warped</span><span class="o">.</span><span class="n">cell_data</span><span class="p">[</span><span class="s2">&quot;VonMises&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">section</span><span class="o">.</span><span class="n">von_mises</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span>
+            <span class="n">warped</span><span class="o">.</span><span class="n">set_active_scalars</span><span class="p">(</span><span class="s2">&quot;VonMises&quot;</span><span class="p">)</span>
+            <span class="n">actor_3</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">warped</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="n">clim</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mf">5e7</span><span class="p">],</span><span class="n">show_scalar_bar</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="c1"># actor_3 = plotter.add_mesh(warped, show_edges=True,scalar_bar_args=sargs)</span>
+            <span class="c1"># actor_3.remove_scalar_bar()</span>
+        <span class="c1"># plotter.add_scalar_bar()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">view_isometric</span><span class="p">()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">show_axes</span><span class="p">()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">show_bounds</span><span class="p">()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Beam.recover_stress"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Beam.recover_stress">[docs]</a>    <span class="k">def</span> <span class="nf">recover_stress</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        
+        <span class="c1"># reactions = self.get_reactions(self.axial_pos_mesh.geometry.x)</span>
+        
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">section</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">recovery</span><span class="p">):</span>
+            <span class="c1">#unpack section for </span>
+            <span class="n">xsdisp</span><span class="p">,</span><span class="n">xs_id</span><span class="p">,</span><span class="n">nodal_coord</span> <span class="o">=</span> <span class="n">section</span><span class="o">.</span><span class="n">_unpack</span><span class="p">()</span>
+            <span class="n">xs</span> <span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_list</span><span class="p">[</span><span class="n">xs_id</span><span class="p">]</span>
+
+            <span class="n">section</span><span class="o">.</span><span class="n">reaction</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_reactions</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">nodal_coord</span><span class="p">]))</span>
+            
+            <span class="n">section</span><span class="o">.</span><span class="n">stress</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">recover_stress</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">reaction</span><span class="p">)</span>
+            
+            <span class="n">section</span><span class="o">.</span><span class="n">von_mises</span> <span class="o">=</span> <span class="n">xs</span><span class="o">.</span><span class="n">get_von_mises_stress</span><span class="p">(</span><span class="n">section</span><span class="o">.</span><span class="n">stress</span><span class="p">)</span></div></div>
+
+        <span class="c1"># # self.generalized_stresses(self.uh)</span>
+        
+        <span class="c1"># #need to interpolate evaluate at axial_pos_mesh nodes, but </span>
+        <span class="c1"># #   keep stress/reactions defined in the axial mesh or stress recovery will be wildly off.</span>
+        <span class="c1"># points_on_proc,cells=get_pts_and_cells(self.axial_mesh,self.axial_pos_mesh.geometry.x)</span>
+        
+        <span class="c1"># S = VectorFunctionSpace(self.axial_mesh,(&#39;CG&#39;,1),dim=6)</span>
+        <span class="c1"># s = Function(S)</span>
+        
+        <span class="c1"># s.interpolate(Expression(self.generalized_stresses(self.uh),S.element.interpolation_points()))</span>
+        <span class="c1"># Sig = s.eval(points_on_proc,cells)</span>
+
+        <span class="c1"># #SIG are the reaction forces in the xs. These are can then be fed back to the xs to recover the stresses</span>
+        <span class="c1"># # print(&quot;reaction forces along beam:&quot;)</span>
+        <span class="c1"># # print(Sig)</span>
+
+        <span class="c1"># for i,xs in enumerate(self.xs_list):</span>
+        <span class="c1">#     # print(&quot;xs area = &quot; + str(xs.A))</span>
+        <span class="c1">#     # print(&quot;xs averaged stresses: &quot;)</span>
+        <span class="c1">#     # print(Sig[i])</span>
+
+        <span class="c1">#     xs.recover_stress(Sig[i])</span>
+
+        <span class="c1">#     # print(&#39;stiffness matrix:&#39;)</span>
+        <span class="c1">#     # print(xs.K)</span>
+        <span class="c1">#     # print(&#39;displacements and rotations:&#39;)</span>
+        <span class="c1">#     # print(self.uh.sub(0).x.array)</span>
+
+<span class="c1"># ExampleBeam.get_max_stress()</span>
+
+<div class="viewcode-block" id="Recovery"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Recovery">[docs]</a><span class="k">class</span> <span class="nc">Recovery</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">xsdisp</span><span class="p">,</span><span class="n">xs_id</span><span class="p">,</span><span class="n">nodal_coord</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">xsdisp</span> <span class="o">=</span> <span class="n">xsdisp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">xs_id</span> <span class="o">=</span> <span class="n">xs_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nodal_coord</span> <span class="o">=</span> <span class="n">nodal_coord</span>
+
+<div class="viewcode-block" id="Recovery._unpack"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/beam/index.html#ALBATROSS.beam.Recovery._unpack">[docs]</a>    <span class="k">def</span> <span class="nf">_unpack</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">xsdisp</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">xs_id</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">nodal_coord</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Anugrah.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

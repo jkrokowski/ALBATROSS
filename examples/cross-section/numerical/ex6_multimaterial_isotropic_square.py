@@ -83,7 +83,7 @@ squareXS.plot_mesh()
 #compute the stiffness matrix
 squareXS.get_xs_stiffness_matrix()
 
-np.set_printoptions(precision=8,suppress=True)
+np.set_printoptions(precision=10,suppress=True)
 
 #output flexibility matrix
 print('Flexibility matrix:')

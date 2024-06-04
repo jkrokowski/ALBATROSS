@@ -36,7 +36,7 @@ class BeamAxis:
         '''
         print("Constructing beam axis...")
         axial_pos_meshname = name+'_axial_pos_mesh'
-        self.axial_pos_mesh = beam_interval_mesh_3D(points,np.ones((len(points)-1,1)),axial_pos_meshname)
+        self.axial_pos_mesh = beam_interval_mesh_3D(points,np.ones((len(points)-1)),axial_pos_meshname)
         axial_meshname = name+'_axial_mesh'
         self.axial_mesh = beam_interval_mesh_3D(points,ele,axial_meshname)
         print("DONE constructing beam axis")

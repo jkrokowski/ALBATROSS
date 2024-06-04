@@ -7,9 +7,8 @@ This script demonstrates:
     -cross-section (2D) analysis
     -(1D) <--> (2D) connection functionality 
 '''
+import ALBATROSS
 import numpy as np
-
-import ALBATROSS 
 
 #################################################################
 ########### DEFINE THE INPUTS FOR THE BEAM PROBLEM ##############
@@ -33,29 +32,24 @@ g = 5000*9.81
 p1 = (0,0,0)
 p2 = (L,0,0)
 
-#create cross-sectional mesh
-points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
-squareXSmesh = ALBATROSS.mesh.create_rectangle(points,[N,N])
+mesh2d_0 = mesh.create_rectangle( MPI.COMM_SELF,np.array([[0,0],[W, H]]),[N,N], cell_type=mesh.CellType.quadrilateral)
+meshes2D = 2*[mesh2d_0] #duplicate the mesh for endpoint
 
-#initialize material object
-unobtainium = ALBATROSS.material.Material(name='unobtainium',
-                                           mat_type='ISOTROPIC',
-                                           mech_props={'E':10e6,'nu':0.2},
-                                           density=2.7e-3)
+#define material parameters
+mats = {'Unobtainium':{ 'TYPE':'ISOTROPIC',
+                        'MECH_PROPS':{'E':10e6,'nu':0.2} ,
+                        'DENSITY':2.7e-3}
+                        }
 
-#initialize and run cross-sectional analysis
-squareXS = ALBATROSS.cross_section.CrossSection(squareXSmesh,[unobtainium])
-squareXS.get_xs_stiffness_matrix()
-xs_list = [squareXS]
+#1D mesh for locating beam cross-sections along beam axis
+meshname_axial_pos = 'axial_postion_mesh'
+ne_2D = len(meshes2D)-1 # number of xs's used
+axial_pos_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_2D],meshname_axial_pos)
 
-
-#create a beam axis
-meshname = 'ex_1'
-nodal_points = [p1,p2]
-# number of segments of the beams that use different cross-sections
-num_segments = len(nodal_points)-1 
-num_ele = [100] #number of subdivisions for each beam segment
-beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
+#1D mesh used for 1D analysis
+meshname_axial = 'axial_mesh'
+ne_1D = 100 #number of elements for 1D mesh
+axial_mesh = utils.beam_interval_mesh_3D([p1,p2],[ne_1D],meshname_axial)
 
 #define orientation of each xs with a vector
 orientations = np.tile([0,1,0],num_segments)
@@ -68,17 +62,14 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 ######### INITIALIZE BEAM OBJECT, APPLY BCs, & SOLVE ############
 #################################################################
 
-#initialize beam object using beam axis and definition of xs's
-CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
+#initialize beam object using 1D mesh and definition of xs's
+CantileverBeam = BeamModel(axial_mesh,xs_info)
 
 #show the orientation of each xs and the interpolated orientation along the beam
-# CantileverBeam.plot_xs_orientations()
+CantileverBeam.plot_xs_orientations()
 
 #applied fixed bc to first endpoint
 CantileverBeam.add_clamped_point(p1)
-
-#add distributed load
-CantileverBeam.add_dist_load((0,0,-g))
 
 #solve the linear problem
 CantileverBeam.solve()
@@ -88,24 +79,23 @@ CantileverBeam.solve()
 #################################################################
 
 #shows plot of 1D displacement solution (recovery doesn't need be executed)
-CantileverBeam.plot_axial_displacement(warp_factor=10)
+CantileverBeam.plot_axial_displacement(warp_factor=1)
 
 #recovers the 3D displacement field over each xs
-CantileverBeam.recover_displacement()
-
-#shows plot of stress over cross-section 
-CantileverBeam.recover_stress()
+CantileverBeam.recover_displacement(plot_xss=True)
 
 #plots both 1D and 2D solutions together
 CantileverBeam.plot_xs_disp_3D()
 
+#shows plot of stress over cross-section 
+CantileverBeam.recover_stress() # currently only axial component sigma11 plotted
+
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
-print('Maximum Tip Deflection')
-print('EB analytical solution:')
-E=unobtainium.E
-rho = unobtainium.density
-I = W*H**3/12
+print('Max Deflection for point load (EB analytical analytical solution)')
+E = mats['Unobtainium']['MECH_PROPS']['E']
+rho = mats['Unobtainium']['DENSITY']
+I = H**4/12
 q = rho*A*g
 print( (-q*L**4)/(8*E*I) )
 

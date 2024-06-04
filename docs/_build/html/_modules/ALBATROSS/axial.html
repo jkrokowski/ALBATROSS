@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ALBATROSS.axial &mdash; lsdo_project_template  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            lsdo_project_template
+          </a>
+              <div class="version">
+                0.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../src/getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/background.html">Background</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/tutorials.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/basic.html">1. Basic tutorials</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/advanced.html">2. Advanced tutorials</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_1.html">Custom feature 1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_2.html">Custom feature 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/basic.html">1. Basic examples</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/advanced.html">2. Advanced examples</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/api.html">API reference</a><ul class="simple">
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">lsdo_project_template</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ALBATROSS.axial</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ALBATROSS.axial</h1><div class="highlight"><pre>
+<span></span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">The axial module for executing a 1D analysis</span>
+<span class="sd">---------------------</span>
+<span class="sd">Contains the most important classes for beam formulations </span>
+<span class="sd">using shear-deformable Timoshenko Beam Theory</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="c1">#TODO: implement a pure displacement based Euler-Bernoulli beam based on examples</span>
+<span class="c1">#TODO: upgrade to geometrically nonlinear capable models</span>
+<span class="c1">#TODO: include dynamics by adding mass properties</span>
+
+<span class="kn">from</span> <span class="nn">dolfinx.fem</span> <span class="kn">import</span> <span class="n">TensorFunctionSpace</span><span class="p">,</span><span class="n">VectorFunctionSpace</span><span class="p">,</span><span class="n">Expression</span><span class="p">,</span><span class="n">Function</span><span class="p">,</span><span class="n">Constant</span><span class="p">,</span> <span class="n">locate_dofs_geometrical</span><span class="p">,</span><span class="n">locate_dofs_topological</span><span class="p">,</span><span class="n">dirichletbc</span><span class="p">,</span><span class="n">form</span>
+<span class="c1"># from dolfinx.fem.petsc import LinearProblem</span>
+<span class="kn">from</span> <span class="nn">dolfinx.fem.petsc</span> <span class="kn">import</span> <span class="p">(</span><span class="n">LinearProblem</span><span class="p">,</span><span class="n">assemble_matrix</span><span class="p">,</span><span class="n">assemble_vector</span><span class="p">,</span> 
+                                <span class="n">apply_lifting</span><span class="p">,</span><span class="n">set_bc</span><span class="p">,</span><span class="n">create_vector</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">ufl</span> <span class="kn">import</span> <span class="p">(</span><span class="n">Jacobian</span><span class="p">,</span> <span class="n">TestFunction</span><span class="p">,</span><span class="n">TrialFunction</span><span class="p">,</span><span class="n">as_vector</span><span class="p">,</span> <span class="n">sqrt</span><span class="p">,</span> 
+                <span class="n">inner</span><span class="p">,</span><span class="n">dot</span><span class="p">,</span><span class="n">grad</span><span class="p">,</span><span class="n">split</span><span class="p">,</span><span class="n">cross</span><span class="p">,</span><span class="n">Measure</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">ALBATROSS.elements</span> <span class="kn">import</span> <span class="n">LinearTimoshenkoElement</span>
+<span class="kn">from</span> <span class="nn">petsc4py.PETSc</span> <span class="kn">import</span> <span class="n">ScalarType</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">dolfinx</span> <span class="kn">import</span> <span class="n">plot</span>
+<span class="kn">import</span> <span class="nn">pyvista</span>
+
+<span class="kn">from</span> <span class="nn">ALBATROSS.utils</span> <span class="kn">import</span> <span class="n">get_pts_and_cells</span>
+<span class="kn">from</span> <span class="nn">ALBATROSS.mesh</span> <span class="kn">import</span> <span class="n">beam_interval_mesh_3D</span>
+
+<span class="kn">from</span> <span class="nn">petsc4py</span> <span class="kn">import</span> <span class="n">PETSc</span>
+
+<div class="viewcode-block" id="BeamAxis"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.BeamAxis">[docs]</a><span class="k">class</span> <span class="nc">BeamAxis</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">points</span><span class="p">,</span><span class="n">ele</span><span class="p">,</span><span class="n">name</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        points: list of points defining the start and stop points of each unique beam segment</span>
+<span class="sd">        ele: number of element for each beam segment (array of size (len(points)-1,))</span>
+<span class="sd">        name: name of the beam (string)</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">axial_pos_meshname</span> <span class="o">=</span> <span class="n">name</span><span class="o">+</span><span class="s1">&#39;_axial_pos_mesh&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">axial_pos_mesh</span> <span class="o">=</span> <span class="n">beam_interval_mesh_3D</span><span class="p">(</span><span class="n">points</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">points</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)),</span><span class="n">axial_pos_meshname</span><span class="p">)</span>
+        <span class="n">axial_meshname</span> <span class="o">=</span> <span class="n">name</span><span class="o">+</span><span class="s1">&#39;_axial_mesh&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span> <span class="o">=</span> <span class="n">beam_interval_mesh_3D</span><span class="p">(</span><span class="n">points</span><span class="p">,</span><span class="n">ele</span><span class="p">,</span><span class="n">axial_meshname</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Axial"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial">[docs]</a><span class="k">class</span> <span class="nc">Axial</span><span class="p">:</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Timoshenko shear deformable beam formulation</span>
+<span class="sd">    </span>
+<span class="sd">    Inputs:</span>
+
+<span class="sd">    domain: 1D analysis mesh</span>
+<span class="sd">    beam_props: 2-tensor (6x6) function defining beam properties along span</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">domain</span><span class="p">,</span><span class="n">xsinfo</span><span class="p">,</span><span class="n">orientation</span><span class="p">):</span>
+        <span class="c1">#import domain, function, and beam properties</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">domain</span> <span class="o">=</span> <span class="n">domain</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span> <span class="o">=</span> <span class="n">LinearTimoshenkoElement</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eleDOFs</span> <span class="o">=</span> <span class="mi">6</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">xsinfo</span> <span class="o">=</span> <span class="n">xsinfo</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dx</span> <span class="o">=</span> <span class="n">Measure</span><span class="p">(</span><span class="s1">&#39;dx&#39;</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dx_shear</span> <span class="o">=</span> <span class="n">Measure</span><span class="p">(</span><span class="s1">&#39;dx&#39;</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;quadrature_scheme&quot;</span><span class="p">:</span><span class="s2">&quot;default&quot;</span><span class="p">,</span> <span class="s2">&quot;quadrature_degree&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">})</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">w</span> <span class="o">=</span> <span class="n">TestFunction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dw</span> <span class="o">=</span> <span class="n">TrialFunction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="p">)</span>
+        <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">u_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_</span><span class="p">)</span> <span class="o">=</span> <span class="n">split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">)</span>
+        <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">du_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtheta</span><span class="p">)</span> <span class="o">=</span> <span class="n">split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dw</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">a_form</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bcs</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">f_pt</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">m_pt</span> <span class="o">=</span> <span class="p">[]</span>
+    
+        <span class="bp">self</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tangent</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">a1</span> <span class="o">=</span> <span class="n">orientation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a1</span> <span class="o">/=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a1</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">compute_local_axes</span><span class="p">()</span>
+       
+<div class="viewcode-block" id="Axial.elastic_energy"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.elastic_energy">[docs]</a>    <span class="k">def</span> <span class="nf">elastic_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generalized_stresses</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dw</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Eps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generalized_strains</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">w</span><span class="p">)</span>
+
+        <span class="c1">#assemble variational form separately for shear terms (using reduced integration)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a_form</span> <span class="o">=</span> <span class="p">(</span><span class="nb">sum</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">Sig</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Eps</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">]])</span> 
+                        <span class="o">+</span> <span class="nb">sum</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">Sig</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Eps</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx_shear</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]]))</span> </div>
+        <span class="c1"># self.a_form = (inner(self.Sig,self.Eps))</span>
+
+<div class="viewcode-block" id="Axial.tangent"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.tangent">[docs]</a>    <span class="k">def</span> <span class="nf">tangent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">domain</span><span class="p">):</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">Jacobian</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">as_vector</span><span class="p">([</span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span> <span class="n">t</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">t</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">]])</span><span class="o">/</span><span class="n">sqrt</span><span class="p">(</span><span class="n">inner</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="n">t</span><span class="p">))</span>     </div>
+
+<div class="viewcode-block" id="Axial.compute_local_axes"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.compute_local_axes">[docs]</a>    <span class="k">def</span> <span class="nf">compute_local_axes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1">#compute section local axes</span>
+        <span class="c1"># self.ez = as_vector([0, 0, 1])</span>
+        <span class="c1"># self.a1 = cross(self.t, self.ez)</span>
+        <span class="c1"># self.a1 /= sqrt(dot(self.a1, self.a1))</span>
+
+        <span class="c1">#Can add a TRY/EXCEPT and then warn the user if they haven&#39;t defined proper orientations</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a2</span> <span class="o">=</span> <span class="n">cross</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a2</span> <span class="o">/=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a2</span><span class="p">))</span></div>
+        
+<div class="viewcode-block" id="Axial.tgrad"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.tgrad">[docs]</a>    <span class="k">def</span> <span class="nf">tgrad</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">dot</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="n">w</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Axial.generalized_strains"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.generalized_strains">[docs]</a>    <span class="k">def</span> <span class="nf">generalized_strains</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
+        <span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span> <span class="o">=</span> <span class="n">split</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">as_vector</span><span class="p">([</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tgrad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">),</span>
+                        <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tgrad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">a1</span><span class="p">)</span><span class="o">-</span><span class="n">dot</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a2</span><span class="p">),</span>
+                        <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tgrad</span><span class="p">(</span><span class="n">u</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">a2</span><span class="p">)</span><span class="o">+</span><span class="n">dot</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">a1</span><span class="p">),</span>
+                        <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tgrad</span><span class="p">(</span><span class="n">theta</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">),</span>
+                        <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tgrad</span><span class="p">(</span><span class="n">theta</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">a1</span><span class="p">),</span>
+                        <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tgrad</span><span class="p">(</span><span class="n">theta</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">a2</span><span class="p">)])</span></div>
+
+<div class="viewcode-block" id="Axial.generalized_stresses"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.generalized_stresses">[docs]</a>    <span class="k">def</span> <span class="nf">generalized_stresses</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">w</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xsinfo</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">generalized_strains</span><span class="p">(</span><span class="n">w</span><span class="p">))</span></div>
+
+    <span class="c1">#constructing RHS:</span>
+<div class="viewcode-block" id="Axial.add_dist_load"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.add_dist_load">[docs]</a>    <span class="k">def</span> <span class="nf">add_dist_load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">f</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        f = tuple for (x,y,z) components of distributed load</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Adding distributed load....&quot;</span><span class="p">)</span>
+        <span class="n">f_vec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">a</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">rho</span><span class="o">*</span><span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">ScalarType</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span> <span class="o">=</span> <span class="n">dot</span><span class="p">(</span><span class="n">f_vec</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span> <span class="o">+=</span> <span class="n">dot</span><span class="p">(</span><span class="n">f_vec</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span></div>
+
+<div class="viewcode-block" id="Axial.add_point_load"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.add_point_load">[docs]</a>    <span class="k">def</span> <span class="nf">add_point_load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">f_list</span><span class="p">,</span><span class="n">pts</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        f = list of tuples for (x,y,z) components of point force force</span>
+<span class="sd">        pts : list of (x,y,z) location along beam axis to apply point force</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Adding point loads....&quot;</span><span class="p">)</span>
+        <span class="c1">#TODO: add data format checks here</span>
+        <span class="k">for</span> <span class="n">f</span><span class="p">,</span><span class="n">pt</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">f_list</span><span class="p">,</span><span class="n">pts</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">f_pt</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">f</span><span class="p">,</span><span class="n">pt</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="Axial.add_point_moment"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.add_point_moment">[docs]</a>    <span class="k">def</span> <span class="nf">add_point_moment</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">m_list</span><span class="p">,</span><span class="n">pts</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        f = list of tuples for (x,y,z) components of point force force</span>
+<span class="sd">        pts : list of (x,y,z) location along beam axis to apply point force</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Adding point loads....&quot;</span><span class="p">)</span>
+        <span class="c1">#TODO: add data format checks here</span>
+        <span class="k">for</span> <span class="n">m</span><span class="p">,</span><span class="n">pt</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">m_list</span><span class="p">,</span><span class="n">pts</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">m_pt</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">m</span><span class="p">,</span><span class="n">pt</span><span class="p">))</span></div>
+        
+<div class="viewcode-block" id="Axial.xyz_to_span"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.xyz_to_span">[docs]</a>    <span class="k">def</span> <span class="nf">xyz_to_span</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">pt</span><span class="p">):</span>
+        <span class="c1">#TODO: method to convert an xyz coordinate to the length along the beam</span>
+        <span class="k">return</span></div>
+<div class="viewcode-block" id="Axial.span_to_xyz"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.span_to_xyz">[docs]</a>    <span class="k">def</span> <span class="nf">span_to_xyz</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">l</span><span class="p">):</span>
+        <span class="c1">#TODO: method to convert spanwise coordinate l to an xyz location</span>
+        <span class="k">return</span></div>
+        
+<div class="viewcode-block" id="Axial.solve"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.solve">[docs]</a>    <span class="k">def</span> <span class="nf">solve</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Solving for beam axis displacement...&quot;</span><span class="p">)</span>
+
+        <span class="c1">#assemble the system from </span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_construct_system</span><span class="p">()</span>
+
+        <span class="c1">#initialize function to store solution of assembled system:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uh</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="p">)</span>
+        <span class="n">uvec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">vector</span> <span class="c1">#petsc vector</span>
+        <span class="n">uvec</span><span class="o">.</span><span class="n">setUp</span><span class="p">()</span>
+        <span class="n">ksp</span> <span class="o">=</span> <span class="n">PETSc</span><span class="o">.</span><span class="n">KSP</span><span class="p">()</span><span class="o">.</span><span class="n">create</span><span class="p">()</span>
+        <span class="n">ksp</span><span class="o">.</span><span class="n">setType</span><span class="p">(</span><span class="n">PETSc</span><span class="o">.</span><span class="n">KSP</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">CG</span><span class="p">)</span>
+        <span class="n">ksp</span><span class="o">.</span><span class="n">setTolerances</span><span class="p">(</span><span class="n">rtol</span><span class="o">=</span><span class="mf">1e-15</span><span class="p">)</span>
+        <span class="n">ksp</span><span class="o">.</span><span class="n">setOperators</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span><span class="p">)</span>
+        <span class="c1"># ksp.setFromOptions()</span>
+        <span class="n">ksp</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span><span class="n">uvec</span><span class="p">)</span></div>
+<div class="viewcode-block" id="Axial._solve_simple"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial._solve_simple">[docs]</a>    <span class="k">def</span> <span class="nf">_solve_simple</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>    
+        <span class="c1"># --------</span>
+        <span class="c1"># between these lines is the vastly simplified solution in the case of:</span>
+        <span class="c1">#   -no point loads</span>
+        <span class="c1">#   -no point moments</span>
+        <span class="c1"># initialize function for displacement and rotation solution</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uh</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">ScalarType</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span> <span class="o">=</span> <span class="o">-</span><span class="n">dot</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">problem</span> <span class="o">=</span> <span class="n">LinearProblem</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a_form</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span><span class="p">,</span> <span class="n">u</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="p">,</span> <span class="n">bcs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bcs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">uh</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">problem</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span></div>
+        <span class="c1"># --------</span>
+
+<div class="viewcode-block" id="Axial._construct_system"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial._construct_system">[docs]</a>    <span class="k">def</span> <span class="nf">_construct_system</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span> <span class="o">=</span> <span class="n">assemble_matrix</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a_form</span><span class="p">),</span><span class="n">bcs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bcs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">A_mat</span><span class="o">.</span><span class="n">assemble</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">f0</span> <span class="o">=</span> <span class="n">Constant</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">ScalarType</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">L_form</span> <span class="o">=</span> <span class="o">-</span><span class="n">dot</span><span class="p">(</span><span class="n">f0</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">u_</span><span class="p">)</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dx</span>
+            <span class="c1"># self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx</span>
+        
+        <span class="c1"># form(self.L_form)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="o">=</span><span class="n">create_vector</span><span class="p">(</span><span class="n">form</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">L_form</span><span class="p">))</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="o">.</span><span class="n">localForm</span><span class="p">()</span> <span class="k">as</span> <span class="n">b_loc</span><span class="p">:</span>
+                    <span class="n">b_loc</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">assemble_vector</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span><span class="n">form</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">L_form</span><span class="p">))</span>
+
+        <span class="c1"># APPLY dirichlet bc: these steps are directly pulled from the </span>
+        <span class="c1"># petsc.py LinearProblem().solve() method</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">a_form</span> <span class="o">=</span> <span class="n">form</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a_form</span><span class="p">)</span>
+        <span class="n">apply_lifting</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,[</span><span class="bp">self</span><span class="o">.</span><span class="n">a_form</span><span class="p">],</span><span class="n">bcs</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">bcs</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="o">.</span><span class="n">ghostUpdate</span><span class="p">(</span><span class="n">addv</span><span class="o">=</span><span class="n">PETSc</span><span class="o">.</span><span class="n">InsertMode</span><span class="o">.</span><span class="n">ADD</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">PETSc</span><span class="o">.</span><span class="n">ScatterMode</span><span class="o">.</span><span class="n">REVERSE</span><span class="p">)</span>
+        <span class="n">set_bc</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">bcs</span><span class="p">)</span>
+        
+        <span class="c1">#if there are any point forces, apply them to the assembled rhs vector</span>
+        <span class="k">if</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">f_pt</span><span class="p">):</span>
+            <span class="n">W0</span><span class="p">,</span> <span class="n">disp_dofs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">collapse</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">f_pt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">f_pt</span><span class="p">:</span>
+                <span class="n">f</span> <span class="o">=</span> <span class="n">f_pt</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">pt</span> <span class="o">=</span> <span class="n">f_pt</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">def</span> <span class="nf">locate_dofs</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+                    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="o">.</span><span class="n">reduce</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">pt</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                                                  <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">pt</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+                                                  <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="n">pt</span><span class="p">[</span><span class="mi">2</span><span class="p">])))</span>
+                <span class="n">f_dofs</span> <span class="o">=</span> <span class="n">locate_dofs_geometrical</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="n">W0</span><span class="p">),</span><span class="n">locate_dofs</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="o">.</span><span class="n">array</span><span class="p">[</span><span class="n">f_dofs</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">f</span></div>
+
+<div class="viewcode-block" id="Axial.add_clamped_point"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.add_clamped_point">[docs]</a>    <span class="k">def</span> <span class="nf">add_clamped_point</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">pt</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        pt = x,y,z location of clamped point</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Adding clamped point...&quot;</span><span class="p">)</span>
+        <span class="c1"># #marker fxn</span>
+        <span class="c1"># def clamped_point(x):</span>
+        <span class="c1">#     x_check = np.isclose(x[0],pt[0])</span>
+        <span class="c1">#     y_check = np.isclose(x[1],pt[1])</span>
+        <span class="c1">#     z_check = np.isclose(x[2],pt[2])</span>
+        <span class="c1">#     return np.logical_and.reduce([x_check,y_check,z_check])</span>
+        <span class="c1">#function for bc application</span>
+        <span class="n">ubc</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">ubc</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">localForm</span><span class="p">()</span> <span class="k">as</span> <span class="n">uloc</span><span class="p">:</span>
+            <span class="n">uloc</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="mf">0.</span><span class="p">)</span>
+        
+        <span class="n">clamped_disp_dofs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_dofs</span><span class="p">(</span><span class="n">pt</span><span class="p">,</span><span class="s1">&#39;disp&#39;</span><span class="p">)</span>
+        <span class="n">clamped_rot_dofs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_dofs</span><span class="p">(</span><span class="n">pt</span><span class="p">,</span><span class="s1">&#39;rot&#39;</span><span class="p">)</span>
+        <span class="c1"># #find displacement DOFs</span>
+        <span class="c1"># W0, disp_dofs = self.beam_element.W.sub(0).collapse()</span>
+        <span class="c1"># clamped_disp_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),clamped_point)</span>
+
+        <span class="c1"># #find rotation DOFs</span>
+        <span class="c1"># W1, rot_dofs = self.beam_element.W.sub(1).collapse()</span>
+        <span class="c1"># clamped_rot_dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),clamped_point)</span>
+        
+        <span class="n">clamped_dofs</span><span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">clamped_disp_dofs</span><span class="p">,</span><span class="n">clamped_rot_dofs</span><span class="p">])</span>
+        <span class="n">clamped_bc</span> <span class="o">=</span> <span class="n">dirichletbc</span><span class="p">(</span><span class="n">ubc</span><span class="p">,</span><span class="n">clamped_dofs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bcs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">clamped_bc</span><span class="p">)</span>
+
+        <span class="c1"># see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111</span>
+        <span class="n">ubc</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>    <span class="c1">#need to add to prevent PETSc memory leak </span></div>
+    
+<div class="viewcode-block" id="Axial._get_dofs"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial._get_dofs">[docs]</a>    <span class="k">def</span> <span class="nf">_get_dofs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">pt</span><span class="p">,</span><span class="n">dof_type</span><span class="o">=</span><span class="s2">&quot;disp&quot;</span><span class="p">):</span>
+            <span class="k">def</span> <span class="nf">locate_pt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+                <span class="n">x_check</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">pt</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="n">y_check</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">pt</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                <span class="n">z_check</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="n">pt</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+                <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="o">.</span><span class="n">reduce</span><span class="p">([</span><span class="n">x_check</span><span class="p">,</span><span class="n">y_check</span><span class="p">,</span><span class="n">z_check</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">dof_type</span><span class="o">==</span><span class="s1">&#39;disp&#39;</span><span class="p">:</span>
+                <span class="c1">#find displacement DOFs</span>
+                <span class="n">W0</span><span class="p">,</span> <span class="n">disp_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">collapse</span><span class="p">()</span>
+                <span class="n">dofs</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">locate_dofs_geometrical</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="n">W0</span><span class="p">),</span><span class="n">locate_pt</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">dof_type</span><span class="o">==</span><span class="s1">&#39;rot&#39;</span><span class="p">:</span>
+                <span class="n">W1</span><span class="p">,</span> <span class="n">rot_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">collapse</span><span class="p">()</span>
+                <span class="n">dofs</span><span class="p">,</span><span class="n">_</span> <span class="o">=</span> <span class="n">locate_dofs_geometrical</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="n">W1</span><span class="p">),</span><span class="n">locate_pt</span><span class="p">)</span>
+    
+            <span class="k">return</span> <span class="n">dofs</span></div>
+<div class="viewcode-block" id="Axial.add_clamped_point_topo"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.add_clamped_point_topo">[docs]</a>    <span class="k">def</span> <span class="nf">add_clamped_point_topo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">dof</span><span class="p">):</span>
+        <span class="n">ubc</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">ubc</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">localForm</span><span class="p">()</span> <span class="k">as</span> <span class="n">uloc</span><span class="p">:</span>
+            <span class="n">uloc</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="mf">0.</span><span class="p">)</span>
+        <span class="n">locate_BC</span> <span class="o">=</span> <span class="n">locate_dofs_topological</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="n">dof</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bcs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dirichletbc</span><span class="p">(</span><span class="n">ubc</span><span class="p">,</span><span class="n">locate_BC</span><span class="p">))</span>
+        <span class="n">ubc</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Axial.get_global_disp"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.get_global_disp">[docs]</a>    <span class="k">def</span> <span class="nf">get_global_disp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">points</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        returns the displacement and rotation at a specific </span>
+<span class="sd">        point on the beam axis with respect to the global coordinate system</span>
+
+<span class="sd">        ARGS:</span>
+<span class="sd">            points = list of (x,y,z) locations to return displacements and rotations</span>
+<span class="sd">        RETURNS:</span>
+<span class="sd">            list of [disp,rotations], where disp and rot are both shape (numpts,3) </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="o">=</span><span class="n">get_pts_and_cells</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">points</span><span class="p">)</span>
+
+        <span class="n">disp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="p">)</span>
+        <span class="n">rot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">disp</span><span class="p">,</span><span class="n">rot</span></div>
+    
+<div class="viewcode-block" id="Axial.get_local_basis"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.get_local_basis">[docs]</a>    <span class="k">def</span> <span class="nf">get_local_basis</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">points</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        returns the basis vectors for a set of points given as a (numpts,3,3) ndarray</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="o">=</span><span class="n">get_pts_and_cells</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">points</span><span class="p">)</span>
+        <span class="c1">#get coordinate system at each mesh node</span>
+        <span class="n">T</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">dim</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+        <span class="n">t</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">Expression</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t</span><span class="p">,</span><span class="n">T</span><span class="o">.</span><span class="n">element</span><span class="o">.</span><span class="n">interpolation_points</span><span class="p">()))</span>
+        <span class="n">tangent</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="p">)</span>
+        <span class="n">a1</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+        <span class="n">a1</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">Expression</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a1</span><span class="p">,</span><span class="n">T</span><span class="o">.</span><span class="n">element</span><span class="o">.</span><span class="n">interpolation_points</span><span class="p">()))</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">a1</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="p">)</span>
+        <span class="c1"># y = self.a1.eval(points_on_proc,cells)</span>
+        <span class="n">a2</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+        <span class="n">a2</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">Expression</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">a2</span><span class="p">,</span><span class="n">T</span><span class="o">.</span><span class="n">element</span><span class="o">.</span><span class="n">interpolation_points</span><span class="p">()))</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="n">a2</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="p">)</span>
+        <span class="c1"># print(&#39;before:&#39;)</span>
+        <span class="c1"># print(np.array([tangent,y,z]))</span>
+        <span class="c1"># print(&#39;after:&#39;)</span>
+        <span class="c1"># print(np.moveaxis(np.array([tangent,y,z]),0,1))</span>
+        <span class="c1"># print(&#39;------&#39;)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">moveaxis</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">tangent</span><span class="p">,</span><span class="n">y</span><span class="p">,</span><span class="n">z</span><span class="p">]),</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Axial.get_local_disp"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.get_local_disp">[docs]</a>    <span class="k">def</span> <span class="nf">get_local_disp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">points</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        returns the displacement and rotation at a specific </span>
+<span class="sd">        point on the beam axis with respect to the axial direction and xs principle axes</span>
+
+<span class="sd">        ARGS:</span>
+<span class="sd">            point = tuple of (x,y,z) locations to return displacements and rotations</span>
+<span class="sd">        RETURNS:</span>
+<span class="sd">            ndarray of 3x2 of [disp,rotations], where disp and rot are both shape 3x1 </span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="p">[</span><span class="n">disp</span><span class="p">,</span><span class="n">rot</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_global_disp</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
+        
+        <span class="c1"># get local basis (rotation matrix)</span>
+        <span class="n">RbA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_local_basis</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
+
+        <span class="c1">#TODO: vectorize this for loop, is tensordot the right approach?</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">RbA</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">disp</span> <span class="o">=</span> <span class="n">RbA</span><span class="nd">@disp</span>
+            <span class="n">rot</span> <span class="o">=</span> <span class="n">RbA</span><span class="nd">@rot</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">disp</span><span class="p">)):</span>
+                <span class="n">disp</span><span class="p">[</span><span class="n">i</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">RbA</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:]</span><span class="nd">@disp</span><span class="p">[</span><span class="n">i</span><span class="p">,:]</span>
+                <span class="n">rot</span><span class="p">[</span><span class="n">i</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">RbA</span><span class="p">[</span><span class="n">i</span><span class="p">,:,:]</span><span class="nd">@rot</span><span class="p">[</span><span class="n">i</span><span class="p">,:]</span>
+        
+        <span class="k">return</span> <span class="p">[</span><span class="n">disp</span><span class="p">,</span><span class="n">rot</span><span class="p">]</span></div>
+    
+<div class="viewcode-block" id="Axial.get_deformed_basis"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.get_deformed_basis">[docs]</a>    <span class="k">def</span> <span class="nf">get_deformed_basis</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">points</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        get the transformation matrix from the reference beam frame (b) to the</span>
+<span class="sd">          deformed beam frame (B)</span>
+
+<span class="sd">        This only works under the assumption of small displacments (e.g. linear beam theory)</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="c1"># self.RTb = </span>
+        <span class="n">T</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">dim</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">T2</span> <span class="o">=</span><span class="n">TensorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+        <span class="n">grad_uh_interp</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">T2</span><span class="p">)</span>
+        <span class="n">grad_uh</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+        <span class="n">grad_uh_0</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">grad_uh_0_interp</span><span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
+        <span class="n">grad_uh_0_interp</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">Expression</span><span class="p">(</span><span class="n">grad_uh_0</span><span class="p">,</span><span class="n">T</span><span class="o">.</span><span class="n">element</span><span class="o">.</span><span class="n">interpolation_points</span><span class="p">()))</span>
+        <span class="n">grad_uh_interp</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">Expression</span><span class="p">(</span><span class="n">grad_uh</span><span class="p">,</span><span class="n">T2</span><span class="o">.</span><span class="n">element</span><span class="o">.</span><span class="n">interpolation_points</span><span class="p">()))</span>
+        
+        <span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="o">=</span><span class="n">get_pts_and_cells</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">points</span><span class="p">)</span>
+        <span class="c1"># print(&quot;strains:&quot;)</span>
+        <span class="c1"># print(grad_uh_interp.eval(points_on_proc,cells))</span>
+        <span class="n">strains</span> <span class="o">=</span> <span class="n">grad_uh_interp</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">points</span><span class="p">),</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+        <span class="n">first_comp</span> <span class="o">=</span> <span class="n">grad_uh_0_interp</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="p">)</span>
+        <span class="c1">#TODO: ensure this works for multiple points at once</span>
+        <span class="n">RbA</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_local_basis</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
+
+        <span class="n">local_strains</span><span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">RbA</span><span class="p">)</span>
+        <span class="n">RTb</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">RbA</span><span class="p">)</span>
+
+        <span class="c1">#rotation angles</span>
+        <span class="n">alpha</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">beta</span> <span class="o">=</span> <span class="n">local_strains</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">gamma</span> <span class="o">=</span> <span class="n">local_strains</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">Rx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span>         <span class="mi">0</span><span class="p">,</span>         <span class="mi">0</span><span class="p">],</span>
+                        <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">alpha</span><span class="p">),</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">alpha</span><span class="p">)],</span>
+                        <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">alpha</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">alpha</span><span class="p">)]])</span>
+        <span class="c1"># rotation about Y-axis</span>
+        <span class="n">Ry</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">beta</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">beta</span><span class="p">)],</span>
+                        <span class="p">[</span><span class="mi">0</span><span class="p">,</span>         <span class="mi">1</span><span class="p">,</span>        <span class="mi">0</span><span class="p">],</span>
+                        <span class="p">[</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">beta</span><span class="p">),</span><span class="mi">0</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">beta</span><span class="p">)]])</span>
+        <span class="c1">#rotation about Z-axis</span>
+        <span class="n">Rz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="mi">0</span><span class="p">],</span>
+                        <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">gamma</span><span class="p">),</span> <span class="mi">0</span><span class="p">],</span>
+                        <span class="p">[</span><span class="mi">0</span><span class="p">,</span>         <span class="mi">0</span><span class="p">,</span>          <span class="mi">1</span><span class="p">]])</span>
+
+        <span class="n">RTb</span><span class="p">[:,:]</span> <span class="o">=</span> <span class="n">Rz</span><span class="nd">@Ry@Rx</span>
+        <span class="c1"># for i in range(RbA.shape[0]):</span>
+        <span class="c1">#     local_strains[i,:,:] = RbA[i,:,:]@strains[i,:,:]@RbA[i,:,:].T</span>
+        <span class="c1">#     # print(&quot;local strain:&quot;)</span>
+        <span class="c1">#     # print(local_strains[i,:,:])</span>
+        <span class="c1">#     # print(strains)</span>
+        <span class="c1">#     # print(local_strains)</span>
+        <span class="c1">#     alpha = 0</span>
+        <span class="c1">#     beta = local_strains[i,2,0]</span>
+        <span class="c1">#     gamma = local_strains[i,1,0]</span>
+        <span class="c1">#     Rx = np.array([[1,         0,         0],</span>
+        <span class="c1">#                     [0,np.cos(alpha),-np.sin(alpha)],</span>
+        <span class="c1">#                     [0,np.sin(alpha),np.cos(alpha)]])</span>
+        <span class="c1">#     # rotation about Y-axis</span>
+        <span class="c1">#     Ry = np.array([[np.cos(beta), 0,np.sin(beta)],</span>
+        <span class="c1">#                     [0,         1,        0],</span>
+        <span class="c1">#                     [-np.sin(beta),0,np.cos(beta)]])</span>
+        <span class="c1">#     #rotation about Z-axis</span>
+        <span class="c1">#     Rz = np.array([[np.cos(gamma),-np.sin(gamma),0],</span>
+        <span class="c1">#                     [np.sin(gamma),np.cos(gamma), 0],</span>
+        <span class="c1">#                     [0,         0,          1]])</span>
+
+        <span class="c1">#     RTb[i,:,:] = Rz@Ry@Rx</span>
+
+        <span class="c1"># print(&quot;Deformed basis:&quot;)</span>
+        <span class="c1"># print(RTb)</span>
+
+        <span class="k">return</span> <span class="n">RTb</span></div>
+
+<div class="viewcode-block" id="Axial.plot_axial_displacement"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.plot_axial_displacement">[docs]</a>    <span class="k">def</span> <span class="nf">plot_axial_displacement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">warp_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        returns a fxn defined over a 3D mesh generated from the </span>
+<span class="sd">        2D xs&#39;s and the 1D analysis mesh</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">background</span> <span class="o">=</span> <span class="p">[</span><span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">]</span>
+        <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">font</span><span class="o">.</span><span class="n">color</span> <span class="o">=</span> <span class="s1">&#39;black&#39;</span>
+
+        <span class="n">tdim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span>
+        <span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">create_vtk_mesh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">tdim</span><span class="p">)</span>
+        <span class="n">grid</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span>
+        <span class="n">plotter</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">Plotter</span><span class="p">()</span>
+        <span class="n">sargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">title_font_size</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+            <span class="n">label_font_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+            <span class="n">shadow</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">n_labels</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+            <span class="n">italic</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">%.3f</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">font_family</span><span class="o">=</span><span class="s2">&quot;arial&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">grid</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;Beam axis displacement&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">collapse</span><span class="p">()</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span>
+        <span class="n">actor_0</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;wireframe&quot;</span><span class="p">,</span> <span class="n">line_width</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s2">&quot;k&quot;</span><span class="p">,</span><span class="n">scalar_bar_args</span><span class="o">=</span><span class="n">sargs</span><span class="p">)</span>
+        <span class="n">warped</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">warp_by_vector</span><span class="p">(</span><span class="s2">&quot;Beam axis displacement&quot;</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="n">warp_factor</span><span class="p">)</span>
+        <span class="n">actor_1</span> <span class="o">=</span> <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">warped</span><span class="p">,</span> <span class="n">line_width</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">view_isometric</span><span class="p">()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">show_axes</span><span class="p">()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">show_bounds</span><span class="p">()</span>
+        <span class="c1"># plotter.show_grid()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">OFF_SCREEN</span><span class="p">:</span>
+            <span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">figure</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="s2">&quot;beam_mesh.png&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Axial.get_reactions"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/axial/index.html#ALBATROSS.axial.Axial.get_reactions">[docs]</a>    <span class="k">def</span> <span class="nf">get_reactions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">points</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        returns a list of forces and moments at the specified </span>
+<span class="sd">            beam axis location</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        
+        <span class="c1">#Construct expression to evalute</span>
+        <span class="n">R</span> <span class="o">=</span> <span class="n">VectorFunctionSpace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">axial_mesh</span><span class="p">,(</span><span class="s1">&#39;CG&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span><span class="n">dim</span><span class="o">=</span><span class="mi">6</span><span class="p">)</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">R</span><span class="p">)</span>
+        <span class="n">r</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="n">Expression</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">generalized_stresses</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uh</span><span class="p">),</span>
+                        <span class="n">R</span><span class="o">.</span><span class="n">element</span><span class="o">.</span><span class="n">interpolation_points</span><span class="p">()</span>
+                        <span class="p">)</span> <span class="p">)</span>
+        
+        <span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="o">=</span><span class="n">get_pts_and_cells</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span><span class="n">points</span><span class="p">)</span>
+        <span class="n">Reactions</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">points_on_proc</span><span class="p">,</span><span class="n">cells</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">Reactions</span></div></div>
+
+    <span class="c1"># def solve2(self):</span>
+    <span class="c1">#     self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)</span>
+    <span class="c1">#     self.A_mat.assemble()</span>
+
+    <span class="c1">#     if self.L_form == None:</span>
+    <span class="c1">#         f = Constant(self.domain,ScalarType((0,0,0)))</span>
+    <span class="c1">#         # self.L_form = -dot(f,self.u_)*self.dx</span>
+    <span class="c1">#         self.L_form = Constant(self.domain,ScalarType(10.))*self.u_[2]*self.dx</span>
+        
+    <span class="c1">#     form(self.L_form)</span>
+    <span class="c1">#     self.b=create_vector(form(self.L_form))</span>
+    <span class="c1">#     with self.b.localForm() as b_loc:</span>
+    <span class="c1">#                 b_loc.set(0)</span>
+    <span class="c1">#     assemble_vector(self.b,form(self.L_form))</span>
+
+    <span class="c1">#     # APPLY dirchelet bc: these steps are directly pulled from the </span>
+    <span class="c1">#     # petsc.py LinearProblem().solve() method</span>
+    <span class="c1">#     self.a_form = form(self.a_form)</span>
+    <span class="c1">#     apply_lifting(self.b,[self.a_form],bcs=self.bcs)</span>
+    <span class="c1">#     self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)</span>
+    <span class="c1">#     set_bc(self.b,self.bcs)</span>
+
+    <span class="c1">#     uh_ptld = Function(self.beam_element.W)</span>
+    <span class="c1">#     uvec = uh_ptld.vector</span>
+    <span class="c1">#     uvec.setUp()</span>
+    <span class="c1">#     ksp = PETSc.KSP().create()</span>
+    <span class="c1">#     ksp.setType(PETSc.KSP.Type.CG)</span>
+    <span class="c1">#     ksp.setTolerances(rtol=1e-15)</span>
+    <span class="c1">#     ksp.setOperators(self.A_mat)</span>
+    <span class="c1">#     ksp.setFromOptions()</span>
+    <span class="c1">#     ksp.solve(self.b,uvec)</span>
+
+
+
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Anugrah.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

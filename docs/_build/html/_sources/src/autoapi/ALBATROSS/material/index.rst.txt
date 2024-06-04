@@ -1,0 +1,105 @@
+:py:mod:`ALBATROSS.material`
+============================
+
+.. py:module:: ALBATROSS.material
+
+
+Module Contents
+---------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.material.Material
+
+
+
+Functions
+~~~~~~~~~
+
+.. autoapisummary::
+
+   ALBATROSS.material.assignMaterialProps
+   ALBATROSS.material.getBeamProps
+   ALBATROSS.material.getConstitutiveField
+   ALBATROSS.material.getMatConstitutive
+   ALBATROSS.material.getMatConstitutiveIsotropic
+   ALBATROSS.material.getMatConstitutiveOrthotropic
+   ALBATROSS.material.tensor2voigt
+   ALBATROSS.material.voigt2tensor
+
+
+
+.. py:class:: Material(name=None, mat_type='ISOTROPIC', mech_props=None, density=None, celltag=None)
+
+
+
+.. py:function:: assignMaterialProps(mesh, mats)
+
+   
+   Input: 
+       mesh: mesh including subdomain labels
+       mats: material constitutive tensor for each  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+
+.. py:function:: getBeamProps(domain, geo, mat, xc='rectangular')
+
+
+.. py:function:: getConstitutiveField()
+
+
+.. py:function:: getMatConstitutive(mesh, material)
+
+
+.. py:function:: getMatConstitutiveIsotropic(mesh, E, nu)
+
+
+.. py:function:: getMatConstitutiveOrthotropic(E11, E22, E33, G12, G13, G23, nu12, nu13, nu23)
+
+
+.. py:function:: tensor2voigt(C)
+
+
+.. py:function:: voigt2tensor(C_voigt)
+
+   
+   converts a 6x6 matrix into the appropriately constructed
+   3 dimensional, Fourth order tensor
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   ..
+       !! processed by numpydoc !!
+

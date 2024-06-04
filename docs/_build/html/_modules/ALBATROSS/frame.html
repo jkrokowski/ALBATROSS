@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ALBATROSS.frame &mdash; lsdo_project_template  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background: #2980B9" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            lsdo_project_template
+          </a>
+              <div class="version">
+                0.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../src/getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/background.html">Background</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/tutorials.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/basic.html">1. Basic tutorials</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/tutorials/advanced.html">2. Advanced tutorials</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_1.html">Custom feature 1</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/custom_2.html">Custom feature 2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/examples.html">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/basic.html">1. Basic examples</a><ul class="simple">
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../src/examples/advanced.html">2. Advanced examples</a><ul class="simple">
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../src/api.html">API reference</a><ul class="simple">
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu"  style="background: #2980B9" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">lsdo_project_template</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">ALBATROSS.frame</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for ALBATROSS.frame</h1><div class="highlight"><pre>
+<span></span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">The Frame model</span>
+<span class="sd">--------------------------------------</span>
+<span class="sd">Used for connecting multiple beams together, joining their dofs,</span>
+<span class="sd">and solving a model comprised of multiple different meshes</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">import</span> <span class="nn">pyvista</span>
+<span class="kn">from</span> <span class="nn">dolfinx</span> <span class="kn">import</span> <span class="n">plot</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">dolfinx.fem</span> <span class="kn">import</span> <span class="n">Function</span>
+<span class="kn">from</span> <span class="nn">petsc4py</span> <span class="kn">import</span> <span class="n">PETSc</span>
+<span class="kn">from</span> <span class="nn">scipy.sparse</span> <span class="kn">import</span> <span class="n">csr_matrix</span>
+<span class="kn">from</span> <span class="nn">scipy.linalg</span> <span class="kn">import</span> <span class="n">block_diag</span>
+
+
+<div class="viewcode-block" id="Frame"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame">[docs]</a><span class="k">class</span> <span class="nc">Frame</span><span class="p">():</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">Beams</span><span class="p">):</span>
+        <span class="c1">#intialize the list of members of the frame</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Members</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">Beam</span> <span class="ow">in</span> <span class="n">Beams</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_beam</span><span class="p">(</span><span class="n">Beam</span><span class="p">)</span>
+        <span class="c1">#intialize the list of connections information</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Connections</span> <span class="o">=</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="Frame.add_beam"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame.add_beam">[docs]</a>    <span class="k">def</span> <span class="nf">add_beam</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">Beam</span><span class="p">):</span>
+        <span class="c1">#add a beam to the list of members of the frame</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Beam</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Frame.add_connection"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame.add_connection">[docs]</a>    <span class="k">def</span> <span class="nf">add_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">cxn_members</span><span class="p">,</span><span class="n">cxn_pt</span><span class="p">,</span><span class="n">cxn_type</span><span class="o">=</span><span class="s1">&#39;rigid&#39;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        adds a dictionary to the list of connections with the following information:</span>
+<span class="sd">            -key:value pairs detailing the index number of each member in the self.Members list</span>
+<span class="sd">              and the dofs associated with the connection at the point for each member</span>
+<span class="sd">        current connection types:</span>
+<span class="sd">            -rigid 6-dof</span>
+
+<span class="sd">        TODO: connection types in the future:</span>
+<span class="sd">            -rigid translation (hinged)</span>
+<span class="sd">            -....</span>
+
+<span class="sd">        another type of dof would be a &quot;rigid link&quot;, where the axes&#39;</span>
+<span class="sd">        are non-intersecting, but perscribed.</span>
+
+<span class="sd">        A third, more challenging style is the application of a flexible joint</span>
+<span class="sd">        This could be implemented with a penalty method, among other approaches</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">cxn</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">cxn_member</span> <span class="ow">in</span> <span class="n">cxn_members</span><span class="p">:</span>
+            <span class="n">cxn_member_disp_dofs</span> <span class="o">=</span> <span class="n">cxn_member</span><span class="o">.</span><span class="n">_get_dofs</span><span class="p">(</span><span class="n">cxn_pt</span><span class="p">,</span><span class="s1">&#39;disp&#39;</span><span class="p">)</span>
+            <span class="n">cxn_member_rot_dofs</span> <span class="o">=</span> <span class="n">cxn_member</span><span class="o">.</span><span class="n">_get_dofs</span><span class="p">(</span><span class="n">cxn_pt</span><span class="p">,</span><span class="s1">&#39;rot&#39;</span><span class="p">)</span>
+            <span class="n">beam_number</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">cxn_member</span><span class="p">)</span>
+            <span class="n">cxn</span><span class="p">[</span><span class="n">beam_number</span><span class="p">]</span><span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">cxn_member_disp_dofs</span><span class="p">,</span><span class="n">cxn_member_rot_dofs</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Connections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cxn</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Frame.create_frame_connectivity"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame.create_frame_connectivity">[docs]</a>    <span class="k">def</span> <span class="nf">create_frame_connectivity</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1">#store dof numbers for each member and initialize </span>
+        <span class="c1">#TODO: move this to the point that the beam is added to the frame?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global</span><span class="o">=</span><span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">member</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="p">):</span>
+            <span class="n">member</span><span class="o">.</span><span class="n">num_local_dofs</span><span class="o">=</span><span class="n">member</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">dofmap</span><span class="o">.</span><span class="n">index_map</span><span class="o">.</span><span class="n">size_global</span>
+            <span class="c1">#initialize number of global dofs corresponding to each member</span>
+            <span class="c1">#   these will be reduced for each connection</span>
+            <span class="n">member</span><span class="o">.</span><span class="n">num_global_dofs</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="n">num_local_dofs</span>
+
+            <span class="c1"># increment the total number of global dofs</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global</span> <span class="o">+=</span> <span class="n">member</span><span class="o">.</span><span class="n">num_local_dofs</span>
+            <span class="k">if</span> <span class="n">i</span><span class="o">!=</span><span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">num_local_dofs</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        
+        <span class="c1">#next, we modify the above maps by building a map from global space to a reduced global space</span>
+        <span class="c1">#   and using the individual maps from the local space to the global space, we can build the local to the reduced global space </span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global_reduced</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduced_dofs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">GtR</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global</span><span class="p">))</span> <span class="c1">#trim this array later</span>
+        
+        <span class="k">for</span> <span class="n">cxn</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Connections</span><span class="p">:</span>
+            <span class="c1">#identify members that are in this connection</span>
+            <span class="n">cxn_members</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cxn</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+            <span class="n">parent</span> <span class="o">=</span> <span class="n">cxn_members</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">children</span> <span class="o">=</span> <span class="n">cxn_members</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="n">parent_dofs</span> <span class="o">=</span> <span class="n">cxn</span><span class="p">[</span><span class="n">parent</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">children</span><span class="p">:</span>
+                <span class="n">child_dofs</span> <span class="o">=</span> <span class="n">cxn</span><span class="p">[</span><span class="n">child</span><span class="p">]</span>
+                <span class="c1">#reduce number of unique global dofs for the assembled system by the number of child dofs</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global_reduced</span> <span class="o">-=</span> <span class="n">child_dofs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="c1">#keep track of which global dofs don&#39;t exist in reduced global system</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">reduced_dofs</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">child_dofs</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="p">[</span><span class="n">child</span><span class="p">])</span>
+                <span class="c1">#add connection between child and parent in global incidence matrix</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">GtR</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="p">[</span><span class="n">parent</span><span class="p">]</span><span class="o">+</span><span class="n">parent_dofs</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="p">[</span><span class="n">child</span><span class="p">]</span><span class="o">+</span><span class="n">child_dofs</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                
+        <span class="c1">#trim global to global_reduced incidence matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">GtR</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">GtR</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">reduced_dofs</span><span class="p">,</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+        
+<div class="viewcode-block" id="Frame.solve"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame.solve">[docs]</a>    <span class="k">def</span> <span class="nf">solve</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1">#TODO: PETSc implementation of all the below stuff</span>
+        <span class="c1">#assemble all subsystems</span>
+        <span class="n">Alist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">blist</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">Atotal</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global_reduced</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global_reduced</span><span class="p">))</span>
+        <span class="n">btotal</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">num_dofs_global_reduced</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">member</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="p">):</span> 
+            <span class="n">member</span><span class="o">.</span><span class="n">_construct_system</span><span class="p">()</span> 
+
+            <span class="c1">#initialize function to store solution of assembled system:</span>
+            <span class="n">member</span><span class="o">.</span><span class="n">uh</span> <span class="o">=</span> <span class="n">Function</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">beam_element</span><span class="o">.</span><span class="n">W</span><span class="p">)</span>
+            
+            <span class="n">member</span><span class="o">.</span><span class="n">Adense</span> <span class="o">=</span> <span class="n">csr_matrix</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">A_mat</span><span class="o">.</span><span class="n">getValuesCSR</span><span class="p">()[::</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">shape</span><span class="o">=</span><span class="n">member</span><span class="o">.</span><span class="n">A_mat</span><span class="o">.</span><span class="n">size</span><span class="p">)</span><span class="o">.</span><span class="n">toarray</span><span class="p">()</span>
+            <span class="c1"># beam.Acsr = csr_matrix(beam.A_mat.getValuesCSR()[::-1], shape=beam.A_mat.size)</span>
+            <span class="n">member</span><span class="o">.</span><span class="n">b_vec</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="n">b</span><span class="o">.</span><span class="n">array</span>
+
+            <span class="n">Alist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">Adense</span><span class="p">)</span>
+            <span class="n">blist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">b_vec</span><span class="p">)</span> 
+
+        <span class="c1">#construct assembled system</span>
+        <span class="n">Atotal</span> <span class="o">=</span> <span class="n">block_diag</span><span class="p">(</span><span class="o">*</span><span class="n">Alist</span><span class="p">)</span>
+        <span class="n">btotal</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">blist</span><span class="p">)</span>
+        
+        <span class="c1">#reduce the system:</span>
+        <span class="n">Ar</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GtR</span><span class="nd">@Atotal@self</span><span class="o">.</span><span class="n">GtR</span><span class="o">.</span><span class="n">T</span>
+        <span class="n">br</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GtR</span><span class="nd">@btotal</span>
+
+        <span class="c1">#get displacement solution of system</span>
+        <span class="n">ur</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">Ar</span><span class="p">,</span><span class="n">br</span><span class="p">)</span>
+
+        <span class="c1">#get the full solution vector</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">u</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GtR</span><span class="o">.</span><span class="n">T</span><span class="nd">@ur</span>
+
+        <span class="c1">#use offsets to populate solution values to member solution functions</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">member</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                <span class="n">member</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">u</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="p">[</span><span class="n">i</span><span class="p">]:]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">member</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">vector</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">u</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span><span class="bp">self</span><span class="o">.</span><span class="n">global_offsets</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]]</span></div>
+        
+<div class="viewcode-block" id="Frame.plot_frame"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame.plot_frame">[docs]</a>    <span class="k">def</span> <span class="nf">plot_frame</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">background</span> <span class="o">=</span> <span class="p">[</span><span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">]</span>
+        <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">font</span><span class="o">.</span><span class="n">color</span> <span class="o">=</span> <span class="s1">&#39;black&#39;</span>
+        <span class="n">plotter</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">Plotter</span><span class="p">()</span>
+        <span class="c1">#plot mesh</span>
+        
+        <span class="k">for</span> <span class="n">member</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="p">:</span>
+            <span class="n">msh</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="n">axial_mesh</span>
+            <span class="n">tdim</span> <span class="o">=</span> <span class="n">msh</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span>
+            <span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">create_vtk_mesh</span><span class="p">(</span><span class="n">msh</span><span class="p">,</span> <span class="n">tdim</span><span class="p">)</span>
+            <span class="n">grid</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span>
+            <span class="c1"># plotter.add_mesh(grid,show_edges=True,opacity=0.25)</span>
+            <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;k&#39;</span><span class="p">,</span><span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="c1"># if add_nodes==True:</span>
+            <span class="c1">#     plotter.add_mesh(grid, style=&#39;points&#39;,color=&#39;k&#39;)</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">view_isometric</span><span class="p">()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">add_axes</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">OFF_SCREEN</span><span class="p">:</span>
+            <span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="Frame.plot_axial_displacement"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame.plot_axial_displacement">[docs]</a>    <span class="k">def</span> <span class="nf">plot_axial_displacement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">warp_factor</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">background</span> <span class="o">=</span> <span class="p">[</span><span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">,</span> <span class="mi">255</span><span class="p">]</span>
+        <span class="n">pyvista</span><span class="o">.</span><span class="n">global_theme</span><span class="o">.</span><span class="n">font</span><span class="o">.</span><span class="n">color</span> <span class="o">=</span> <span class="s1">&#39;black&#39;</span>
+        <span class="n">plotter</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">Plotter</span><span class="p">()</span>
+        <span class="c1">#plot mesh</span>
+        <span class="k">for</span> <span class="n">member</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="p">:</span>
+            <span class="n">msh</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="n">axial_mesh</span>
+            <span class="n">tdim</span> <span class="o">=</span> <span class="n">msh</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">dim</span>
+            <span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">create_vtk_mesh</span><span class="p">(</span><span class="n">msh</span><span class="p">,</span> <span class="n">tdim</span><span class="p">)</span>
+            <span class="n">grid</span> <span class="o">=</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">cell_types</span><span class="p">,</span> <span class="n">geom</span><span class="p">)</span>
+            <span class="c1"># plotter.add_mesh(grid,show_edges=True,opacity=0.25)</span>
+            <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s1">&#39;k&#39;</span><span class="p">,</span><span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="c1"># if add_nodes==True:</span>
+            <span class="c1">#     plotter.add_mesh(grid, style=&#39;points&#39;,color=&#39;k&#39;)</span>
+            <span class="n">grid</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="s2">&quot;u&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">member</span><span class="o">.</span><span class="n">uh</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">collapse</span><span class="p">()</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">array</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">geom</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="mi">3</span><span class="p">))</span>
+
+            <span class="n">warped</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">warp_by_vector</span><span class="p">(</span><span class="s2">&quot;u&quot;</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="n">warp_factor</span><span class="p">)</span>
+            <span class="n">plotter</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">warped</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">plotter</span><span class="o">.</span><span class="n">view_isometric</span><span class="p">()</span>
+        <span class="n">plotter</span><span class="o">.</span><span class="n">show_axes</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">OFF_SCREEN</span><span class="p">:</span>
+            <span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">figure</span> <span class="o">=</span> <span class="n">plot</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="s2">&quot;beam_mesh.png&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Frame.recover_displacement"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame.recover_displacement">[docs]</a>    <span class="k">def</span> <span class="nf">recover_displacement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">plot_xss</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">member</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Members</span><span class="p">:</span>
+            <span class="n">member</span><span class="o">.</span><span class="n">recover_displacement</span><span class="p">(</span><span class="n">plot_xss</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    
+<div class="viewcode-block" id="Frame.recover_stress"><a class="viewcode-back" href="../../src/autoapi/ALBATROSS/frame/index.html#ALBATROSS.frame.Frame.recover_stress">[docs]</a>    <span class="k">def</span> <span class="nf">recover_stress</span><span class="p">(</span><span class="bp">self</span><span class="p">,):</span>
+        <span class="k">return</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Anugrah.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

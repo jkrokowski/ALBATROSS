@@ -120,12 +120,8 @@ mainXS =  ALBATROSS.cross_section.CrossSection(mainXSmesh,mats,celltags=mainXSct
 #compute the stiffness matrix
 mainXS.get_xs_stiffness_matrix()
 
-# xs_list = [ribXS,mainXS]
 xs_list = [mainXS,ribXS]
-# xs_list = [mainXS]
-# xs_list = [ribXS]
-print(mainXS.yavg)
-print(ribXS.zavg)
+
 #################################################################
 ########### DEFINE THE INPUTS FOR THE BEAM PROBLEM ##############
 #################################################################
@@ -180,19 +176,6 @@ num_segments = nodal_coordinates.shape[0]-1 # number of xs's used
 # num_ele_pos = np.ones((num_segments))
 # axial_pos_mesh = ALBATROSS.utils.beam_interval_mesh_3D(nodal_coordinates,num_ele_pos,meshname_axial_pos)
 
-# #plot axial position mesh
-# p = pyvista.Plotter(window_size=[800, 800])
-# domain = axial_pos_mesh
-# num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-# topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
-# grid = pyvista.UnstructuredGrid(topology, cell_types, x)
-# p.add_mesh(grid, style='points',color='b',show_edges=True)
-# p.show_grid()
-# # p.view_xy()
-# p.view_isometric()
-# p.show_axes()
-# p.show()
-
 #1D mesh used for 1D analysis
 meshname = 'PAZY'
 # ne_1D = nodal_coordinates.shape[0] #number of elements for 1D mesh
@@ -202,11 +185,24 @@ num_ele = np.ceil(axial_coords_offsets[1:]/mesh_size).astype('int')
 
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_coordinates,num_ele,meshname)
 
-#output for aero force generation
-with open(os.path.join(dirpath,'segment_locations.npy'), 'wb') as f:
-    np.save(f,nodal_coordinates)
-with open(os.path.join(dirpath,'nodal_coords.npy'), 'wb') as f:
-    np.save(f,beam_axis.axial_mesh.geometry.x)
+#plot axial position mesh
+p = pyvista.Plotter(window_size=[800, 800])
+domain = beam_axis.axial_pos_mesh
+num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
+topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+p.add_mesh(grid, style='points',color='b',show_edges=True)
+p.show_grid()
+# p.view_xy()
+p.view_isometric()
+p.show_axes()
+p.show()
+
+# #output for aero force generation
+# with open(os.path.join(dirpath,'segment_locations.npy'), 'wb') as f:
+#     np.save(f,nodal_coordinates)
+# with open(os.path.join(dirpath,'nodal_coords.npy'), 'wb') as f:
+#     np.save(f,beam_axis.axial_mesh.geometry.x)
 
 #define orientation of each xs with a vector
 orientations = np.tile([-1,0,0],num_segments)
@@ -227,15 +223,16 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 #initialize beam object using 1D mesh and definition of xs's
 PAZYWing = ALBATROSS.beam.Beam(beam_axis,xs_info)
 
-# #show the orientation of each xs and the interpolated orientation along the beam
+#show the orientation of each xs and the interpolated orientation along the beam
 # PAZYWing.plot_xs_orientations()
-
-#apply force at free end in the negative z direction
-PAZYWing.add_point_load(aero_forces[1:,:],nodal_coordinates_from_aero[1:,:])
-# PAZYWing.add_point_load([10,0,1000],[tip_pt])
 
 #applied fixed bc to first endpoint
 PAZYWing.add_clamped_point(root_pt)
+
+#apply force at free end in the negative z direction
+PAZYWing.add_point_load(aero_forces[1:,:],nodal_coordinates_from_aero[1:,:])
+# PAZYWing.add_point_load([1.,1.,0],[tip_pt])
+# PAZYWing.add_dist_load((0,0,-9.81))
 
 #solve the linear problem
 PAZYWing.solve()
@@ -244,28 +241,28 @@ PAZYWing.solve()
 ######### POSTPROCESSING, TESTING & VISUALIZATION ############
 #################################################################
 
-# from matplotlib import pyplot as plt
-# xs_props = PAZYWing.k.vector.array
-# row = 0
-# EA = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
-# row = 3
-# GJ = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
-# row = 4
-# EI_flap = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
-# row = 5
-# EI_lag = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
+from matplotlib import pyplot as plt
+xs_props = PAZYWing.k.vector.array
+row = 0
+EA = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
+row = 3
+GJ = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
+row = 4
+EI_flap = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
+row = 5
+EI_lag = xs_props[[i*36 +row*6+row for i in range(beam_axis.axial_mesh.geometry.x.shape[0]-1)]]
 
-# print(beam_axis.axial_mesh.geometry.x.shape)
+print(beam_axis.axial_mesh.geometry.x.shape)
 
-# fig,ax=plt.subplots()
-# # ax.scatter(axial_mesh.geometry.x[:-1,1],EA)
-# # ax.scatter(axial_mesh.geometry.x[:-1,1],GJ)
-# ax.scatter(beam_axis.axial_mesh.geometry.x[:-1,1],EI_flap)
-# # ax.scatter(axial_mesh.geometry.x[:-1,1],EI_lag)
+fig,ax=plt.subplots()
+# ax.scatter(axial_mesh.geometry.x[:-1,1],EA)
+# ax.scatter(axial_mesh.geometry.x[:-1,1],GJ)
+ax.scatter(beam_axis.axial_mesh.geometry.x[:-1,1],EI_flap)
+# ax.scatter(axial_mesh.geometry.x[:-1,1],EI_lag)
 
-# ax.set(xlabel='spanwise', ylabel='axial stiffness')
-# ax.grid()
-# plt.show()
+ax.set(xlabel='spanwise', ylabel='axial stiffness')
+ax.grid()
+plt.show()
 
 #shows plot of 1D displacement solution (recovery doesn't need be executed)
 PAZYWing.plot_axial_displacement(warp_factor=1)
