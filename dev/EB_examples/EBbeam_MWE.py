@@ -4,13 +4,13 @@
 import numpy as np
 from mpi4py import MPI
 import basix
-from dolfinx.fem import (Function, FunctionSpace, dirichletbc,
+from dolfinx.fem import (Function, dirichletbc,functionspace,
                          locate_dofs_topological,Constant,Expression)
 from dolfinx.io import VTKFile
 from dolfinx.fem.petsc import LinearProblem
 from dolfinx.mesh import locate_entities_boundary,create_interval
 from ufl import (SpatialCoordinate,inner, TestFunction, TrialFunction, div, grad, dx)
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 ########## GEOMETRIC INPUT ####################
 E = 70e3
@@ -63,7 +63,7 @@ def M(u):
 beam_element=basix.ufl.element(basix.ElementFamily.Hermite, basix.CellType.interval, 3)
 
 #finite element function space on domain, with trial and test fxns
-W = FunctionSpace(domain,beam_element)
+W = functionspace(domain,beam_element)
 print("Number of DOFs: %d" % W.dofmap.index_map.size_global)
 print("Number of elements (intervals): %d" % NUM_ELEM)
 print("Number of nodes: %d" % (NUM_ELEM+1))
@@ -91,8 +91,10 @@ startdof=locate_dofs_topological(W,0,startpt)
 enddof=locate_dofs_topological(W,0,endpt)
 
 #fix displacement of start point and rotation as well
-fixed_disp = dirichletbc(ubc,[startdof[0]])
-fixed_rot = dirichletbc(ubc,[startdof[1]])
+fixed_disp = dirichletbc(ubc,np.array([startdof[0]]))
+fixed_rot = dirichletbc(ubc,np.array([startdof[1]]))
+# fixed_disp = dirichletbc(ubc,startdof)
+
 
 #SOLVE VARIATIONAL PROBLEM
 #initialize function in functionspace for beam properties
@@ -123,7 +125,7 @@ for i,x in enumerate(uh.x.array):
         disp = np.append(disp,x)
 
 #evaluate derivatives and interpolate to higher order function space
-T = FunctionSpace(domain,("CG",1))
+T = functionspace(domain,("CG",1))
 
 #interpolate exact ufl expression onto high-order function space
 disp_expr = Expression(w_cl,T.element.interpolation_points())

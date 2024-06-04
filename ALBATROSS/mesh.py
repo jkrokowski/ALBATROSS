@@ -21,6 +21,7 @@ def beam_interval_mesh_3D(pts,ne,meshname):
      tdim = 1
 
      gmsh.initialize()
+     gmsh.option.setNumber("General.Terminal",0) #hide meshing output
 
      #construct line in 3D space
      gmsh.model.add(meshname)

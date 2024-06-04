@@ -16,25 +16,6 @@ setup(
     # long_description=long_description,
     long_description_content_type = "text/markdown",
     # install_requires=[
-    #     'numpy',
+    #     'numpy','sparseqr','scipy','fenicsx','meshio','gmsh'
     # ]
-    install_requires=[
-        'numpy',
-        'sparseqr',
-        'scipy',
-        'pytest',
-        'myst-nb',
-        'sphinx==5.3.0',
-        'sphinx_rtd_theme',
-        'sphinx-copybutton',
-        'sphinx-autoapi==2.1.0',
-        'astroid==2.15.5',
-        'numpydoc',
-        'gitpython',
-        'sphinxcontrib-collections @ git+https://github.com/anugrahjo/sphinx-collections.git', # 'sphinx-collections',
-        'sphinxcontrib-bibtex',
-        'setuptools',
-        'wheel',
-        'twine',
-    ],
 )

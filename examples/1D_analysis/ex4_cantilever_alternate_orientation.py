@@ -18,7 +18,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 10 #number of quad elements per side on xc mesh
+N = 20 #number of quad elements per side on xc mesh
 W = .1 #xs width
 H = .1 #xs height
 A = W*H #xs area
@@ -84,26 +84,21 @@ CantileverBeam.solve()
 #################################################################
 ######### POSTPROCESSING, TESTING & VISUALIZATION ############
 #################################################################
-
 #shows plot of 1D displacement solution (recovery doesn't need be executed)
 CantileverBeam.plot_axial_displacement(warp_factor=10)
 
 #recovers the 3D displacement field over each xs
-CantileverBeam.recover_displacement()
-
-#shows plot of stress over cross-section 
-CantileverBeam.recover_stress() 
+CantileverBeam.recover_displacement(plot_xss=True)
 
 #plots both 1D and 2D solutions together
 CantileverBeam.plot_xs_disp_3D()
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
-print('Max Deflection for point load (EB analytical solution)')
-E=unobtainium.E
-I = W*H**3/12
+print('Max Deflection for point load (EB analytical analytical solution)')
+E = mats['Unobtainium']['MECH_PROPS']['E']
+I = H**4/12
 print( (-F*L**3)/(3*E*I) )
 
-print('Max vertical deflection of tip:')
+print('Max vertical deflection of centroid:')
 print(CantileverBeam.get_local_disp([p2])[0][2])
-

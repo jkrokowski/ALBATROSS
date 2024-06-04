@@ -7,32 +7,39 @@ nx=32
 ny=32
 domain = mesh.create_unit_square(MPI.COMM_WORLD, nx, ny, mesh.CellType.triangle)
 
-V = fem.VectorFunctionSpace(domain, ("CG", 1))
+V = fem.VectorFunctionSpace(domain, ("CG", 1),dim=3)
 u = fem.Function(V)
 x = SpatialCoordinate(domain)
 
 #Some random expression
-u_expr = fem.Expression(as_vector([-x[1]*x[1],x[0]*x[0]]),V.element.interpolation_points())
+u_expr = fem.Expression(as_vector([-x[1]*x[1],x[0]*x[0],x[0]*x[1]]),V.element.interpolation_points())
 u.interpolate(u_expr)
 
 dx = Measure("dx",domain=domain)
 
 #Rigid Body Modes expression (2D)
 rbms = [
-    fem.Expression(fem.Constant(domain,PETSc.ScalarType((1.0,0.0))),V.element.interpolation_points()),
-    fem.Expression(fem.Constant(domain,PETSc.ScalarType((0.0,1.0))),V.element.interpolation_points()),
-    fem.Expression(as_vector([-x[1],x[0]]),V.element.interpolation_points()),
+    fem.Expression(fem.Constant(domain,PETSc.ScalarType((1.0,0.0,0.0))),V.element.interpolation_points()),
+    fem.Expression(fem.Constant(domain,PETSc.ScalarType((0.0,1.0,0.0))),V.element.interpolation_points()),
+    fem.Expression(fem.Constant(domain,PETSc.ScalarType((0.0,0.0,1.0))),V.element.interpolation_points()),
+    fem.Expression(as_vector([-x[1],x[0],0]),V.element.interpolation_points()),
+    fem.Expression(as_vector([0,0,x[1]]),V.element.interpolation_points()),
+    fem.Expression(as_vector([0,0,-x[0]]),V.element.interpolation_points())
 ]
 
 # List of functions to orthogonalise
-vx = fem.Function(V)
-vy = fem.Function(V)
-vr = fem.Function(V)
-vx.interpolate(rbms[0])
-vy.interpolate(rbms[1])
-vr.interpolate(rbms[2])
-
-v = list((vx,vy,vr))
+# vx = fem.Function(V)
+# vy = fem.Function(V)
+# vr = fem.Function(V)
+# vx.interpolate(rbms[0])
+# vy.interpolate(rbms[1])
+# vr.interpolate(rbms[2])
+v = list()
+for i,rbm in enumerate(rbms):
+    v_fxn = fem.Function(V)
+    v_fxn.interpolate(rbm)
+    v.append(v_fxn)
+# v = list((vx,vy,vr))
 
 # GS Projection
 def proj(u, v):
