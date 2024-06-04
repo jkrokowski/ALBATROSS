@@ -48,7 +48,6 @@ squareXS = ALBATROSS.cross_section.CrossSection(squareXSmesh,[unobtainium])
 squareXS.get_xs_stiffness_matrix()
 xs_list = [squareXS]
 
-
 #create a beam axis
 meshname = 'ex_1'
 nodal_points = [p1,p2]
@@ -72,7 +71,7 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
 
 #show the orientation of each xs and the interpolated orientation along the beam
-# CantileverBeam.plot_xs_orientations()
+CantileverBeam.plot_xs_orientations()
 
 #applied fixed bc to first endpoint
 CantileverBeam.add_clamped_point(p1)
@@ -114,7 +113,6 @@ print('------')
 print('Maximum Stress for point load (at root of beam)')
 print('EB analytical solution:')
 M = -F*L #maximum moment
-print( (-H/2)* (-F*L) / I  )
+print( (-H/2)* (M) / I  )
 print('ALBATROSS computed value:')
 print( CantileverBeam.get_max_stress() )
-print()

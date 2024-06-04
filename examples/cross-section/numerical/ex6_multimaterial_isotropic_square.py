@@ -5,7 +5,7 @@ from dolfinx.mesh import meshtags
 import pyvista
 import numpy as np
 from dolfinx.io import XDMFFile
-from dolfinx.plot import create_vtk_mesh
+from dolfinx.plot import vtk_mesh
 
 import ALBATROSS
 
@@ -44,7 +44,7 @@ pyvista.global_theme.font.color = 'black'
 
 p = pyvista.Plotter(window_size=[800, 800])
 num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+topology, cell_types, x = vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
 grid = pyvista.UnstructuredGrid(topology, cell_types, x)
 grid.cell_data["Material"] = ct.values
 sargs = dict(

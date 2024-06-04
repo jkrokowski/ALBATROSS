@@ -130,10 +130,9 @@ class Beam(Axial):
         # https://fenicsproject.discourse.group/t/segv-fault-when-interpolating-function-onto-different-mesh/13593
         # https://github.com/FEniCS/dolfinx/blob/v0.7.3/python/test/unit/fem/test_interpolation.py#L720-L765 
         self.o.interpolate(self.o2,nmm_interpolation_data=create_nonmatching_meshes_interpolation_data(
-            self.o.function_space.mesh._cpp_object,
+            self.o.function_space.mesh,
             self.o.function_space.element,
-            self.o2.function_space.mesh._cpp_object, padding=1e-14))
-        print("made it here :)")
+            self.o2.function_space.mesh, padding=1e-14))
 
     def _link_xs_to_axial(self):
         '''
@@ -151,9 +150,9 @@ class Beam(Axial):
             tensor_element = ('DG',0,(6,6))
             num_vals_to_enter = self.numsegments
         elif self.segment_type == "VARIABLE":
-            scalar_element = ('CG',0)
-            vector_element = ('CG',0,(3,))
-            tensor_element = ('CG',0,(6,6))
+            scalar_element = ('CG',1)
+            vector_element = ('CG',1,(3,))
+            tensor_element = ('CG',1,(6,6))
             num_vals_to_enter = self.numsegments + 1
 
         #We need to construct a continuous field over the axial mesh 
@@ -185,20 +184,26 @@ class Beam(Axial):
         #interpolate from axial_pos_mesh to axial_mesh 
 
         #initialize fxn spaces
-        self.T_66 = functionspace(self.axial_mesh,tensor_element,shape=(6,6))
-        self.S = functionspace(self.axial_mesh,vector_element)
+        self.T_66 = functionspace(self.axial_mesh,tensor_element)
+        self.S = functionspace(self.axial_mesh,scalar_element)
 
         #interpolate beam constitutive matrix
         self.k = Function(self.T_66)
-        self.k.interpolate(k2)
+        self.k.interpolate(k2,nmm_interpolation_data=create_nonmatching_meshes_interpolation_data(
+            self.k.function_space.mesh,
+            self.k.function_space.element,
+            k2.function_space.mesh, padding=1e-14))
 
         #interpolate linear density area
         self.linear_density = Function(self.S)
-        self.linear_density.interpolate(linear_density2)
+        self.linear_density.interpolate(linear_density2,nmm_interpolation_data=create_nonmatching_meshes_interpolation_data(
+            self.k.function_space.mesh,
+            self.k.function_space.element,
+            linear_density2.function_space.mesh, padding=1e-14))
 
-        # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
-        linear_density2.vector.destroy()
+        # # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+        # k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
+        # linear_density2.vector.destroy()
 
         print("Done interpolating cross-sectional properties to axial mesh...")
     

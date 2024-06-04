@@ -101,12 +101,21 @@ CantileverBeam.plot_xs_disp_3D()
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
-print('Max Deflection for point load (EB analytical analytical solution)')
+print('Maximum Tip Deflection')
+print('EB analytical solution:')
 E=unobtainium.E
 rho = unobtainium.density
 I = W*H**3/12
 q = rho*A*g
 print( (-q*L**4)/(8*E*I) )
 
-print('Max vertical deflection of centroid:')
+print('ALBATROSS computed value:')
 print(CantileverBeam.get_local_disp([p2])[0][2])
+print('------')
+
+print('Maximum Stress for point load (at root of beam)')
+print('EB analytical solution:')
+M = ( -q*L**2 ) / 2 #maximum moment
+print( (-H/2)* (M) / I  )
+print('ALBATROSS computed value:')
+print( CantileverBeam.get_max_stress() )

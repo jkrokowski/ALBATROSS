@@ -8,7 +8,7 @@ import scipy.io
 from scipy.sparse import csc_matrix,csr_matrix
 import meshio
 
-from dolfinx.geometry import BoundingBoxTree,compute_collisions_trees,compute_colliding_cells
+from dolfinx.geometry import bb_tree,compute_collisions_points,compute_colliding_cells
 from ufl import TestFunction,TrialFunction,inner,dx
 from dolfinx.fem.petsc import assemble_matrix,assemble_vector,apply_lifting,set_bc
 from dolfinx.fem import form
@@ -55,7 +55,7 @@ def plot_xdmf_mesh(msh,surface=True,add_nodes=False):
      #plot mesh
      if type(msh) != list:
           tdim = msh.topology.dim
-          topology, cell_types, geom = plot.create_vtk_mesh(msh, tdim)
+          topology, cell_types, geom = plot.vtk_mesh(msh, tdim)
           grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
           if surface:
                plotter.add_mesh(grid,show_edges=True,opacity=0.25)
@@ -71,7 +71,7 @@ def plot_xdmf_mesh(msh,surface=True,add_nodes=False):
      else:
           for m in msh:
                tdim = m.topology.dim
-               topology, cell_types, geom = plot.create_vtk_mesh(m, tdim)
+               topology, cell_types, geom = plot.vtk_mesh(m, tdim)
                grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
                # plotter.add_mesh(grid,show_edges=True,opacity=0.25)
                plotter.add_mesh(grid,color='k',show_edges=True)
@@ -88,13 +88,13 @@ def get_pts_and_cells(domain,points):
      ARGS:
           point = tuple of (x,y,z) locations to return displacements and rotations
      '''
-     bb_tree = BoundingBoxTree(domain,domain.topology.dim)
+     bounding_box_tree = bb_tree(domain,domain.topology.dim)
      points = np.array(points)
 
      cells = []
      points_on_proc = []
      # Find cells whose bounding-box collide with the the points
-     cell_candidates = compute_collisions_trees(bb_tree, points)
+     cell_candidates = compute_collisions_points(bounding_box_tree, points)
      # Choose one of the cells that contains the point
      colliding_cells = compute_colliding_cells(domain, cell_candidates, points)
      for i, point in enumerate(points):
@@ -135,7 +135,7 @@ def mat_to_mesh(filename,aux_data=None, plot_xs = False ):
 
           plotter = pyvista.Plotter()
           num_cells_local = msh.topology.index_map(msh.topology.dim).size_local
-          topology, cell_types, x = plot.create_vtk_mesh(msh, msh.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+          topology, cell_types, x = plot.vtk_mesh(msh, msh.topology.dim, np.arange(num_cells_local, dtype=np.int32))
 
           grid = pyvista.UnstructuredGrid(topology, cell_types, x)
           plotter.add_mesh(grid,show_edges=True)

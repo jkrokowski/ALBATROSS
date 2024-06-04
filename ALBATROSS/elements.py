@@ -6,7 +6,7 @@ Defines the finite element spaces with user-defined element type and
 '''
 from dolfinx.fem import functionspace
 from ufl import dx
-from basix.ufl import element
+from basix.ufl import element,mixed_element
 
 class LinearTimoshenkoElement():
 
@@ -40,7 +40,7 @@ class LinearTimoshenkoElement():
         if(element_type == "CG1"):
             # ------ CG2-CG1 ----------
             Ue =  element("CG", domain.topology.cell_name(), 1, shape=(domain.geometry.dim,))
-            W = functionspace(domain,Ue*Ue)
+            W = functionspace(domain,mixed_element([Ue,Ue]))
             
         else:
             print("Invalid element type.")

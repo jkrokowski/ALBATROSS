@@ -584,7 +584,7 @@ class CrossSection:
         #deviatoric stress
         s = stress - 1. / 3 * tr(stress) * Identity(stress.ufl_shape[0])
         von_Mises = sqrt(3. / 2 * inner(s, s))
-        V_von_mises = functionspace(self.msh, ("DG", 0,(self.msh.geometry.dim)))
+        V_von_mises = functionspace(self.msh, ("DG", 0))
         stress_expr = Expression(von_Mises, V_von_mises.element.interpolation_points())
         stresses = Function(V_von_mises)
         stresses.interpolate(stress_expr)

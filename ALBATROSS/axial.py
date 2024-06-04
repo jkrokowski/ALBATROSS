@@ -15,11 +15,11 @@ from dolfinx.fem import (functionspace,Expression,Function,Constant,
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,as_vector, sqrt, 
-                inner,dot,grad,split,cross,Measure)
+                inner,dot,grad,split,cross,Measure, Index)
 from ALBATROSS.elements import LinearTimoshenkoElement
 from petsc4py.PETSc import ScalarType
 import numpy as np
-from dolfinx import plot
+from dolfinx import plot,default_scalar_type
 import pyvista
 
 from ALBATROSS.utils import get_pts_and_cells
@@ -126,8 +126,11 @@ class Axial:
         '''
         
         print("Adding distributed load....")
-        f_vec = self.linear_density*Constant(self.domain,ScalarType(f))
-
+        # f_vec = as_vector([self.linear_density[i]*Constant(self.domain,default_scalar_type(f[i])) for i in range(3)])
+        f_vec = self.linear_density*Constant(self.domain,default_scalar_type(f))
+        print(f_vec.ufl_shape)
+        print(self.u_.ufl_shape)
+        print(dot(f_vec,self.u_).ufl_shape)
         if self.L_form is None:
             self.L_form = dot(f_vec,self.u_)*self.dx
         else:
@@ -305,7 +308,7 @@ class Axial:
         '''
         points_on_proc,cells=get_pts_and_cells(self.domain,points)
         #get coordinate system at each mesh node
-        T = functionspace(self.domain,('CG',1,(self.domain.geometry.cell_name(),)))
+        T = functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
 
         t = Function(T)
         t.interpolate(Expression(self.t,T.element.interpolation_points()))
@@ -355,8 +358,8 @@ class Axial:
         This only works under the assumption of small displacments (e.g. linear beam theory)
         '''
         # self.RTb = 
-        T = functionspace(self.domain,('CG',1,(self.domain.geometry.cell_name(),)))
-        T2 =functionspace(self.domain,('CG',1),(3,3))
+        T = functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
+        T2 =functionspace(self.domain,('CG',1,(3,3)))
         grad_uh_interp = Function(T2)
         grad_uh = grad(self.uh.sub(0))
         grad_uh_0 = grad(self.uh.sub(0)[0])
@@ -429,7 +432,7 @@ class Axial:
         pyvista.global_theme.font.color = 'black'
 
         tdim = self.domain.topology.dim
-        topology, cell_types, geom = plot.create_vtk_mesh(self.domain,tdim)
+        topology, cell_types, geom = plot.vtk_mesh(self.domain,tdim)
         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
         plotter = pyvista.Plotter()
         sargs = dict(
