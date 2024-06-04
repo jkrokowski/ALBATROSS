@@ -15,7 +15,7 @@ from dolfinx.fem import (functionspace,Expression,Function,Constant,
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,as_vector, sqrt, 
-                inner,dot,grad,split,cross,Measure, Index)
+                inner,dot,grad,split,cross,Measure)
 from ALBATROSS.elements import LinearTimoshenkoElement
 from petsc4py.PETSc import ScalarType
 import numpy as np
