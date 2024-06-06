@@ -25,8 +25,8 @@ IXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 # squareXS.plot_mesh()
 
 #compute the stiffness matrix
-IXS.get_xs_stiffness_matrix()
-IXS.compute_xs_stiffness_matrix_sensitivities()
+IXS.get_xs_stiffness_matrix_EB()
+IXS.compute_xs_stiffness_matrix_sensitivities_EB()
 
 np.set_printoptions(precision=3)
 
@@ -44,7 +44,7 @@ print("Analytical Bending stiffness (EI):")
 I = (W*H**3)/12 -((W-tw)*(H-2*tf)**3)/12
 print(E*I)
 print("Computed bending stiffness:")
-print(IXS.K[4,4])
+print(IXS.K[2,2])
 
 import pyvista
 from dolfinx.plot import vtk_mesh
@@ -52,12 +52,12 @@ from dolfinx.plot import vtk_mesh
 
 pyvista.global_theme.background = [255, 255, 255, 255]
 pyvista.global_theme.font.color = 'black'
-plotter = pyvista.Plotter(shape=(2,3))
+plotter = pyvista.Plotter(shape=(2,2))
 grids = []
 warped = []
-for i in range(6):
-    row = int(i/3)
-    col = i%3
+for i in range(4):
+    row = int(i/2)
+    col = i%2
     plotter.subplot(row,col)
     #plot mesh
     tdim = domain.topology.dim

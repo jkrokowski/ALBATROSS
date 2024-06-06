@@ -15,7 +15,14 @@ setup(
     description="Analysis Library for Beams And Three-Dimensional Representations Of Slender Structures",
     # long_description=long_description,
     long_description_content_type = "text/markdown",
-    # install_requires=[
-    #     'numpy','sparseqr','scipy','fenicsx','meshio','gmsh'
-    # ]
+    install_requires=[
+        'numpy',
+        'sparseqr',
+        'scipy',
+        'fenics-dolfinx',
+        'meshio',
+        'pyvista'
+        # 'gmsh',
+        # 'sparseqr'
+    ]
 )

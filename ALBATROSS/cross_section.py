@@ -712,6 +712,52 @@ class CrossSection:
                                 self.K @ self.dSdx,
                                 self.K)
 
+    def compute_xs_stiffness_matrix_sensitivities_EB(self):
+        args = self.K1_form[0][0].arguments()
+        n = max(a.number() for a in args) if args else -1
+        du = Argument(self.VX,n+1)
+        # du = Argument(self.VX,0) #there are no arguments in any of these forms?
+
+        m = 4
+        self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du)
+                            for idx1 in range(m)] 
+                                for idx2 in range(m)]
+        self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
+                            for idx1 in range(m)] 
+                                for idx2 in range(m)]
+        self.dK1dx = np.array([[assemble_vector(form(self.dK1dx_form[idx1][idx2]))
+                        for idx1 in range(m)] 
+                            for idx2 in range(m)])     
+        self.dK2dx = np.array([[assemble_vector(form(self.dK2dx_form[idx1][idx2]))
+                for idx1 in range(m)] 
+                    for idx2 in range(m)])
+        
+        #boundary dofs ([:,:,self.boundary_dofs])
+        self.boundary_dofs = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        
+        #use chain rule for derivative of flexibility matrix dSdx:
+        #first term of dSdx
+        self.dK1invT = -np.einsum('ijk,ij->ijk',
+                             self.K1inv.T @ self.dK1dx.transpose(1,0,2),
+                               self.K1inv.T @ self.K2 @ self.K1inv ) 
+        #second term of dSdx
+        self.dK2 = np.einsum('ijk,ij->ijk',
+                        self.K1inv.T@self.dK2dx,
+                        self.K1inv)
+        
+        #third term of dSdx
+        self.dK1inv = -np.einsum('ijk,ij->ijk',
+                            self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
+                              self.K1inv)
+
+        #add terms to get dSdx
+        self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
+        
+        #compute derivative of stiffness matrix (dKdx) from derivative of flexibility matrix (dSdx)
+        self.dKdx = - np.einsum('ijk,ij->ijk',
+                                self.K @ self.dSdx,
+                                self.K)
+        
     def strains_from_warping_fxns(self,ubar_c,uhat_c,utilde_c,ubreve_c):
         gradubar_c=grad(ubar_c)
         eps = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
