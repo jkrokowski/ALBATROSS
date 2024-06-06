@@ -5,8 +5,9 @@ from dolfinx import mesh
 import pyvista
 import numpy as np
 from dolfinx.io import XDMFFile
-from dolfinx.plot import create_vtk_mesh
+from dolfinx.plot import vtk_mesh
 import ufl
+from basix.ufl import element
 
 import ALBATROSS
 
@@ -43,20 +44,20 @@ def import_cross_section_mesh(xsName):
         domain= mesh.create_mesh(MPI.COMM_WORLD,
                             cells,
                             points,
-                            ufl.Mesh(ufl.VectorElement("Lagrange",cell,degree)) )
+                            ufl.Mesh(element("Lagrange",cell._cellname,degree,shape=(2,))) )
         #read celltags
         ct = xdmf.read_meshtags(in_mesh, name="Grid")   
 
-    domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
-    
-    # #adjust to make tags start at 0
-    # ct.values[:]=ct.values-np.min(ct.values)
+        domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
+        
+        # #adjust to make tags start at 0
+        # ct.values[:]=ct.values-np.min(ct.values)
 
-    #TOTAL HACK here, but just making sure 0 == Nylon, 1 == AL
-    ct.values[ct.values == 37] = 0
-    ct.values[ct.values == 38] = 1
-    ct.values[ct.values == 13] = 1
-    ct.values[ct.values == 14] = 0
+        #TOTAL HACK here, but just making sure 0 == Nylon, 1 == AL
+        ct.values[ct.values == 37] = 0
+        ct.values[ct.values == 38] = 1
+        ct.values[ct.values == 13] = 1
+        ct.values[ct.values == 14] = 0
         
     return domain,ct
 
@@ -70,7 +71,7 @@ pyvista.global_theme.font.color = 'black'
 for domain,ct in zip([ribXSmesh,mainXSmesh],[ribXSct,mainXSct]):
     p = pyvista.Plotter(window_size=[800, 800])
     num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-    topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+    topology, cell_types, x = vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
     grid = pyvista.UnstructuredGrid(topology, cell_types, x)
     grid.cell_data["Material"] = ct.values
     sargs = dict(
@@ -189,7 +190,7 @@ beam_axis = ALBATROSS.axial.BeamAxis(nodal_coordinates,num_ele,meshname)
 p = pyvista.Plotter(window_size=[800, 800])
 domain = beam_axis.axial_pos_mesh
 num_cells_local = domain.topology.index_map(domain.topology.dim).size_local
-topology, cell_types, x = create_vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
+topology, cell_types, x = vtk_mesh(domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32))
 grid = pyvista.UnstructuredGrid(topology, cell_types, x)
 p.add_mesh(grid, style='points',color='b',show_edges=True)
 p.show_grid()
