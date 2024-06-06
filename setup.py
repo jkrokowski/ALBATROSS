@@ -17,12 +17,12 @@ setup(
     long_description_content_type = "text/markdown",
     install_requires=[
         'numpy',
-        'sparseqr',
         'scipy',
-        'fenics-dolfinx',
-        'meshio',
-        'pyvista'
-        # 'gmsh',
-        # 'sparseqr'
+        # 'sparseqr',
+        # 'fenics-dolfinx',
+        # 'meshio',
+        # 'pyvista',
+        # 'sparseqr @ git+https://github.com/yig/PySPQR.git',
+        'gmsh'
     ]
 )
