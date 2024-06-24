@@ -1,4 +1,5 @@
-from distutils.core import setup
+# from distutils.core import setup
+from setuptools import setup
 # import setuptools
 # from setuptools import setup,find_packages
 # with open("README.md","r") as f:
@@ -18,11 +19,12 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
+        'gmsh',
         # 'sparseqr',
         # 'fenics-dolfinx',
         # 'meshio',
         # 'pyvista',
         # 'sparseqr @ git+https://github.com/yig/PySPQR.git',
-        'gmsh'
+        # 'sparseqr @ git+https://github.com/yig/PySPQR.git',
     ]
 )
