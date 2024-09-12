@@ -33,6 +33,34 @@ def celltags_to_dofs(V,cell_tags):
     return indices
 
 
+def get_collision_celltags(mesh0,mesh1,collisions,tol=1e-14):
+    '''return celltags on '''
+    cells0 = []
+    cells1 = []
+    for i, (cell0, cell1) in enumerate(collisions):
+        geom0 = extract_cell_geometry(mesh0, cell0)
+        geom1 = extract_cell_geometry(mesh1, cell1)
+        distance = geometry.compute_distance_gjk(geom0, geom1)
+        if np.linalg.norm(distance) <= tol:
+            cells0.append(cell0)
+            cells1.append(cell1)
+    celltags0 = mark_cells(mesh0, np.asarray(cells0, dtype=np.int32))
+    celltags1 = mark_cells(mesh1, np.asarray(cells1, dtype=np.int32))
+
+    return celltags0,celltags1
+
+
+def get_bbtrees(meshes):
+    bb_trees = []
+    for msh in meshes:
+        num_cells = msh.topology.index_map(msh.topology.dim).size_local + \
+                msh.topology.index_map(msh.topology.dim).num_ghosts
+        
+        bb_tree=geometry.bb_tree(msh, msh.topology.dim, np.arange(num_cells, dtype=np.int32))
+        bb_trees.append(bb_tree)
+
+    return bb_trees
+
 def pts_to_dofs(V,collision_pts):
     vertices=[]
     for i in range(collision_pts.num_nodes):
@@ -165,6 +193,13 @@ def permute_and_expand_matrix(V_to,V_from,M_scalar):
     M.assemble()
 
     return M
+
+def get_interpolation_matrix(V_1,V_0):
+    M01 = interpolation_matrix_nonmatching_meshes(V_1,V_0)
+    M01.assemble()
+    M01_expanded = permute_and_expand_matrix(V_1,V_0,M01)
+
+    return M01_expanded
 
 
 def solve_coupled_system(A1,A2,b1,b2,uh1,uh2,M12,M21,subdofs1,subdofs2,alpha,w=1):
