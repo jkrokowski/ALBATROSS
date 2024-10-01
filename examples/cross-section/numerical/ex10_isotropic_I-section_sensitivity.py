@@ -7,10 +7,10 @@ N = 5 #number of quad elements per side
 H = .1
 W= .1
 tf = 0.01
-tw = 0.01
+tw = 0.02
 
 dims = [H,W,tf,tw]
-num_el = [3,4]#number of elements through each wall thickness
+num_el = [2,2]#number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_I_section(dims,num_el,'I_section')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
