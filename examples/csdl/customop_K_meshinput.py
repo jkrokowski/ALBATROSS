@@ -1,7 +1,7 @@
 import csdl_alpha as csdl
 import ALBATROSS
 
-# custom paraboloid model
+# custom cross-sectional model
 class CrossSection(csdl.CustomExplicitOperation):
 
     def __init__(self, domain,xs_analysis_type,material_type,material_name):

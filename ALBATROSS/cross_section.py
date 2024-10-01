@@ -805,7 +805,8 @@ class CrossSection:
         #compute xs mass properties:
         self.M = np.zeros((6,6))
 
-
+    def update_mesh(self,nodes,disp):
+        
 
 
         return
@@ -831,107 +832,9 @@ class CrossSection:
     #     # uhat_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(1))
     #     # utilde_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(2))
     #     # ubreve_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(3))
-
-    # def map_disp_to_stress(self,ubar,uhat):
-    #     i,j,k,l=self.i,self.j,self.k,self.l
-
-    #     #compute strains at x1=0
-    #     eps = self.get_eps_from_disp_fxns(ubar,uhat)        
-        
-    #     # construct strain and stress tensors based on u_sol
-    #     sigma = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
-    #     return sigma
-    
-    # def get_eps_from_disp_fxns(self,ubar,uhat):
-    #     gradubar=grad(ubar)
-    #     return as_tensor([[uhat[0],uhat[1],uhat[2]],
-    #                     [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-    #                     [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
-    
-    # def recover_stress_old(self,loads,plot_stress=False):
-    #     '''
-    #     loads: 6x1 vector of the loads over the xs
-    #     '''
-    #     #TODO: rewrite using a sol_coeff_to_
-    #     disp_coeff = self.sols_decoup[:,6:]@self.K1_inv@loads
-    #     print(disp_coeff)
-    #     print(disp_coeff.shape)
-    #     U2d = FunctionSpace(self.msh,self.Ve)
-    #     ubar = Function(U2d)
-    #     uhat = Function(U2d)
-    #     utilde = Function(U2d)
-    #     ubreve = Function(U2d)
-
-    #     #populate displacement coeff fxns based on coeffcient values
-    #     self.coeff_to_field(ubar,disp_coeff,self.ubar_vtx_to_dof)
-    #     self.coeff_to_field(uhat,disp_coeff,self.uhat_vtx_to_dof)
-    #     self.coeff_to_field(utilde,disp_coeff,self.utilde_vtx_to_dof)
-    #     self.coeff_to_field(ubreve,disp_coeff,self.ubreve_vtx_to_dof)
-
-    #     sigma = self.map_disp_to_stress(ubar,uhat)
-
-    #     S = TensorFunctionSpace(self.msh,('CG',1),shape=(3,3))
-    #     sigma_sol = Function(S)
-    #     sigma_sol.interpolate(Expression(sigma,S.element.interpolation_points()))
-    #     points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
-
-    #     sigma_sol_eval = sigma_sol.eval(points_on_proc,cells)
-    #     # print("Sigma Sol:")
-    #     # print(sigma_sol_eval)
-    #     # L = 0
-    #     # utotal_exp = ubar+uhat*L+utilde*(L**2)+ubreve*(L**3)
-    #     # utotal = Function(U2d)
-    #     # utotal.interpolate(Expression(utotal_exp,U2d.element.interpolation_points()))
-    #     # points_on_proc,cells=get_pts_and_cells(self.msh,self.msh.geometry.x)
-
-    #     # sigma_sol_eval = utotal.eval(points_on_proc,cells)        
-    #     if plot_stress:
-    #         warp_factor = 0.000001
-
-    #         #plot Axial mesh
-    #         tdim = self.msh.topology.dim
-    #         topology, cell_types, geom = create_vtk_mesh(self.msh,tdim)
-    #         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-    #         plotter = pyvista.Plotter()
-    #         actor_0 = plotter.add_mesh(grid, style="wireframe", color="k")
-    #         RBG = np.array([[ 0,  0,  1],
-    #                             [ 1,  0,  0],
-    #                             [ 0,  1, 0]])
-    #         # print(geom.shape[0])
-    #         # grid.point_data['u'] = (utotal.x.array.reshape((geom.shape[0],3)).T).T
-    #         # warped = grid.warp_by_vector("u",factor=warp_factor)
-    #         # actor_1 = plotter.add_mesh(warped, show_edges=True)
-    #         grid.point_data['sigma11'] = sigma_sol_eval[:,0]
-    #         warped = grid.warp_by_scalar("sigma11",factor=warp_factor)
-    #         actor_2 = plotter.add_mesh(warped,show_edges=True)
-
-    #         # actor_1 = plotter.add_mesh(grid, style='points',color='k',point_size=12)
-    #         # grid.point_data["u"]= self.o.x.array.reshape((geom.shape[0],3))
-    #         # glyphs = grid.glyph(orient="u",factor=.25)
-    #         # actor_2 = plotter.add_mesh(glyphs,color='b')
-
-    #         plotter.view_xy()
-    #         plotter.show_axes()
-
-    #         # if not pyvista.OFF_SCREEN:
-    #         plotter.show()
-
-    #     return sigma_sol_eval
-    
+   
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
-        # #plots mesh o
-        # pyvista.global_theme.background = [255, 255, 255, 255]
-        # pyvista.global_theme.font.color = 'black'
-        # tdim = self.msh.topology.dim
-        # topology, cell_types, geometry = plot.create_vtk_mesh(domain, tdim)
-        # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-        # plotter = pyvista.Plotter()
-        # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-        # plotter.view_isometric()
-        # plotter.show_axes()
-        # if not pyvista.OFF_SCREEN:
-        #     plotter.show()
 
 class CrossSectionAnalytical:
     def __init__(self,params):
