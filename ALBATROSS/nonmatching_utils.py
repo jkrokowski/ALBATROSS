@@ -4,6 +4,283 @@ from dolfinx.fem.petsc import assemble_vector,assemble_matrix,create_vector
 from petsc4py import PETSc
 import basix
 from mpi4py import MPI
+import ufl
+
+
+class Collision:
+    '''
+    Collection of information about each overlapping section
+    '''
+    def __init__(self,collision_bbtree,collision_points,celltags,penalty_dofs):
+        self.collision_bbtree = collision_bbtree
+        self.collision_points = collision_points
+        self.celltags = celltags
+        self.penalty_dofs = penalty_dofs
+        
+    def add_pen_vec(self,pen_vec):
+        self.pen_vec = pen_vec
+
+class Separation:
+    '''
+    An object to store information about the lack of an overlap
+    (basically just an empty spare matrix to be added to the nested PETSc system)'''
+    def __init__(self):
+        self.mat = PETSc.Mat()
+
+class Region:
+    '''
+    A distinct domain defined by a mesh
+    '''
+    def __init__(self,msh,element_metadata,bc_arg):
+        self.msh = msh
+        self.fxn_space = fem.functionspace(self.msh,element_metadata)
+        self.bc = bc_arg
+
+        #dof to vertex map
+        self.dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.fxn_space.num_sub_spaces)
+        indices_to=[]
+        for i in range(self.fxn_space.num_sub_spaces):
+            _,map_to = self.fxn_space.sub(i).collapse()
+            indices_to.extend(map_to)
+        self.dof_to_vertex_map = self.dof_to_vertex_map[np.argsort(indices_to)]
+ 
+    def add_plotting_info(self,plotting_dict): 
+        self.plotting = plotting_dict
+
+class CoupledProblem:
+    '''solve a coupled problem with non matching, overlapping meshes'''
+    def __init__(self,meshes,element_metadata,form_construction,bc_args,pen=1e5):
+        assert(len(meshes)==len(bc_args))
+
+        self.regions = {i:Region(msh,element_metadata,bc) for i,(msh,bc) in enumerate(zip(meshes,bc_args))} 
+        self.meshes = {i:msh for i,msh in enumerate(meshes)}
+        self.form_construction = form_construction
+        self.bcs = {i:bc for i,bc in enumerate(bc_args)}
+        self.pen = pen
+
+        self.num_meshes = len(meshes)
+
+        #compute collisions between all meshes
+        self._find_overlap()
+
+        #set up each individual mesh 
+        self._assemble_systems()
+
+    def _find_overlap(self):
+        '''
+        Construct collision objects 
+        '''
+        bb_trees = get_bbtrees(list(self.meshes.values()))
+        self.bb_trees = {i:bbtree for i,bbtree in zip(self.meshes.keys(),bb_trees)}
+
+        #compute all collisions
+        # TODO: some collision detection computational time can be saved by avoiding 
+        # the collision detection on the inverse mesh combination with a non-overlapping section         
+        collisions = {}
+        separations = {}
+        adjacency = np.zeros((self.num_meshes,self.num_meshes),dtype=int)
+        for i in self.meshes.keys():
+            collisions_i = {}
+            separations_i = {}
+            for j in self.meshes.keys():
+                if i==j:
+                    continue
+                #get collisions 
+                collisions_bbtree_ij = geometry.compute_collisions_trees(self.bb_trees[i], self.bb_trees[j])
+                
+                if collisions_bbtree_ij.size != 0:
+                    adjacency[i,j] = 1
+                    collision_points_ij = geometry.compute_collisions_points(self.bb_trees[j],self.meshes[i].geometry.x)
+                    celltags_i,celltags_j = get_collision_celltags(self.meshes[i],self.meshes[j],collisions_bbtree_ij)
+
+                    penalty_dofs = pts_to_dofs(self.regions[i].fxn_space,collision_points_ij)
+                    
+                    #information about a collision of mesh i on mesh j
+                    collision_ij = Collision(collisions_bbtree_ij,
+                                             collision_points_ij,
+                                             (celltags_i,celltags_j),
+                                             penalty_dofs)
+
+                    pen_vec = self._build_penalty_vector(self.regions[i],collision_ij)
+                    
+                    collision_ij.add_pen_vec(pen_vec)
+
+                    collisions_i[j]=collision_ij
+
+                elif collisions_bbtree_ij.size == 0:
+                    separations_i[j]=Separation()
+                    
+            #add all collisions to dictionary list        
+            collisions[i] = collisions_i
+            separations[i] = separations_i
+
+        self.collisions = collisions
+        self.separations = separations
+        self.adjacency = adjacency
+    
+    
+    def _build_penalty_vector(self,region_i,collision_ij):
+        '''
+        Build the vector of penalty terms per dof
+        This is a PETSc Vector that can be directly multiplied by 
+        '''
+        #initialize empty PETSc vector
+        pen_vec = PETSc.Vec().create()
+        vec_size = region_i.fxn_space.dofmap.index_map.size_global * region_i.fxn_space.num_sub_spaces
+        pen_vec.setSizes(vec_size)
+        pen_vec.setFromOptions()
+
+        #compute areas of each element in the overlapping subdomain using a DG0 space
+        DG0 = fem.functionspace(region_i.msh,("DG",0))
+        v = ufl.TestFunction(DG0)
+        # dx_overlap = ufl.Measure("dx", domain=region_i.msh, subdomain_id = 1, subdomain_data=collision_ij.celltags)
+        dx_overlap = ufl.Measure("dx", domain=region_i.msh, subdomain_data=collision_ij.celltags[0])
+        cell_area_form = fem.form(v*dx_overlap(1))
+        cell_areas = fem.assemble_vector(cell_area_form)
+
+        #create connectivity between cells and vertices (if not already created)
+        region_i.msh.topology.create_connectivity(0,2)
+        pen_values = np.zeros((len(collision_ij.penalty_dofs),),dtype=float)
+        #return a list of penalty values for each dof
+        for i,dof in enumerate(collision_ij.penalty_dofs):
+            #get the corresponding vertex for a specific dof
+            vtx = region_i.dof_to_vertex_map[dof]
+
+            #get the cells connected to the penalty dof
+            cells = region_i.msh.topology.connectivity(0,2).links(vtx)
+            
+            #add up area of all cells that are incident to the penalty dof
+            #  adjust penalty proportionately to the supported area
+            pen_values[i] = self.pen * np.sum(cell_areas.array[cells])
+
+        #populate the PETSc vector with the values at the proper indices
+        for idx,val in zip(collision_ij.penalty_dofs,pen_values):
+            pen_vec.setValue(idx,val)
+        
+        return pen_vec
+
+    def _assemble_systems(self):
+        #compile systems for each individual mesh
+        systems = []
+        for region in self.regions.values():
+            forms = self.form_construction(region.msh,region.fxn_space,region.bc)
+            region.forms = forms
+            system = get_petsc_system(forms[0],forms[1],forms[2])
+            region.system = system
+            systems.append(system)
+        self.systems = systems
+
+    def _construct_solution_fxns(self):
+        for region in self.regions.values():
+            region.fxn = fem.Function(region.fxn_space)
+
+    def _construct_coupled_system(self):
+        '''
+        Given collisions and regions, 
+        set up the coupled system with the penalty terms
+        '''
+
+        # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
+        for idx,val in np.ndenumerate(self.adjacency):
+            if val == 1:
+                #get the interpolation matrix
+                self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
+                                                                                     self.regions[idx[0]].fxn_space)
+                #copy the dimensions of the interpolation matrix:
+                self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
+                #prepopulate the penalty matrix term with the interpolation matrix
+                # self.collisions[idx[0]][idx[1]].pen_mat.copy(self.collisions[idx[0]][idx[1]].inter_mat.duplicate())
+
+            elif val == 0 and idx[0] != idx[1]:
+                self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system[0].getSize()[0],
+                                                                self.regions[idx[0]].system[0].getSize()[1]])
+                self.separations[idx[0]][idx[1]].mat.assemble()
+
+        #populate an array of the same size as the adjacency matrix of the petsc matrices
+        #  using a *stupidly* incomprehensible list "comprehension" 
+        # this adds the unadultered system to the diaongals, the interpolation matrices where there is a collision
+        # and the assembled empty matrices where there is a "separation"
+        A_list = [ [self.regions[i].system[0] if i==j
+                    else self.separations[i][j].mat if self.adjacency[i][j] == 0 and i!=j
+                    else self.collisions[i][j].pen_mat 
+                        for i in range(self.num_meshes)]
+                     for j in range(self.num_meshes) ]
+        
+        #TODO: need to scale the penalty parameter based on the average size of the cells corresponding to the dof 
+        # add the penalty to the relevant block of A_list
+        for idx,val in np.ndenumerate(self.adjacency):
+            # if idx[0]==idx[1]:
+            if val==1:
+                pen_term = PETSc.Mat().createAIJ(A_list[idx[0]][idx[0]].getSize())
+                pen_term.assemble()
+                diag = pen_term.getDiagonal()
+                #set diagonal values to the pre-computed penalty vector values
+                for val in self.collisions[idx[0]][idx[1]].penalty_dofs:
+                    diag[val] = self.collisions[idx[0]][idx[1]].pen_vec[val]
+                pen_term.setDiagonal(diag)
+                # penalty_term = PETSc.Mat().createAIJ(I_mat.getSize())
+                # I_mat.multTranspose(self.collisions[idx[0]][idx[1]].pen_vec,penalty_term)
+
+                #add penalty term to diagonal block
+                A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
+
+                #add penalty term to off diagonal block (scale the interpolation matrix)
+                # A_list[idx[0]][idx[1]].scale(-self.alpha)
+
+                #TODO: add the off-diagonal block which is the matrix mult of pen_term and the interpolation matrix
+                # PETSc.MatMatMult(pen_term,self.collisions[idx[0]][idx[1]].inter_mat,A_list[idx[0]][idx[1]])
+                A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
+                A_list[idx[0]][idx[1]].assemble()
+                A_list[idx[0]][idx[1]].scale(-1.0)
+                # A_list[idx[0]][idx[1]] = A_list[idx[0]][idx[1]].matMult() self.collisions[idx[0]][idx[1]].pen_vec
+
+
+        #create a list of the RHS vectors
+        b_list = [region.system[1] for region in self.regions.values()]
+
+        A = PETSc.Mat()
+        A.createNest(A_list)
+
+        b = PETSc.Vec()
+        b.createNest(b_list)
+        b.setUp()
+        
+        self.A = A
+        self.b = b
+
+
+    def _solve_coupled_system(self):
+        '''
+        Solve the assembled coupled system'''
+
+        self._construct_solution_fxns()
+
+        self.uh = PETSc.Vec()
+        self.uh.createNest([region.fxn.vector for region in self.regions.values()])
+        self.uh.setUp()
+
+        #solve linear problem
+        ksp = PETSc.KSP().create()
+        ksp.setType(PETSc.KSP.Type.CG)
+        ksp.setTolerances(rtol=1e-18)
+        ksp.setOperators(self.A)
+        ksp.setFromOptions()
+        ksp.solve(self.b,self.uh)
+
+        for region in self.regions.values():
+            region.fxn.vector.ghostUpdate()
+
+        self.solution = [region.fxn for region in self.regions.values()]
+
+
+    def solve(self):
+
+        self._construct_coupled_system()
+
+        self._solve_coupled_system()
+
+        return self.solution
+    
 
 def mark_cells(msh, cell_index):
     num_cells = msh.topology.index_map(
@@ -34,7 +311,7 @@ def celltags_to_dofs(V,cell_tags):
 
 
 def get_collision_celltags(mesh0,mesh1,collisions,tol=1e-14):
-    '''return celltags on '''
+    '''return celltags for of the mesh'''
     cells0 = []
     cells1 = []
     for i, (cell0, cell1) in enumerate(collisions):
@@ -91,6 +368,10 @@ def get_petsc_system(a,L,bc=None):
 
 
 def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from nonmatching meshes
+    '''
+    V1: fxn space to be interpolated TO
+    V0: fxn space to be interpolated FROM
+    '''
     msh_0 = V_0.mesh
     msh_0.topology.dim
     msh_1 = V_1.mesh
@@ -195,6 +476,9 @@ def permute_and_expand_matrix(V_to,V_from,M_scalar):
     return M
 
 def get_interpolation_matrix(V_1,V_0):
+    '''
+    returns the interpolation matrix from one functionspace on a mesh to another
+    '''
     M01 = interpolation_matrix_nonmatching_meshes(V_1,V_0)
     M01.assemble()
     M01_expanded = permute_and_expand_matrix(V_1,V_0,M01)
