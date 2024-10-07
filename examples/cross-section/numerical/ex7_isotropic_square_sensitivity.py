@@ -57,7 +57,7 @@ for i in range(6):
     plotter.subplot(row,col)
     #plot mesh
     tdim = domain.topology.dim
-    topology, cell_types, geom = plot.create_vtk_mesh(domain, tdim)
+    topology, cell_types, geom = plot.vtk_mesh(domain, tdim)
     grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
 
     # sensitivity_to_plot = squareXS.dK1inv[5,5,:]
