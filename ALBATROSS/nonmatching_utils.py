@@ -31,13 +31,23 @@ class Region:
     '''
     A distinct domain defined by a mesh
     '''
-    def __init__(self,msh,element_metadata,bc_arg):
+    def __init__(self,msh,fxn_space=None,element_metadata=None,bc_arg=None):
+        
+        #mesh for the region
         self.msh = msh
-        self.fxn_space = fem.functionspace(self.msh,element_metadata)
-        self.bc = bc_arg
+
+        #fxn space is either created now based on the problem, or already 
+        # given and "linked".
+        if element_metadata is not None:
+            self.fxn_space = fem.functionspace(self.msh,element_metadata)
+        else:
+            self.fxn_space = fxn_space
+
+        if bc_arg is not None:
+            self.bc = bc_arg
 
         #dof to vertex map
-        self.dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.fxn_space.num_sub_spaces)
+        self.dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.fxn_space.value_size)
         indices_to=[]
         for i in range(self.fxn_space.num_sub_spaces):
             _,map_to = self.fxn_space.sub(i).collapse()
@@ -52,7 +62,7 @@ class CoupledProblem:
     def __init__(self,meshes,element_metadata,form_construction,bc_args,pen=1e5):
         assert(len(meshes)==len(bc_args))
 
-        self.regions = {i:Region(msh,element_metadata,bc) for i,(msh,bc) in enumerate(zip(meshes,bc_args))} 
+        self.regions = {i:Region(msh,element_metadata=element_metadata,bc_arg=bc) for i,(msh,bc) in enumerate(zip(meshes,bc_args))} 
         self.meshes = {i:msh for i,msh in enumerate(meshes)}
         self.form_construction = form_construction
         self.bcs = {i:bc for i,bc in enumerate(bc_args)}
@@ -206,7 +216,6 @@ class CoupledProblem:
                         for i in range(self.num_meshes)]
                      for j in range(self.num_meshes) ]
         
-        #TODO: need to scale the penalty parameter based on the average size of the cells corresponding to the dof 
         # add the penalty to the relevant block of A_list
         for idx,val in np.ndenumerate(self.adjacency):
             # if idx[0]==idx[1]:

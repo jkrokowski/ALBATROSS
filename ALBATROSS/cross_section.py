@@ -121,41 +121,21 @@ class CrossSection:
 
         #vectorfunctionspace for initializing displacement functions
         self.recovery_V = functionspace(self.msh,('CG',1,(self.d,)))
+
+        #initialize warping displacement fxn space
+        self._set_up_fxnspace_and_fxns()
         
     def get_xs_stiffness_matrix(self):
-        
-        # Construct Displacement Coefficient mixed function space
-        self.Ve = element("CG",self.msh.topology.cell_name(),1,shape=(self.d,))
-        self.V = functionspace(self.msh, mixed_element(4*[self.Ve]))
-        
-        #displacement and test functions
-        self.u = TrialFunction(self.V)
-        self.v = TestFunction(self.V)
-
-        #displacement coefficient trial functions
-        self.ubar,self.uhat,self.utilde,self.ubreve=split(self.u)
-
-        #displacement coefficient test functions
-        self.vbar,self.vhat,self.vtilde,self.vbreve=split(self.v)
-
-        #partial derivatives of displacement:
-        self.ubar_B = grad(self.ubar)
-        self.uhat_B = grad(self.uhat)
-        self.utilde_B = grad(self.utilde)
-        self.ubreve_B = grad(self.ubreve)
-
-        #partial derivatives of shape fxn:
-        self.vbar_a = grad(self.vbar)
-        self.vhat_a = grad(self.vhat)
-        self.vtilde_a = grad(self.vtilde)
-        self.vbreve_a = grad(self.vbreve)
-        
+               
         #construct material constitutive tensor field
         # self.constructConstitutiveField()
 
         #assemble matrix
         print('Constructing Cross-Section System...')
         self._construct_residual()
+
+        print('Assembling System Matrix....')   
+        self._assemble_system_matrix()
 
         print('Computing non-trivial solutions....')
         self._get_modes()
@@ -169,8 +149,32 @@ class CrossSection:
 
         print("DONE computing Beam Constitutive Matrix") 
 
+
     def get_xs_stiffness_matrix_EB(self):
-                
+        
+        #construct material constitutive tensor field
+        # self.constructConstitutiveField()
+
+        print('Constructing Cross-Section System...')
+        self._construct_residual()
+
+        print('Assembling System Matrix....')   
+        self._assemble_system_matrix()
+
+        print('Computing non-trivial solutions....')
+        self._get_modes()
+
+        print('Orthogonalizing w.r.t. elastic modes...')
+        self._decouple_modes()
+        self._build_elastic_solution_modes_EB()
+        
+        print('Computing Beam Constitutive Matrix....')
+        self._compute_xs_stiffness_matrix_EB()
+
+        print("DONE computing Beam Constitutive Matrix")  
+    
+
+    def _set_up_fxnspace_and_fxns(self):
         # Construct Displacement Coefficient mixed function space
         self.Ve = element("CG",self.msh.topology.cell_name(),1,shape=(self.d,))
         self.V = functionspace(self.msh, mixed_element(4*[self.Ve]))
@@ -196,25 +200,8 @@ class CrossSection:
         self.vhat_a = grad(self.vhat)
         self.vtilde_a = grad(self.vtilde)
         self.vbreve_a = grad(self.vbreve)
-        
-        #construct material constitutive tensor field
-        # self.constructConstitutiveField()
 
-        #assemble matrix
-        print('Constructing Cross-Section System...')
-        self._construct_residual()
 
-        print('Computing non-trivial solutions....')
-        self._get_modes()
-
-        print('Orthogonalizing w.r.t. elastic modes...')
-        self._decouple_modes()
-        self._build_elastic_solution_modes_EB()
-        
-        print('Computing Beam Constitutive Matrix....')
-        self._compute_xs_stiffness_matrix_EB()
-
-        print("DONE computing Beam Constitutive Matrix")  
     def _apply_rotation(self,C,alpha,beta,gamma):
         #indices
         i,j,k,l=self.i,self.j,self.k,self.l
@@ -320,14 +307,17 @@ class CrossSection:
         
         self.Residual =  L1+L2+L3+L4
 
-    def _get_modes(self):
-        print('Assembling System Matrix....')   
-        self.A_mat = petsc.assemble_matrix(form(self.Residual))
-        self.A_mat.assemble()
 
-        m,n1=self.A_mat.getSize()
+    def _assemble_system_matrix(self):
+        self.system_mat = petsc.assemble_matrix(form(self.Residual))
+        self.system_mat.assemble()
+
+
+    def _get_modes(self):
+        
+        m,n1=self.system_mat.getSize()
         print('Computing QR factorization')
-        Acsr = csr_matrix(self.A_mat.getValuesCSR()[::-1], shape=self.A_mat.size)
+        Acsr = csr_matrix(self.system_mat.getValuesCSR()[::-1], shape=self.system_mat.size)
         
         #perform QR factorization and store as struct in householder form
         QR= sparseqr.qr_factorize( Acsr.transpose() )
@@ -840,23 +830,38 @@ class CrossSection:
         plot_xdmf_mesh(self.msh)
 
 class CoupledXSProblem:
-    '''solve a coupled problem with non matching, overlapping meshes'''
-    def __init__(self,meshes,element_metadata,form_construction,bc_args,pen=1e5):
-        assert(len(meshes)==len(bc_args))
+    '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
+        compute combined beam cross-sectional properties'''
+    def __init__(self,XSs,pen=1e5):
 
-        self.regions = {i:Region(msh,element_metadata,bc) for i,(msh,bc) in enumerate(zip(meshes,bc_args))} 
-        self.meshes = {i:msh for i,msh in enumerate(meshes)}
-        self.form_construction = form_construction
-        self.bcs = {i:bc for i,bc in enumerate(bc_args)}
+        self.XSs = XSs
+
+        self.regions = {i:Region(XS.msh,fxn_space=XS.V) for i,XS in enumerate(XSs)} 
+        self.meshes = {i:XS.msh for i,XS in enumerate(XSs)}
+        # self.form_construction = form_construction
+        # self.bcs = {i:bc for i,bc in enumerate(bc_args)}
         self.pen = pen
 
-        self.num_meshes = len(meshes)
+        self.num_meshes = len(self.meshes)
 
         #compute collisions between all meshes
         self._find_overlap()
 
-        #set up each individual mesh 
-        self._assemble_systems()
+        
+    def get_xs_stiffness_matrix(self):
+        #assemble each region's system matrix
+        self._assemble_system_mats()
+
+        #apply the penalty parameter
+        self._construct_coupled_system_matrix()
+
+        #total system size:
+        print(self.system_mat.getSize())
+
+        #individual system sizes:
+        for XS in self.XSs:
+            print(XS.system_mat.getSize())
+
 
     def _find_overlap(self):
         '''
@@ -951,25 +956,26 @@ class CoupledXSProblem:
         
         return pen_vec
 
-    def _assemble_systems(self):
-        #compile systems for each individual mesh
-        systems = []
-        for region in self.regions.values():
-            forms = self.form_construction(region.msh,region.fxn_space,region.bc)
-            region.forms = forms
-            system = get_petsc_system(forms[0],forms[1],forms[2])
-            region.system = system
-            systems.append(system)
-        self.systems = systems
 
-    def _construct_solution_fxns(self):
-        for region in self.regions.values():
-            region.fxn = Function(region.fxn_space)
+    def _assemble_system_mats(self):
+        #construct the residudal and assemble the system mat for each region
+        for XS in self.XSs:
+            XS._construct_residual()
+            XS._assemble_system_matrix()
 
-    def _construct_coupled_system(self):
+        #compile system matrices for each individual region into a list 
+        #   accessible by the coupled problem class
+        # system_mats = []
+        for i,region in zip(self.regions,self.regions.values()):
+            region.system_mat = self.XSs[i].system_mat
+        #     system_mats.append(region.system_mat)
+        # self.system_mats = system_mats
+
+
+    def _construct_coupled_system_matrix(self):
         '''
         Given collisions and regions, 
-        set up the coupled system with the penalty terms
+        set up the coupled system matrix with the penalty terms
         '''
 
         # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
@@ -990,15 +996,14 @@ class CoupledXSProblem:
 
         #populate an array of the same size as the adjacency matrix of the petsc matrices
         #  using a *stupidly* incomprehensible list "comprehension" 
-        # this adds the unadultered system to the diaongals, the interpolation matrices where there is a collision
+        # this adds the unadultered system to the diagonals, the interpolation matrices where there is a collision
         # and the assembled empty matrices where there is a "separation"
-        A_list = [ [self.regions[i].system[0] if i==j
+        A_list = [ [self.regions[i].system_mat if i==j
                     else self.separations[i][j].mat if self.adjacency[i][j] == 0 and i!=j
                     else self.collisions[i][j].pen_mat 
                         for i in range(self.num_meshes)]
                      for j in range(self.num_meshes) ]
         
-        #TODO: need to scale the penalty parameter based on the average size of the cells corresponding to the dof 
         # add the penalty to the relevant block of A_list
         for idx,val in np.ndenumerate(self.adjacency):
             # if idx[0]==idx[1]:
@@ -1015,63 +1020,73 @@ class CoupledXSProblem:
 
                 #add penalty term to diagonal block
                 A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
+                
+                #TODO: need to come up with a better way of populating the 
+                #   nested list than simply filling with the interpolation matrix, then overwriting it...
 
-                #add penalty term to off diagonal block (scale the interpolation matrix)
-                # A_list[idx[0]][idx[1]].scale(-self.alpha)
-
-                #TODO: add the off-diagonal block which is the matrix mult of pen_term and the interpolation matrix
-                # PETSc.MatMatMult(pen_term,self.collisions[idx[0]][idx[1]].inter_mat,A_list[idx[0]][idx[1]])
+                #add penalty term to off diagonal block                
                 A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
                 A_list[idx[0]][idx[1]].assemble()
                 A_list[idx[0]][idx[1]].scale(-1.0)
-                # A_list[idx[0]][idx[1]] = A_list[idx[0]][idx[1]].matMult() self.collisions[idx[0]][idx[1]].pen_vec
-
-
-        #create a list of the RHS vectors
-        b_list = [region.system[1] for region in self.regions.values()]
 
         A = PETSc.Mat()
         A.createNest(A_list)
-
-        b = PETSc.Vec()
-        b.createNest(b_list)
-        b.setUp()
         
-        self.A = A
-        self.b = b
+        #TODO: need to check if this is the correct approach for a nested matrix
+        A.assemble()
+
+        self.system_mat = A
+
+    def _get_modes(self):
+        m,n1=self.system_mat.getSize()
+        print('Computing QR factorization')
+        Acsr = csr_matrix(self.system_mat.getValuesCSR()[::-1], shape=self.system_mat.size)
+        
+        #perform QR factorization and store as struct in householder form
+        QR= sparseqr.qr_factorize( Acsr.transpose() )
+
+        #build matrix of unit vectors for selecting last 12 columns
+        X = np.zeros((m,12))
+        for i in range(12):
+            X[m-1-i,11-i]=1
+
+        #perform matrix multiplication implicitly to construct orthogonal nullspace basis
+        self.sols = sparseqr.qmult(QR,X)
+        self.sparse_sols = sparseify(self.sols,sparse_format='csc')
+
+    # def _solve_coupled_system(self):
+    #     '''
+    #     Solve the assembled coupled system'''
+
+    #     self._construct_solution_fxns()
+
+    #     self.uh = PETSc.Vec()
+    #     self.uh.createNest([region.fxn.vector for region in self.regions.values()])
+    #     self.uh.setUp()
+
+    #     #solve linear problem
+    #     ksp = PETSc.KSP().create()
+    #     ksp.setType(PETSc.KSP.Type.CG)
+    #     ksp.setTolerances(rtol=1e-18)
+    #     ksp.setOperators(self.A)
+    #     ksp.setFromOptions()
+    #     ksp.solve(self.b,self.uh)
+
+    #     for region in self.regions.values():
+    #         region.fxn.vector.ghostUpdate()
+
+    #     self.solution = [region.fxn for region in self.regions.values()]
 
 
-    def _solve_coupled_system(self):
-        '''
-        Solve the assembled coupled system'''
+    # def solve(self):
 
-        self._construct_solution_fxns()
+    #     self._construct_coupled_system()
 
-        self.uh = PETSc.Vec()
-        self.uh.createNest([region.fxn.vector for region in self.regions.values()])
-        self.uh.setUp()
+    #     self._solve_coupled_system()
 
-        #solve linear problem
-        ksp = PETSc.KSP().create()
-        ksp.setType(PETSc.KSP.Type.CG)
-        ksp.setTolerances(rtol=1e-18)
-        ksp.setOperators(self.A)
-        ksp.setFromOptions()
-        ksp.solve(self.b,self.uh)
-
-        for region in self.regions.values():
-            region.fxn.vector.ghostUpdate()
-
-        self.solution = [region.fxn for region in self.regions.values()]
+    #     return self.solution
 
 
-    def solve(self):
-
-        self._construct_coupled_system()
-
-        self._solve_coupled_system()
-
-        return self.solution
 
 class CrossSectionAnalytical:
     def __init__(self,params):
