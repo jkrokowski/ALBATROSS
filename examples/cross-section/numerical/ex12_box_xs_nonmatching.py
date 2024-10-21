@@ -56,7 +56,7 @@ add_mesh(mesh_2)
 add_mesh(mesh_3)
 plotter.show_grid()
 plotter.view_xy()
-# plotter.show()
+plotter.show()
 
 meshes= [mesh_0,mesh_1,mesh_2,mesh_3]
 

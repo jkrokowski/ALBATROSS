@@ -444,7 +444,7 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
 
 
 def permute_and_expand_matrix(V_to,V_from,M_scalar):
-    '''return assembled PETSc matrix that interpolated from one mesh to another'''
+    '''return assembled PETSc matrix that interpolates from one mesh to another'''
     indices_to = []
     indices_from = []
     for i in range(V_to.num_sub_spaces):
@@ -462,17 +462,16 @@ def permute_and_expand_matrix(V_to,V_from,M_scalar):
     M0 = PETSc.Mat().create(comm=MPI.COMM_WORLD)
     M0.setSizes((dim0, dim1))
     M0.setUp()
+    
+    #list comprehension to construct that blocks for the nested PETSc matrix
+    M_list = [[M_scalar if i==j
+               else M0
+                for i in range(V_to.value_shape[0])]
+               for j in range(V_to.value_shape[0])]
 
-    M12 = M0
-    M21 = M0
-
-    M11 = M_scalar
-    M22 = M_scalar
-
-    #need to figure out how to customize this nesting structure based on the number of subspaces
+    #construct nested petsc matrix from the list of interpolation matrices
     M_nest = PETSc.Mat(comm=MPI.COMM_WORLD)
-    M_nest.createNest([[M11, M12],
-                  [M21, M22]])
+    M_nest.createNest(M_list)
     M_nest.assemble()
 
     #convert nested matrix to normal PETSc matrix to allow for permutation
@@ -486,12 +485,23 @@ def permute_and_expand_matrix(V_to,V_from,M_scalar):
 
     return M
 
-def get_interpolation_matrix(V_1,V_0):
+def get_interpolation_matrix(V_1,V_0,mixed=False):
     '''
     returns the interpolation matrix from one functionspace on a mesh to another
     '''
-    M01 = interpolation_matrix_nonmatching_meshes(V_1,V_0)
+    #Need to handle mixed function spaces by passing the passing a 
+    #   collapsed subspace to the interpolation_matrix_nonmatching_meshes()
+    #   method
+    if mixed is True:
+        M01 = interpolation_matrix_nonmatching_meshes(V_1.sub(0).collapse()[0],
+                                                      V_0.sub(0).collapse()[0])
+    else: 
+        M01 = interpolation_matrix_nonmatching_meshes(V_1,V_0)
+
+    #assemble the PETSc matrix
     M01.assemble()
+
+    #expand the interpolation matrix based on the ordering of the subspace
     M01_expanded = permute_and_expand_matrix(V_1,V_0,M01)
 
     return M01_expanded

@@ -348,22 +348,16 @@ class CrossSection:
         self.uhat_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(1))
         self.utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
         self.ubreve_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(3))
-        
-        ubar_vtx_to_dof = self.ubar_vtx_to_dof
-        uhat_vtx_to_dof = self.uhat_vtx_to_dof
 
         #GET UBAR AND UHAT RELATED MODES
-        ubar_modes = self.sols[ubar_vtx_to_dof,:]
-        uhat_modes = self.sols[uhat_vtx_to_dof,:]
+        ubar_modes = self.sols[self.ubar_vtx_to_dof,:]
+        uhat_modes = self.sols[self.uhat_vtx_to_dof,:]
 
         #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
         UBAR = self.V.sub(0).collapse()[0]
         UHAT = self.V.sub(1).collapse()[0]
         ubar_mode = Function(UBAR)
         uhat_mode = Function(UHAT)
-
-        #area and center of xs
-        A = self.A
 
         #INITIALIZE DECOUPLING MATRIX (12X12)
         mat = np.zeros((12,12))
@@ -375,9 +369,9 @@ class CrossSection:
             uhat_mode.vector.array = uhat_modes[:,:,mode].flatten()
 
             #FIRST THREE ROWS : AVERAGE UBAR_i VALUE FOR THAT MODE
-            mat[0,mode]=assemble_scalar(form(ubar_mode[0]*dx))/A
-            mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))/A
-            mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))/A
+            mat[0,mode]=assemble_scalar(form(ubar_mode[0]*dx))
+            mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))
+            mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))
             
             #SECOND THREE ROWS : AVERAGE ROTATION (COMPUTED USING UBAR x Xi, WHERE X1=0, X2,XY=Y,Z)
             mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
@@ -520,13 +514,13 @@ class CrossSection:
         # the polynomial expansion:
         Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
 
-        #now we begin the differentiation, form construction, and form assembly
-        # to get K1 & K2 as well as dK1dx & dK2dx (used for shape optimization)
+        # differentiation the constructed form construction
         self.K1_form = [[diff(P[idx1],c[idx2]) for idx1 in range(6)] 
                         for idx2 in range(6)]
         self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx1 in range(6)]
                         for idx2 in range(6)]
         
+        #assemble the K1 and K2 matrices
         self.K1 = np.array([[assemble_scalar(form(self.K1_form[idx1][idx2]))
                      for idx1 in range(6)] 
                         for idx2 in range(6)])
@@ -862,6 +856,18 @@ class CoupledXSProblem:
         for XS in self.XSs:
             print(XS.system_mat.getSize())
 
+        #use QR factorization to get null modes:
+        self._get_modes()
+        print("null modes found!")
+
+        #need to "decouple" the modes
+        self._modes_to_region()
+        
+
+        #
+
+        #populate each individual region with the null mode corresponding
+
 
     def _find_overlap(self):
         '''
@@ -983,15 +989,16 @@ class CoupledXSProblem:
             if val == 1:
                 #get the interpolation matrix
                 self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
-                                                                                     self.regions[idx[0]].fxn_space)
+                                                                                     self.regions[idx[0]].fxn_space,
+                                                                                     mixed=True)
                 #copy the dimensions of the interpolation matrix:
                 self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
                 #prepopulate the penalty matrix term with the interpolation matrix
                 # self.collisions[idx[0]][idx[1]].pen_mat.copy(self.collisions[idx[0]][idx[1]].inter_mat.duplicate())
 
             elif val == 0 and idx[0] != idx[1]:
-                self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system[0].getSize()[0],
-                                                                self.regions[idx[0]].system[0].getSize()[1]])
+                self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system_mat.getSize()[0],
+                                                                self.regions[idx[0]].system_mat.getSize()[1]])
                 self.separations[idx[0]][idx[1]].mat.assemble()
 
         #populate an array of the same size as the adjacency matrix of the petsc matrices
@@ -1040,7 +1047,8 @@ class CoupledXSProblem:
     def _get_modes(self):
         m,n1=self.system_mat.getSize()
         print('Computing QR factorization')
-        Acsr = csr_matrix(self.system_mat.getValuesCSR()[::-1], shape=self.system_mat.size)
+        A_aij = self.system_mat.convert('aij')
+        Acsr = csr_matrix(A_aij.getValuesCSR()[::-1], shape=self.system_mat.size)
         
         #perform QR factorization and store as struct in householder form
         QR= sparseqr.qr_factorize( Acsr.transpose() )
@@ -1053,39 +1061,26 @@ class CoupledXSProblem:
         #perform matrix multiplication implicitly to construct orthogonal nullspace basis
         self.sols = sparseqr.qmult(QR,X)
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
+    
+    #TODO: Decoupling routine at the xs level needs to be cleaned up a bit
+    #       then, construct a decoupling matrix for the full system modes
 
-    # def _solve_coupled_system(self):
-    #     '''
-    #     Solve the assembled coupled system'''
+    #       next, efficiently get the warping functions
 
-    #     self._construct_solution_fxns()
+    #       then to compute the stiffness matrix, we can compile K1_form and K2_form for each region
+    #       K1 and K2 can be assembled and added together (as they both contribute to the loading and the internal energy)
+    #       finally, K can be determined from the coupled system level K1 and K2 in the standard way
+    # def _decouple_modes(self):
 
-    #     self.uh = PETSc.Vec()
-    #     self.uh.createNest([region.fxn.vector for region in self.regions.values()])
-    #     self.uh.setUp()
+    #     #for each region, decouple the modes correseponding to that region
 
-    #     #solve linear problem
-    #     ksp = PETSc.KSP().create()
-    #     ksp.setType(PETSc.KSP.Type.CG)
-    #     ksp.setTolerances(rtol=1e-18)
-    #     ksp.setOperators(self.A)
-    #     ksp.setFromOptions()
-    #     ksp.solve(self.b,self.uh)
+    # def _build_elastic_solution_modes(self):
 
-    #     for region in self.regions.values():
-    #         region.fxn.vector.ghostUpdate()
+    #     #for each region, get the elastic solution modes
 
-    #     self.solution = [region.fxn for region in self.regions.values()]
+    # def _compute_stiffness_matrix(self):
 
-
-    # def solve(self):
-
-    #     self._construct_coupled_system()
-
-    #     self._solve_coupled_system()
-
-    #     return self.solution
-
+    #     #compute the composite stiffness matrix from the coupled 
 
 
 class CrossSectionAnalytical:
