@@ -13,10 +13,10 @@ m1,n1 = 36,3
 m2,n2 = 4,45
 m3,n3 = 54,5
 m4,n4 = 6,65
-H = 1
-L = 1
-T1 = .1
-T2 = .1
+H = 0.1
+L = 0.1
+T1 = .01
+T2 = .01
 
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1)
 mesh_0.geometry.x[:, :2] -= .5
@@ -33,7 +33,7 @@ mesh_1.geometry.x[:, 0] += L/2 - T2/2
 mesh_2 = mesh.create_unit_square(MPI.COMM_WORLD, m3, n3)
 mesh_2.geometry.x[:, :2] -= .5
 mesh_2.geometry.x[:, 1] *= T1
-mesh_0.geometry.x[:, 0] *= L
+mesh_2.geometry.x[:, 0] *= L
 mesh_2.geometry.x[:, 1] -= H/2 - T1/2
 
 mesh_3 = mesh.create_unit_square(MPI.COMM_WORLD, m4, n4)
@@ -71,6 +71,8 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 coupled_cross_section = ALBATROSS.cross_section.CoupledXSProblem(XSs)
 
 coupled_cross_section.get_xs_stiffness_matrix()
+
+print(coupled_cross_section.K)
 
 # ### PLOT SOLUTION
 # plotter = pyvista.Plotter()

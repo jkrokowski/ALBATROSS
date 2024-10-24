@@ -331,11 +331,12 @@ class CrossSection:
         self.sols = sparseqr.qmult(QR,X)
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
 
-    def _decouple_modes(self):
-        # We need to handle this operation on a per material basis, so we can't just store C one time
-
-        #this is a change of basis operation from the originally computed basis to one
-        # using our knowledge of what the solution should look like
+    def _decouple_modes(self,basis_matrix_only=False):
+        #this is a change of basis operation from the standard R^12 basis to
+        #   the basis defined by the 6 rigid body modes and the 6 elastic modes
+        #
+        #the change of basis matrix can be easily computed by simply evaluating
+        #   the functions defining the rigid+elastic basis at all the dofs
         x = self.x
         dx = self.dx
         C = self.C
@@ -372,6 +373,9 @@ class CrossSection:
             mat[0,mode]=assemble_scalar(form(ubar_mode[0]*dx))
             mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))
             mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))
+            # mat[0,mode]=1.0
+            # mat[1,mode]=1.0
+            # mat[2,mode]=1.0
             
             #SECOND THREE ROWS : AVERAGE ROTATION (COMPUTED USING UBAR x Xi, WHERE X1=0, X2,XY=Y,Z)
             mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
@@ -411,14 +415,12 @@ class CrossSection:
             mat[10,mode]=M2
             mat[11,mode]=M3
         
-        # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        ubar_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
-        uhat_mode.vector.destroy()  #need to add to prevent PETSc memory leak 
         self.mat = mat
-        mat_sparse = sparseify(mat,sparse_format='csc')
+        if basis_matrix_only is False:
+            mat_sparse = sparseify(mat,sparse_format='csc')
 
-        self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
-        # self.sols_decoup = self.sols@np.linalg.inv(mat)
+            self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
+            # self.sols_decoup = self.sols@np.linalg.inv(mat)
 
     def _build_elastic_solution_modes(self):
         #Initialize a tensor element and mixed tensor function space 
@@ -859,13 +861,17 @@ class CoupledXSProblem:
         #use QR factorization to get null modes:
         self._get_modes()
         print("null modes found!")
+        
+        #populate each individual cross-section's solution modes:
+        # self._map_modes_to_region()
+
 
         #need to "decouple" the modes
-        self._modes_to_region()
+        self._decouple_modes()
         
-
-        #
-
+        #map elastic solutions to construct warping functions
+        self._compute_xs_stiffness_matrix()
+        
         #populate each individual region with the null mode corresponding
 
 
@@ -972,8 +978,13 @@ class CoupledXSProblem:
         #compile system matrices for each individual region into a list 
         #   accessible by the coupled problem class
         # system_mats = []
+        offset = 0
         for i,region in zip(self.regions,self.regions.values()):
             region.system_mat = self.XSs[i].system_mat
+            #store offset values for the computed 
+            region.offset_start = offset
+            offset += region.system_mat.getSize()[0]
+            region.offset_end = offset
         #     system_mats.append(region.system_mat)
         # self.system_mats = system_mats
 
@@ -1039,7 +1050,6 @@ class CoupledXSProblem:
         A = PETSc.Mat()
         A.createNest(A_list)
         
-        #TODO: need to check if this is the correct approach for a nested matrix
         A.assemble()
 
         self.system_mat = A
@@ -1070,17 +1080,36 @@ class CoupledXSProblem:
     #       then to compute the stiffness matrix, we can compile K1_form and K2_form for each region
     #       K1 and K2 can be assembled and added together (as they both contribute to the loading and the internal energy)
     #       finally, K can be determined from the coupled system level K1 and K2 in the standard way
-    # def _decouple_modes(self):
+    
+    def _decouple_modes(self):
+        ''' 
+        for each region, decouple the modes corresponding to that region
+        '''
+        #intialize empty basis transformation matrix
+        self.basis_trans_matrix = np.zeros((12,12))
 
-    #     #for each region, decouple the modes correseponding to that region
+        #compute contribution to basis transformation matrix for each region
+        for i,region in zip(self.regions,self.regions.values()):
+            self.XSs[i].sols = self.sols[region.offset_start:region.offset_end,:]
+            self.XSs[i]._decouple_modes(basis_matrix_only=True)
+            self.basis_trans_matrix += self.XSs[i].mat
+        #perform the basis transformation
+        self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
 
-    # def _build_elastic_solution_modes(self):
-
-    #     #for each region, get the elastic solution modes
-
+        for i,region in zip(self.regions,self.regions.values()):
+            self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
+    def _compute_xs_stiffness_matrix(self):
+        '''
+        for each region, get the elastic solution modes
+        '''
+        self.K = np.zeros((6,6))
+        for i,region in zip(self.regions,self.regions.values()):
+            self.XSs[i]._build_elastic_solution_modes()
+            self.XSs[i]._compute_xs_stiffness_matrix()
+            self.K += self.XSs[i].K
     # def _compute_stiffness_matrix(self):
 
-    #     #compute the composite stiffness matrix from the coupled 
+    #     #compute the composite stiffness matrix from the overlapping sections 
 
 
 class CrossSectionAnalytical:
