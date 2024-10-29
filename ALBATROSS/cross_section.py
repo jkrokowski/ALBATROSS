@@ -852,9 +852,11 @@ class CoupledXSProblem:
         self._construct_coupled_system_matrix()
 
         #total system size:
+        print("overall system size:")
         print(self.system_mat.getSize())
 
         #individual system sizes:
+        print("overall system size:")
         for XS in self.XSs:
             print(XS.system_mat.getSize())
 

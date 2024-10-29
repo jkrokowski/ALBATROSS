@@ -1,13 +1,10 @@
-# https://fenicsproject.discourse.group/t/find-cell-tags-from-two-overlapped-meshes-with-different-resolutions/13198/2
 from mpi4py import MPI
-import ufl
-import numpy as np
-from petsc4py import PETSc
-from dolfinx import fem, io, mesh, geometry, plot, cpp, default_scalar_type
-from dolfinx.fem.petsc import assemble_vector,assemble_matrix,create_vector
-import basix
+from dolfinx import mesh, plot
 import pyvista
 import ALBATROSS
+import numpy as np
+
+np.set_printoptions(precision=3)
 
 m1,n1 = 36,3
 m2,n2 = 4,45
@@ -17,6 +14,9 @@ H = 0.1
 L = 0.1
 T1 = .01
 T2 = .01
+T3 = .01
+T4 = .01
+
 
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1)
 mesh_0.geometry.x[:, :2] -= .5
@@ -72,7 +72,25 @@ coupled_cross_section = ALBATROSS.cross_section.CoupledXSProblem(XSs)
 
 coupled_cross_section.get_xs_stiffness_matrix()
 
+# print(coupled_cross_section.K)
+
+
+#output stiffness matrix
+print('Stiffness matrix:')
 print(coupled_cross_section.K)
+
+print("Analytical axial stiffness (EA):")
+E = unobtainium.E
+A = L*H - (H-T1-T3)*(L-T2-T4)
+print(E*A)
+print("Computed Axial Stiffness:")
+print(coupled_cross_section.K[0,0])
+
+print("Analytical Bending stiffness (EI):")
+I = (L*H**3)/12 - ((L-T2-T4)*(H-T1-T3)**3)/12
+print(E*I)
+print("Computed bending stiffness:")
+print(coupled_cross_section.K[4,4])
 
 # ### PLOT SOLUTION
 # plotter = pyvista.Plotter()
