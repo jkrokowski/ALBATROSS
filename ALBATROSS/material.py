@@ -144,3 +144,11 @@ def getBeamProps(domain,geo,mat,xc='rectangular',):
         GS2 = kappa*G*S
 
         return [S,ES,GS1,GS2,GJ,EI1,EI2]
+    
+def caddee_material_to_albatross(caddee_material,type = 'ISOTROPIC'):
+    E,nu,G = caddee_material.get_constants()
+
+    return Material(name=caddee_material.name,
+                    mat_type='ISOTROPIC',
+                    mech_props={'E':E,'nu':nu},
+                    density=2700)

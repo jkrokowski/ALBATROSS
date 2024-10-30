@@ -6,10 +6,15 @@ import numpy as np
 
 np.set_printoptions(precision=3)
 
-m1,n1 = 36,3
-m2,n2 = 4,45
-m3,n3 = 54,5
-m4,n4 = 6,65
+# m1,n1 = 36,3
+# m2,n2 = 4,45
+# m3,n3 = 54,5
+# m4,n4 = 6,65
+
+m1,n1 = 99,10
+m2,n2 = 10,99
+m3,n3 = 99,10
+m4,n4 = 10,99
 H = 0.1
 L = 0.1
 T1 = .01
@@ -68,7 +73,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-coupled_cross_section = ALBATROSS.cross_section.CoupledXSProblem(XSs)
+coupled_cross_section = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e5)
 
 coupled_cross_section.get_xs_stiffness_matrix()
 

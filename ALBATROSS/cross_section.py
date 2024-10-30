@@ -1095,23 +1095,38 @@ class CoupledXSProblem:
             self.XSs[i].sols = self.sols[region.offset_start:region.offset_end,:]
             self.XSs[i]._decouple_modes(basis_matrix_only=True)
             self.basis_trans_matrix += self.XSs[i].mat
-        #perform the basis transformation
-        self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
+        #perform the basis transformation (use the sparse matrix to prevent numerical inaccuracies during inversion)
+        # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
+        self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix,sparse_format='csc')
+
+        self.sols_decoup = (self.sparse_sols.dot(inv(self.basis_trans_matrix_sparse))).toarray()
 
         for i,region in zip(self.regions,self.regions.values()):
             self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
+
+
     def _compute_xs_stiffness_matrix(self):
         '''
         for each region, get the elastic solution modes
         '''
         self.K = np.zeros((6,6))
+        # self.K1 = np.zeros((6,6))
+        # self.K2 = np.zeros((6,6))
+        # self.S = np.zeros((6,6))
         for i,region in zip(self.regions,self.regions.values()):
             self.XSs[i]._build_elastic_solution_modes()
             self.XSs[i]._compute_xs_stiffness_matrix()
-            self.K += self.XSs[i].K
-    # def _compute_stiffness_matrix(self):
+            # self.S += self.XSs[i].S
+            # self.K += self.XSs[i].K
+        #     self.K1 += self.XSs[i].K1
+        #     self.K2 += self.XSs[i].K2
+        # self.K1inv = np.linalg.inv(self.K1)
+        
+        # #compute Flexibility matrix
+        # self.S = self.K1inv.T@self.K2@self.K1inv
 
-    #     #compute the composite stiffness matrix from the overlapping sections 
+        # #invert Flexibility matrix to find beam constitutive matrix
+        # self.K = np.linalg.inv(self.S)
 
 
 class CrossSectionAnalytical:

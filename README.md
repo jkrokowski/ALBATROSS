@@ -23,10 +23,10 @@ Usage of a [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/ins
 <!-- First, install the package dependencies. Then clone the repository and pip install: -->
 
 1. Install [FEniCS](https://fenicsproject.org/download/), [pyvista](https://docs.pyvista.org/version/stable/), [SciPy](https://scipy.org/), [meshio](https://github.com/nschloe/meshio) using conda:
-   1. ```connda install -c conda-forge fenics-dolfinx mpich pyvista scipy meshio ```
+   1. ```conda install -c conda-forge fenics-dolfinx mpich pyvista scipy meshio ```
 <!-- 2. Install [gmsh](https://gmsh.info/) using ```pip install gmsh``` (conda installing gmsh does not provide the python API) -->
 2. Install [sparseqr](https://github.com/yig/PySPQR) , specifically the latest branch on github as the current pypi version will not work. Note that you need to have installed SuiteSparse and ffi on your system. sparseqr can be installed on linux (or WSL) with the following command:
-   1. ```sudo apt-get install libsuitesparse-dev)```
+   1. ```sudo apt-get install libsuitesparse-dev```
    2. ```sudo apt install libffi-dev```
    3. ```git clone https://github.com/yig/PySPQR.git``` 
    4. ```pip install .``` in the top level PySPQR directory.
