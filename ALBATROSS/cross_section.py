@@ -233,7 +233,8 @@ class CrossSection:
 
         self.theta.interpolate(orientation)
 
-    def _construct_residual(self):
+    def _construct_residual(self,dx=None,return_residual=False):
+
         #geometric dimension
         d = self.d
         #indices
@@ -261,9 +262,11 @@ class CrossSection:
         #     # dx = Measure('dx', domain=self.msh, subdomain_data=subdomain,subdomain_id=material.id)
         #     dx = self.dx
         #     # dx = self.dx
-        dx = self.dx      
+        if dx is None:
+            dx = self.dx
+        else:
+            dx = dx(1)      
         
-
         #if an orthotropic material is used, the constructMatOrientation method
         #must be called prior to applying rotations
         # if material.type == 'ORTHOTROPIC':
@@ -305,13 +308,22 @@ class CrossSection:
         #equation 10,11,12
         L4= -CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*dx\
         
-        self.Residual =  L1+L2+L3+L4
+        #construct residual
+        residual = L1+L2+L3+L4
 
+        if return_residual is False:
+            self.Residual = residual
+        else:
+            return residual
 
-    def _assemble_system_matrix(self):
-        self.system_mat = petsc.assemble_matrix(form(self.Residual))
-        self.system_mat.assemble()
-
+    def _assemble_system_matrix(self,residual = None):
+        if residual is None:
+            self.system_mat = petsc.assemble_matrix(form(self.Residual))
+            self.system_mat.assemble()
+        else:
+            system_mat = petsc.assemble_matrix(form(residual))
+            system_mat.assemble()
+            return system_mat
 
     def _get_modes(self):
         
@@ -996,6 +1008,8 @@ class CoupledXSProblem:
         Given collisions and regions, 
         set up the coupled system matrix with the penalty terms
         '''
+        #TODO: for each collision, subtract off half the assembled stiffness of the ovelapping section 
+        # (use restricted integration measure and collision information to assemble these corrections) 
 
         # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
         for idx,val in np.ndenumerate(self.adjacency):
@@ -1040,7 +1054,7 @@ class CoupledXSProblem:
 
                 #add penalty term to diagonal block
                 A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
-                
+
                 #TODO: need to come up with a better way of populating the 
                 #   nested list than simply filling with the interpolation matrix, then overwriting it...
 
@@ -1048,6 +1062,18 @@ class CoupledXSProblem:
                 A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
                 A_list[idx[0]][idx[1]].assemble()
                 A_list[idx[0]][idx[1]].scale(-1.0)
+
+
+                #apply the correction for the overlap
+                dx_correction = ufl.Measure("dx", 
+                                            domain=self.XSs[idx[0]].msh,
+                                            subdomain_data= self.collisions[idx[0]][idx[1]].celltags[0])
+                res = self.XSs[idx[0]]._construct_residual(dx=dx_correction,
+                                                           return_residual=True)
+                correction = self.XSs[idx[0]]._assemble_system_matrix(residual=res)
+                # correction.view()
+                A_list[idx[0]][idx[0]].axpy(-0.5,correction)
+
 
         A = PETSc.Mat()
         A.createNest(A_list)
@@ -1117,7 +1143,7 @@ class CoupledXSProblem:
             self.XSs[i]._build_elastic_solution_modes()
             self.XSs[i]._compute_xs_stiffness_matrix()
             # self.S += self.XSs[i].S
-            # self.K += self.XSs[i].K
+            self.K += self.XSs[i].K
         #     self.K1 += self.XSs[i].K1
         #     self.K2 += self.XSs[i].K2
         # self.K1inv = np.linalg.inv(self.K1)

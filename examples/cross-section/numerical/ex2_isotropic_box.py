@@ -13,7 +13,7 @@ t4 = 0.01
 
 points = [(-W/2,H/2),(W/2,H/2),(W/2,-H/2),(-W/2,-H/2)]
 thicknesses = [t1,t2,t3,t4]
-num_el = 4*[20] #number of elements through each wall thickness
+num_el = 4*[10] #number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_hollow_box(points,thicknesses,num_el,'box_xs')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
