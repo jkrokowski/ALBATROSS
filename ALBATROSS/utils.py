@@ -63,7 +63,8 @@ def plot_xdmf_mesh(msh,surface=True,add_nodes=False):
                plotter.add_mesh(grid,color='k',show_edges=True)
           if add_nodes:
                plotter.add_mesh(grid, style='points',color='k')
-          plotter.view_isometric()
+          # plotter.view_isometric()
+          plotter.view_xy()
           plotter.show_bounds()
           plotter.add_axes()
           if not pyvista.OFF_SCREEN:
@@ -77,7 +78,8 @@ def plot_xdmf_mesh(msh,surface=True,add_nodes=False):
                plotter.add_mesh(grid,color='k',show_edges=True)
                if add_nodes:
                     plotter.add_mesh(grid, style='points',color='k')
-          plotter.view_isometric()
+          # plotter.view_isometric()
+          plotter.view_xy()
           plotter.show_bounds()
           plotter.add_axes()
           if not pyvista.OFF_SCREEN:

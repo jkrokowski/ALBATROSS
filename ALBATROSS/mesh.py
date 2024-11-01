@@ -320,6 +320,123 @@ def create_I_section(dims,num_el,meshname):
           # print("Finished meshing 2D with %i elements" % (domain.num_cells))
           return domain
      
+
+def create_T_section(dims,num_el,meshname):
+     '''
+     dims = [height,width,flange,web]
+     num_el = [numel_flange,numel_web]
+     meshname = name of mesh
+     '''
+
+     #unpack input 
+     [H,W,tf,tw]=dims
+     [nf,nweb]=num_el
+     filename = 'output/'+meshname+'.xdmf'
+  
+     #choose number of elements between corners for height and width:
+     avg_cell_size = np.average(np.array([tf,tw])/np.array(num_el))
+
+     nw = int(np.ceil((0.5*(W-tw))/avg_cell_size))
+     nh = int(np.ceil((H-2*tf)/avg_cell_size))
+     
+     #for 2D xs mesh, gdim=tdim=2
+     gdim = 2
+     tdim = 2
+
+     #initialize, add model and activate
+     print("Generating 2D T-section mesh...")
+     gmsh.initialize()
+     gmsh.option.setNumber("General.Terminal",0) #suppress gmsh output
+     gmsh.model.add(meshname)
+     gmsh.model.setCurrent(meshname)
+     
+     #repeated dims
+     H2 = H/2
+     W2 = W/2
+     H2mtf = H/2 - tf
+     tw2 = tw/2
+     #list of coordinates for each sub-section of I-section
+     box_nodes = [[-W2,H2mtf,-tw2,H2],
+                  [-tw2,H2mtf,tw2,H2],
+                  [tw2,H2mtf,W2,H2],
+                  [-tw2,-H2mtf,tw2,H2mtf],
+               #    [-W2,-H2,-tw2,-H2mtf],
+                  [-tw2,-H2,tw2,-H2mtf]]
+               #    [tw2,-H2,W2,-H2mtf]]
+     
+     #number of elements in x and y directions for each sub-section
+     box_el_num = [[nw,nf],
+                    [nweb,nf],
+                    [nw,nf],
+                    [nweb,nh],
+                    # [nw,nf],
+                    [nweb,nf]]
+                    # [nw,nf]]
+     
+     #loop to build all 8 subsections of the hollow box
+     for box,el_num in zip(box_nodes,box_el_num):
+          x1,y1,x2,y2 = box
+          num_el_x, num_el_y = el_num
+
+          p1 = gmsh.model.geo.addPoint(x1,y1,0)
+          p2 = gmsh.model.geo.addPoint(x1,y2,0)
+          p3 = gmsh.model.geo.addPoint(x2,y2,0)
+          p4 = gmsh.model.geo.addPoint(x2,y1,0)
+          l1 = gmsh.model.geo.addLine(p1, p2)
+          l2 = gmsh.model.geo.addLine(p2, p3)
+          l3 = gmsh.model.geo.addLine(p3, p4)
+          l4 = gmsh.model.geo.addLine(p4, p1)
+
+          gmsh.model.geo.mesh.setTransfiniteCurve(l1, int(num_el_y + 1))
+          gmsh.model.geo.mesh.setTransfiniteCurve(l2, int(num_el_x + 1))
+          gmsh.model.geo.mesh.setTransfiniteCurve(l3, int(num_el_y + 1))
+          gmsh.model.geo.mesh.setTransfiniteCurve(l4, int(num_el_x + 1))
+
+          cl1 = gmsh.model.geo.addCurveLoop([p1, p2, p3, p4])
+          rect =gmsh.model.geo.addPlaneSurface([cl1])
+
+          gmsh.model.geo.mesh.setTransfiniteSurface(rect)
+          gmsh.model.geo.mesh.setRecombine(2, rect)
+     
+     #get list of tags of all box nodes
+     tags = list(range(1,len(box_nodes)+1))
+
+     #remove duplicate points to ensure closed section 
+     # (not guaranteed to be closed otherwise!)
+     gmsh.model.geo.remove_all_duplicates()
+     gmsh.model.geo.synchronize()
+     gmsh.model.add_physical_group(tdim,tags,0,"rect")
+
+     #generate the mesh and optionally write the gmsh mesh file
+     gmsh.model.mesh.generate(gdim)
+     gmsh.write("output/" +meshname + ".msh")
+
+     #uncomment this below if you want to run gmsh window for debug, etc
+     # gmsh.fltk.run()
+
+     # close gmsh API
+     gmsh.finalize()
+
+     #read gmsh file and write and xdmf
+     if MPI.COMM_WORLD.rank == 0:
+          # Read in mesh
+          msh = meshio.read("output/" +meshname + ".msh")
+
+          # Create and save one file for the mesh, and one file for the facets 
+          mesh = gmsh_to_xdmf(msh, "quad", prune_z=True)
+          meshio.write(f"output/"+meshname+".xdmf", mesh)
+
+     fileName = "output/"+ meshname + ".xdmf"
+
+     #read xdmf and return dolfinx mesh object
+     with XDMFFile(MPI.COMM_WORLD, fileName, "r") as xdmf:
+          #mesh generation with meshio seems to have difficulty renaming the mesh name
+          # (but not the file, hence the "Grid" name property)
+          domain = xdmf.read_mesh(name="Grid")
+          domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
+          # print("Finished meshing 2D with %i elements" % (domain.num_cells))
+          return domain     
+     
 def create_circle(radius,num_el,meshname):
      '''
      radius = outer radius of circle
