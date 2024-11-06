@@ -13,6 +13,8 @@ from scipy.sparse.linalg import inv
 import sparseqr
 from scipy.sparse import csr_matrix
 import ufl 
+import pyvista
+from dolfinx import plot
 
 from ALBATROSS.material import getMatConstitutiveIsotropic
 from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,sparseify
@@ -458,7 +460,7 @@ class CrossSection:
         N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten(),:]
         N_tilde_vals = elastic_sols[self.utilde_vtx_to_dof.flatten(),:]
         N_breve_vals = elastic_sols[self.ubreve_vtx_to_dof.flatten(),:]
-
+        print(N_bar_vals.shape)
         #populate elastic solution modes to elastic solution mode function
         self.N_bar.vector.array[N_bar_vtx_to_dofs.flatten()] = N_bar_vals.flatten()
         self.N_hat.vector.array[N_hat_vtx_to_dofs.flatten()] = N_hat_vals.flatten()
@@ -836,6 +838,60 @@ class CrossSection:
    
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
+
+    def plot_warping_fxns(self):
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
+        plotter = pyvista.Plotter()
+        #plot mesh
+        
+        # tdim = self.msh.topology.dim
+        # topology, cell_types, geom = plot.vtk_mesh(self.msh, tdim)
+        # grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+        # plotter.add_mesh(grid,show_edges=True,opacity=0.25)
+        # plotter.view_xy()
+        # plotter.show_bounds()
+        # plotter.add_axes()
+        # if not pyvista.OFF_SCREEN:
+        #     plotter.show()
+        elastic_sols = self.sols_decoup[:,6:]
+
+        mode = ['Axial','Shear 1', 'Shear 2', 'Torsion', 'Bending 1', 'Bending 2']
+        plotter = pyvista.Plotter(shape=(2,3))
+        grids = []
+        warped = []
+        for i in range(6):
+            row = int(i/3)
+            col = i%3
+            name = f'mode_{i}'
+            plotter.subplot(row,col)
+            #plot mesh
+            tdim = self.msh.topology.dim
+            topology, cell_types, geom = plot.vtk_mesh(self.msh, tdim)
+            grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+            c = np.zeros((6,1))
+            c[i,:] = 1
+            print(c)
+            warping_sol = elastic_sols@c
+            
+            solution_mode_to_plot = warping_sol[self.ubar_vtx_to_dof.flatten(),:]
+            print(solution_mode_to_plot.shape)
+            solution_mode = solution_mode_to_plot.reshape((geom.shape[0], 3))
+
+            grids[i][name]= solution_mode
+            # grids[f'mode_{i}']= solution_mode
+            warped.append(grids[i].warp_by_vector(name,factor=1))
+            plotter.add_mesh(warped,show_edges=True,opacity=0.5)
+            plotter.add_mesh(grids[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'warping mode {i}'})
+            # plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
+            plotter.add_text(mode[i])
+            plotter.view_isometric()
+            # plotter.show_bounds()
+            plotter.add_axes()
+        # plotter.subplot(0,0)
+        # plotter.show_bounds()
+        if not pyvista.OFF_SCREEN:
+            plotter.show()
 
 class CoupledXSProblem:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
