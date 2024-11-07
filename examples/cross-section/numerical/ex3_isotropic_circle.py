@@ -22,6 +22,9 @@ circleXS.plot_mesh()
 #compute the stiffness matrix
 circleXS.get_xs_stiffness_matrix()
 
+#show the warping functions
+circleXS.plot_warping_fxns()
+
 np.set_printoptions(precision=3)
 
 #output flexibility matrix

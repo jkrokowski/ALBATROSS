@@ -28,6 +28,9 @@ IXS.plot_mesh()
 #compute the stiffness matrix
 IXS.get_xs_stiffness_matrix()
 
+#show the warping functions
+IXS.plot_warping_fxns()
+
 np.set_printoptions(precision=3)
 
 #output flexibility matrix

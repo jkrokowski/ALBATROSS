@@ -30,6 +30,8 @@ boxXS.plot_mesh()
 #compute the stiffness matrix
 boxXS.get_xs_stiffness_matrix()
 
+boxXS.plot_warping_fxns()
+
 np.set_printoptions(precision=3)
 
 #output flexibility matrix
