@@ -398,6 +398,7 @@ class CrossSection:
             # CONSTRUCT STRESSES FOR LAST SIX ROWS
 
             #compute strains at x1=0
+            #TODO: see if a "symmetric gradient" solves the issues of the  
             gradubar=grad(ubar_mode)
             eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
                             [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
@@ -861,27 +862,21 @@ class CrossSection:
             grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
             c = np.zeros((6,1))
             c[i,:] = 1
-            print(c)
+
             warping_sol = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]@c
-            print(warping_sol.shape)
             
             solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
-            grids[i][name]= solution_mode
-            
-            if i<3:
-                warped.append(grids[i].warp_by_vector(name,factor=1))
-            else:
-                warped.append(grids[i].warp_by_vector(name,factor=.10))
+            grids[i][name]= solution_mode/np.max(np.linalg.norm(solution_mode,axis=1))
+            warped.append(grids[i].warp_by_vector(name,factor=.01))
 
-            plotter.add_mesh(warped[i],show_edges=True,opacity=.8)
+
+            plotter.add_mesh(warped[i],show_edges=True,opacity=.9)
             plotter.add_mesh(grids[i],show_edges=True,opacity=.5,scalar_bar_args={'title': f'warping mode {i}'})
-            # plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
             plotter.add_text(mode[i])
-            plotter.view_xy()
+            plotter.view_isometric()
             plotter.show_bounds()
-            # plotter.add_axes()
-        # plotter.subplot(0,0)
-        # plotter.show_bounds()
+            
+
         if not pyvista.OFF_SCREEN:
             plotter.show()
 
