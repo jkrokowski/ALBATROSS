@@ -34,7 +34,7 @@ class CrossSection(csdl.CustomExplicitOperation):
         A = self.create_output('A',(1,))
 
         # declare any derivative parameters
-        self.declare_derivative_parameters('K', 'xy', dependent=False)
+        # self.declare_derivative_parameters('K', 'xy', dependent=False)
 
         # construct output of the model
         output = csdl.VariableGroup()
@@ -69,8 +69,9 @@ class CrossSection(csdl.CustomExplicitOperation):
         if self.xs_analysis_type == 'TS':
             xs.get_xs_stiffness_matrix()
             xs.compute_xs_stiffness_matrix_sensitivities()
-            print(xs.dKdx)
-            derivatives['K', 'xy'] = np.ones((36,32))
+            # print(xs.dKdx)
+            # derivatives['K', 'xy'] = xs.dKdx
+            derivatives['K', 'xy'] = xs.dKdx.reshape((36,xy.flatten().shape[0]))
         elif self.xs_analysis_type == 'EB':
             self.xs.get_xs_stiffness_matrix_EB()
             self.xs.compute_xs_stiffness_matrix_sensitivities_EB()
