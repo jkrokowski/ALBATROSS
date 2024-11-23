@@ -5,7 +5,7 @@ import numpy as np
 
 #create mesh
 N = 10
-H = .1
+H = .2
 W= .1
 tf = 0.01
 tw = 0.01
@@ -27,6 +27,8 @@ TXS.plot_mesh()
 
 #compute the stiffness matrix
 TXS.get_xs_stiffness_matrix()
+
+TXS.plot_warping_fxns()
 
 np.set_printoptions(precision=3)
 

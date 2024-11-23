@@ -384,9 +384,9 @@ class CrossSection:
             uhat_mode.vector.array = uhat_modes[:,:,mode].flatten()
 
             #FIRST THREE ROWS : AVERAGE UBAR_i VALUE FOR THAT MODE
-            mat[0,mode]=assemble_scalar(form(ubar_mode[0]*dx))
-            mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))
-            mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))
+            mat[0,mode]=assemble_scalar(form(ubar_mode[0]*dx))/self.A
+            mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))/self.A
+            mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))/self.A
             # mat[0,mode]=1.0
             # mat[1,mode]=1.0
             # mat[2,mode]=1.0
@@ -398,11 +398,29 @@ class CrossSection:
             # CONSTRUCT STRESSES FOR LAST SIX ROWS
 
             #compute strains at x1=0
-            #TODO: see if a "symmetric gradient" solves the issues of the  
+            #TODO: see if a "symmetric gradient" solves the issues
             gradubar=grad(ubar_mode)
-            eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
-                            [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-                            [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+            # eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
+            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+            
+            eps = as_tensor([[uhat_mode[0],
+                              0.5*(uhat_mode[1]+gradubar[0,0]),
+                              0.5*(uhat_mode[2]+gradubar[0,1])],
+                            [0.5*(gradubar[0,0]+uhat_mode[1]),
+                             gradubar[1,0],
+                             0.5*(gradubar[2,0]+gradubar[1,1])],
+                            [0.5*(gradubar[0,1]+uhat_mode[2]),
+                             0.5*(gradubar[1,1]+gradubar[2,0]),
+                             gradubar[2,1]]])
+
+            # eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
+            #                 [gradubar[0,0],
+            #                  0.5*( gradubar[1,0] + gradubar[0,1]) ,
+            #                  gradubar[2,0] ],
+            #                 [0.5*(gradubar[0,1]+gradubar[1,0]),
+            #                  gradubar[1,1],
+            #                  gradubar[2,1]]])
             
             # construct strain and stress tensors based on u_sol
             sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
@@ -411,6 +429,10 @@ class CrossSection:
             sigma11 = sigma[0,0]
             sigma12 = sigma[0,1]
             sigma13 = sigma[0,2]
+            # sigma12 = sigma[1,0]
+            # sigma13 = sigma[2,0]
+            # sigma12 = 0.5*(sigma[0,1] + sigma[1,0])
+            # sigma13 = 0.5*(sigma[0,2] + sigma[2,0])
 
             #integrate stresses over cross-section at "root" of beam and construct xs load vector
             P1 = assemble_scalar(form(sigma11*dx))
@@ -764,9 +786,20 @@ class CrossSection:
         
     def strains_from_warping_fxns(self,ubar_c,uhat_c,utilde_c,ubreve_c):
         gradubar_c=grad(ubar_c)
-        eps = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
-                            [gradubar_c[0,0],gradubar_c[1,0],gradubar_c[2,0]],
-                            [gradubar_c[0,1],gradubar_c[1,1],gradubar_c[2,1]]])
+        # eps = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
+        #                     [gradubar_c[0,0],gradubar_c[1,0],gradubar_c[2,0]],
+        #                     [gradubar_c[0,1],gradubar_c[1,1],gradubar_c[2,1]]])
+        
+        eps = as_tensor([[uhat_c[0],
+                              0.5*(uhat_c[1]+gradubar_c[0,0]),
+                              0.5*(uhat_c[2]+gradubar_c[0,1])],
+                            [0.5*(gradubar_c[0,0]+uhat_c[1]),
+                             gradubar_c[1,0],
+                             0.5*(gradubar_c[2,0]+gradubar_c[1,1])],
+                            [0.5*(gradubar_c[0,1]+uhat_c[2]),
+                             0.5*(gradubar_c[1,1]+gradubar_c[2,0]),
+                             gradubar_c[2,1]]])
+        
         return eps 
 
     def stress_from_warping_fxns(self,ubar_c,uhat_c,utilde_c,ubreve_c):
@@ -865,9 +898,9 @@ class CrossSection:
 
             warping_sol = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]@c
             
-            solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
+            solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[2,1,0]]
             grids[i][name]= solution_mode/np.max(np.linalg.norm(solution_mode,axis=1))
-            warped.append(grids[i].warp_by_vector(name,factor=.01))
+            warped.append(grids[i].warp_by_vector(name,factor=0.01))
 
 
             plotter.add_mesh(warped[i],show_edges=True,opacity=.9)
@@ -1197,6 +1230,9 @@ class CoupledXSProblem:
         # #invert Flexibility matrix to find beam constitutive matrix
         # self.K = np.linalg.inv(self.S)
 
+    def plot_warping_fxns(self):
+        for xs in self.XSs:
+            xs.plot_warping_fxns()
 
 class CrossSectionAnalytical:
     def __init__(self,params):

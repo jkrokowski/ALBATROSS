@@ -83,6 +83,8 @@ squareXS.plot_mesh()
 #compute the stiffness matrix
 squareXS.get_xs_stiffness_matrix()
 
+squareXS.plot_warping_fxns()
+
 np.set_printoptions(precision=10,suppress=True)
 
 #output flexibility matrix

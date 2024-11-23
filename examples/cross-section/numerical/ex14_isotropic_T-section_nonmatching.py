@@ -60,10 +60,11 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e5)
+TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=5e4)
 
 TXS_nm.get_xs_stiffness_matrix()
 
+TXS_nm.plot_warping_fxns()
 
 
 np.set_printoptions(precision=3)
@@ -79,7 +80,7 @@ print(E*A)
 print("Computed Axial Stiffness:")
 print(TXS_nm.K[0,0])
 
-print("Analytical Bending stiffness (EI):")
+print("Analytical Bending stiffness (EI1):")
 I1 = ( (tw*H**3)/12 + 
       ( (((W-tw)*tf**3)/12) 
        + ((tf*(W-tw)))*((H-tf)/2)**2) )
@@ -87,7 +88,7 @@ print(E*I1)
 print("Computed bending stiffness 1:")
 print(TXS_nm.K[4,4])
 
-print("Analytical Bending stiffness (EI):")
+print("Analytical Bending stiffness (EI2):")
 I2 = ((tf*W**3)/12) + ((H-tf)*tw**3)/12
 print(E*I2)
 print("Computed bending stiffness 2:")
@@ -119,6 +120,8 @@ TXS.plot_mesh()
 
 #compute the stiffness matrix
 TXS.get_xs_stiffness_matrix()
+
+TXS.plot_warping_fxns()
 
 np.set_printoptions(precision=3)
 
