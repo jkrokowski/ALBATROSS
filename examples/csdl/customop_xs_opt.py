@@ -33,7 +33,7 @@ class CrossSection(csdl.CustomExplicitOperation):
         K = self.create_output('K', shape)
         A = self.create_output('A',(1,))
 
-        # declare any derivative parameters
+        # declare any CONSTANT derivative parameters
         # self.declare_derivative_parameters('K', 'xy', dependent=False)
 
         # construct output of the model
@@ -47,12 +47,13 @@ class CrossSection(csdl.CustomExplicitOperation):
     def compute(self, input_vals, output_vals):
               
         #update mesh geometry with mesh geometry inputs 
+        #TODO: simplify xy input to only perimeter values!
         #TODO: implement mesh deformation subproblem
         self.domain.geometry.x[:,0:2] = input_vals['xy']
         # self.domain.geometry.x[:,0:2] = inputs.xy.value
 
         xs = ALBATROSS.cross_section.CrossSection(self.domain,[self.material])
-        # self.xs.plot_mesh()
+        # xs.plot_mesh()
         if self.xs_analysis_type == 'TS':
             xs.get_xs_stiffness_matrix()
         elif self.xs_analysis_type == 'EB':
@@ -70,8 +71,9 @@ class CrossSection(csdl.CustomExplicitOperation):
             xs.get_xs_stiffness_matrix()
             xs.compute_xs_stiffness_matrix_sensitivities()
             # print(xs.dKdx)
-            # derivatives['K', 'xy'] = xs.dKdx
-            derivatives['K', 'xy'] = xs.dKdx.reshape((36,xy.flatten().shape[0]))
+            derivatives['K', 'xy'] = xs.dKdx
+            # derivatives['K', 'xy'] = xs.dKdx.reshape((36,xy.flatten().shape[0]))
+            # derivatives['K', 'xy'] = xs.dKdx.reshape((xy.flatten().shape[0],36))
         elif self.xs_analysis_type == 'EB':
             self.xs.get_xs_stiffness_matrix_EB()
             self.xs.compute_xs_stiffness_matrix_sensitivities_EB()
@@ -94,7 +96,7 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 3
+N = 2
 W = .1
 H = .1
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -122,27 +124,39 @@ K = outputs.K
 A = outputs.A
 
 with csdl.namespace('Objective'):
-    f = -K[4,4] - K[5,5]
-    f.add_name('bending_stiffness')
+    f = -K[5,5]
+    f.add_name('axial stiffness')
     f.set_as_objective()
 
 with csdl.namespace('Area constraint'):
     g1 = A
     g1.add_name('g1')
-    g1.set_as_constraint() # constraint
+    g1.set_as_constraint(upper=0.01,lower=0.01) # constraint
 
 recorder.stop()
 
 print(K.value)
 print(A.value)
 
-
 sim = csdl.experimental.PySimulator(recorder)
 
-print('current K:      ', sim[K])
-print('current dKdx:  ', sim.compute_totals(K,xy)[K,xy], '\n')
+print(inputs.xy.value)
 
-sim.check_totals()
+print('current K:      ', sim[K])
+# print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
+dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True)[K,xy]
+dKdx = sim.compute_totals(K,xy)[K,xy]
+diff=dKdx-dKdx_FD
+
+print('dKdx(FD):  ', dKdx_FD, '\n')
+print('dKdx:  ', dKdx, '\n')
+print('diff:', diff)
+
+print('norms:')
+print(np.linalg.norm(dKdx_FD))
+print(np.linalg.norm(dKdx))
+
+# sim.check_totals()
 
 # sim[inputs.xy] *=2
 
