@@ -1,11 +1,12 @@
 import csdl_alpha as csdl
 import ALBATROSS
 import numpy as np
+from dolfinx.mesh import locate_entities_boundary
 
 # custom cross-sectional model
 class CrossSection(csdl.CustomExplicitOperation):
 
-    def __init__(self, domain,xs_analysis_type,material_type,material_name,mech_props):
+    def __init__(self, domain,xs_analysis_type,material_type,material_name,mech_props,boundary_nodes=None):
         super().__init__()
 
         self.domain = domain
@@ -18,6 +19,9 @@ class CrossSection(csdl.CustomExplicitOperation):
                             mat_type=self.material_type,
                             mech_props=self.mech_props,
                             density=2700)
+        
+        if boundary_nodes is not None:
+            self.boundary_nodes = boundary_nodes
 
     def evaluate(self, inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
@@ -44,13 +48,14 @@ class CrossSection(csdl.CustomExplicitOperation):
 
         return output
     
-    def compute(self, input_vals, output_vals):
-              
-        #update mesh geometry with mesh geometry inputs 
+    def compute(self, input_vals, output_vals):     
         #TODO: simplify xy input to only perimeter values!
         #TODO: implement mesh deformation subproblem
-        self.domain.geometry.x[:,0:2] = input_vals['xy']
-        # self.domain.geometry.x[:,0:2] = inputs.xy.value
+        # self.domain.geometry.x[:,0:2] = input_vals['xy']
+        if self.boundary_nodes is not None: 
+            self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
+        else: 
+            self.domain.geometry.x[:,0:2]=input_vals['xy']
 
         xs = ALBATROSS.cross_section.CrossSection(self.domain,[self.material])
         # xs.plot_mesh()
@@ -62,33 +67,26 @@ class CrossSection(csdl.CustomExplicitOperation):
         output_vals['A'] = xs.A
 
     def compute_derivatives(self, input_vals, outputs_vals, derivatives):
-        # xy = 
-        self.domain.geometry.x[:,0:2] = input_vals['xy']
-        
+        if self.boundary_nodes is not None: 
+            self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
+        else: 
+            self.domain.geometry.x[:,0:2]=input_vals['xy']
         xs = ALBATROSS.cross_section.CrossSection(self.domain,[self.material])
         
         if self.xs_analysis_type == 'TS':
             xs.get_xs_stiffness_matrix()
             xs.compute_xs_stiffness_matrix_sensitivities()
-            # print(xs.dKdx)
-            derivatives['K', 'xy'] = xs.dKdx
+            print(xs.dKdx.shape)
+            #TODO: need to restrict to just derivatives on boundary
+            if self.boundary_nodes is not None: 
+                derivatives['K', 'xy'] = xs.dKdx
+            else: 
+                derivatives['K', 'xy'] = xs.dKdx
             # derivatives['K', 'xy'] = xs.dKdx.reshape((36,xy.flatten().shape[0]))
             # derivatives['K', 'xy'] = xs.dKdx.reshape((xy.flatten().shape[0],36))
         elif self.xs_analysis_type == 'EB':
             self.xs.get_xs_stiffness_matrix_EB()
             self.xs.compute_xs_stiffness_matrix_sensitivities_EB()
-
-        # self.xs = ALBATROSS.cross_section.CrossSection(self.domain,[material])
-        
-        # print('dKdx shape:')
-        # print(self.xs.dKdx.shape)
-        # print('xy shape:')
-        # print(xy.shape)
-        # print(self.xs.dKdx)
-        # print('-------')
-        # print(self.xs.dKdx.reshape((36,xy.flatten().shape[0])))
-        
-        # derivatives['K', 'xy'] = self.xs.dKdx.reshape((36,xy.flatten().shape[0]))
 
 
 recorder = csdl.Recorder(inline=True)
@@ -96,13 +94,15 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 2
+N = 6
 W = .1
 H = .1
 points = [[-W/2,-H/2],[W/2, H/2]]
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
-xy=domain.geometry.x[:,0:2]
+boundary_nodes = locate_entities_boundary(domain,0,lambda x: np.ones_like(x[0]))
+
+xy=domain.geometry.x[boundary_nodes,0:2]
 print("shape of xy:")
 print(xy.shape)
 inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
@@ -115,7 +115,8 @@ crosssection = CrossSection(domain=domain,
                             xs_analysis_type='TS',
                             material_type='ISOTROPIC',
                             material_name='unobtainium',
-                            mech_props={'E':100.0,'nu':0.2})
+                            mech_props={'E':100.0,'nu':0.2},
+                            boundary_nodes=boundary_nodes)
 
 #only call one time
 outputs = crosssection.evaluate(inputs)
@@ -131,7 +132,7 @@ with csdl.namespace('Objective'):
 with csdl.namespace('Area constraint'):
     g1 = A
     g1.add_name('g1')
-    g1.set_as_constraint(upper=0.01,lower=0.01) # constraint
+    g1.set_as_constraint(upper=0.011) # constraint
 
 recorder.stop()
 
@@ -144,17 +145,18 @@ print(inputs.xy.value)
 
 print('current K:      ', sim[K])
 # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
-dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True)[K,xy]
+# dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=0.001)[K,xy]
 dKdx = sim.compute_totals(K,xy)[K,xy]
-diff=dKdx-dKdx_FD
+# diff=dKdx-dKdx_FD
 
-print('dKdx(FD):  ', dKdx_FD, '\n')
-print('dKdx:  ', dKdx, '\n')
-print('diff:', diff)
+# print('dKdx(FD):  ', dKdx_FD, '\n')
+# print('dKdx:  ', dKdx, '\n')
+# print('diff:', diff)
 
-print('norms:')
-print(np.linalg.norm(dKdx_FD))
-print(np.linalg.norm(dKdx))
+# print('norms:')
+# print(np.linalg.norm(dKdx_FD))
+# print(np.linalg.norm(dKdx))
+# print(np.linalg.norm(diff))
 
 # sim.check_totals()
 
@@ -175,10 +177,12 @@ prob = CSDLAlphaProblem(problem_name='bending_stiffness_max',simulator=sim)
 optimizer = SLSQP(prob,recording=True)
 
 # Check first derivatives at the initial guess, if needed
-optimizer.check_first_derivatives(prob.x0)
+# optimizer.check_first_derivatives(prob.x0,step=0.01)
 
 # Solve your optimization problem
 optimizer.solve()
 
 optimizer.print_results()
 
+print("xy values:")
+print(xy.value)

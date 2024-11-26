@@ -30,9 +30,10 @@ default_scalar_type = PETSc.ScalarType
 #       for a (CG,1) stress field and higher order convergence
 
 class CrossSection:
-    def __init__(self, msh, materials ,celltags=None):
+    def __init__(self, msh, materials ,celltags=None,verbose=False):
         #analysis domain
         self.msh = msh
+        self.verbose = verbose
         '''
         TODO: example for four elements (include type/size checks)
         assert(len(celltags['mat_id'])==len(msh))
@@ -133,20 +134,25 @@ class CrossSection:
         # self.constructConstitutiveField()
 
         #assemble matrix
-        print('Constructing Cross-Section System...')
+        if self.verbose:
+            print('Constructing Cross-Section System...')
         self._construct_residual()
 
-        print('Assembling System Matrix....')   
+        if self.verbose:
+            print('Assembling System Matrix....')   
         self._assemble_system_matrix()
 
-        print('Computing non-trivial solutions....')
+        if self.verbose:
+            print('Computing non-trivial solutions....')
         self._get_modes()
 
-        print('Orthogonalizing w.r.t. elastic modes...')
+        if self.verbose:
+            print('Orthogonalizing w.r.t. elastic modes...')
         self._decouple_modes()
         self._build_elastic_solution_modes()
         
-        print('Computing Beam Constitutive Matrix....')
+        if self.verbose:
+            print('Computing Beam Constitutive Matrix....')
         self._compute_xs_stiffness_matrix()
 
         print("DONE computing Beam Constitutive Matrix") 
@@ -157,20 +163,25 @@ class CrossSection:
         #construct material constitutive tensor field
         # self.constructConstitutiveField()
 
-        print('Constructing Cross-Section System...')
+        if self.verbose:
+            print('Constructing Cross-Section System...')
         self._construct_residual()
 
-        print('Assembling System Matrix....')   
+        if self.verbose:
+            print('Assembling System Matrix....')   
         self._assemble_system_matrix()
 
-        print('Computing non-trivial solutions....')
+        if self.verbose:
+            print('Computing non-trivial solutions....')
         self._get_modes()
 
-        print('Orthogonalizing w.r.t. elastic modes...')
+        if self.verbose:
+            print('Orthogonalizing w.r.t. elastic modes...')
         self._decouple_modes()
         self._build_elastic_solution_modes_EB()
         
-        print('Computing Beam Constitutive Matrix....')
+        if self.verbose:
+            print('Computing Beam Constitutive Matrix....')
         self._compute_xs_stiffness_matrix_EB()
 
         print("DONE computing Beam Constitutive Matrix")  
@@ -330,7 +341,8 @@ class CrossSection:
     def _get_modes(self):
         
         m,n1=self.system_mat.getSize()
-        print('Computing QR factorization')
+        if self.verbose:
+            print('Computing QR factorization')
         Acsr = csr_matrix(self.system_mat.getValuesCSR()[::-1], shape=self.system_mat.size)
         
         #perform QR factorization and store as struct in householder form
@@ -588,7 +600,6 @@ class CrossSection:
 
         #unpack elastic solution modes
         elastic_sols = np.concatenate([self.sols_decoup[:,6:7],self.sols_decoup[:,9:]],axis=1)
-        print(elastic_sols.shape)
 
         #get map of function dofs 
         N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0))
@@ -695,6 +706,7 @@ class CrossSection:
         self.K = np.linalg.inv(self.S)
     
     def compute_xs_stiffness_matrix_sensitivities(self):
+        #TODO: combine EB and TS sensitivities...
         args = self.K1_form[0][0].arguments()
         n = max(a.number() for a in args) if args else -1
         du = Argument(self.VX,n+1)
@@ -713,7 +725,7 @@ class CrossSection:
                     for idx2 in range(6)])
         
         #boundary dofs ([:,:,self.boundary_dofs])
-        self.boundary_dofs = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         
         #use chain rule for derivative of flexibility matrix dSdx:
         #first term of dSdx
@@ -737,6 +749,8 @@ class CrossSection:
         self.dKdx = - np.einsum('ijk,ij->ijk',
                                 self.K @ self.dSdx,
                                 self.K)
+        
+        # self.dKdx_boundary = 
 
     def compute_xs_stiffness_matrix_sensitivities_EB(self):
         args = self.K1_form[0][0].arguments()

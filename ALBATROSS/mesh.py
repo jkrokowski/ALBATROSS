@@ -1,10 +1,35 @@
 import numpy as np
-from dolfinx import mesh
+from dolfinx import mesh,fem
+import ufl
 import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
 import meshio
 from ALBATROSS.utils import gmsh_to_xdmf
+
+# def move_mesh(msh, bcs: List[dolfinx.fem.DirichletBC]):
+#      '''Function to apply elliptic smoothing to a mesh
+#      given a prescribed boundary motion
+     
+#      msh: mesh to be moved
+#      '''
+
+#      c_el = msh.ufl_domain().ufl_coordinate_element()
+#      V = fem.functionspace(msh, c_el)
+
+#      msh = V.mesh
+#      uh = fem.Function(V)
+#      fem.petsc.set_bc(uh.vector, bcs)
+#      u = ufl.TrialFunction(V)
+#      v = ufl.TestFunction(V)
+#      a = ufl.inner(ufl.grad(u), ufl.grad(v))*ufl.dx
+#      L = ufl.inner(dolfinx.fem.Constant(mesh, (0., 0.)), v)*ufl.dx
+#      problem = dolfinx.fem.petsc.LinearProblem(a, L, bcs, uh)
+#      problem.solve()
+#      deformation_array = uh.x.array.reshape((-1, mesh.geometry.dim))
+#      msh.geometry.x[:, :mesh.geometry.dim] += deformation_array
+
+#      return new_mesh_coords
 
 def beam_interval_mesh_3D(pts,ne,meshname):
      '''

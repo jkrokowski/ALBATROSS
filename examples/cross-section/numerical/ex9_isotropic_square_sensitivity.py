@@ -5,10 +5,10 @@ import numpy as np
 #cross-section mesh definition
 N = 5 #number of quad elements per side
 W = .1 #square height  
-H = .2 #square depth
+H = .1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
-domain = ALBATROSS.mesh.create_rectangle(points,[N,2*N])
+domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -19,7 +19,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
-# squareXS.plot_mesh()
+squareXS.plot_mesh()
 
 #compute the stiffness matrix
 squareXS.get_xs_stiffness_matrix()
