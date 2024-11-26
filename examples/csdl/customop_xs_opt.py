@@ -71,6 +71,7 @@ class CrossSection(csdl.CustomExplicitOperation):
             self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
         else: 
             self.domain.geometry.x[:,0:2]=input_vals['xy']
+            
         xs = ALBATROSS.cross_section.CrossSection(self.domain,[self.material])
         
         if self.xs_analysis_type == 'TS':

@@ -750,7 +750,16 @@ class CrossSection:
                                 self.K @ self.dSdx,
                                 self.K)
         
-        # self.dKdx_boundary = 
+        #get map from vtx to dofs to restrict to boundary
+        self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
+        indices_to=[]
+        for i in range(self.VX.num_sub_spaces):
+            _,map_to = self.VX.sub(i).collapse()
+            indices_to.extend(map_to)
+        self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
+
+        #find all the indices where the boundary_node is in the boundary_dof_to_vertex_map and save those indices as a list
+        self.dKdx_boundary = self.dKdx
 
     def compute_xs_stiffness_matrix_sensitivities_EB(self):
         args = self.K1_form[0][0].arguments()
