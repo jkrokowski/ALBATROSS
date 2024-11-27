@@ -300,26 +300,57 @@ class CrossSection:
         CiakB = as_tensor([[[[C[i_, j_, k_, l_] for l_ in [1,2]]
                     for k_ in range(d)] for j_ in [1,2]] 
                     for i_ in range(d)])
-              
+        
+        # n = self.n
+        # ds = self.ds
+        #traction free boundary conditions
+        # Tbar = Ciak1[i,a,k]*uhat[k]*n[a]*vbar[i]*ds \
+        #         + CiakB[i,a,k,B]*ubar_B[k,B]*n[a]*vbar[i]*ds 
+        # That = 2*Ciak1[i,a,k]*utilde[k]*n[a]*vhat[i]*ds \
+        #         + CiakB[i,a,k,B]*uhat_B[k,B]*n[a]*vhat[i]*ds
+        # Ttilde = 3*Ciak1[i,a,k]*ubreve[k]*n[a]*vtilde[i]*ds \
+        #         + CiakB[i,a,k,B]*utilde_B[k,B]*n[a]*vtilde[i]*ds 
+        # Tbreve = CiakB[i,a,k,B]*ubreve_B[k,B]*n[a]*vbreve[i]*ds 
+
+        # Tbar = []
+        # for i in range(3):
+        #     Tbar+=Ciak1[i,a,k]*uhat[k]*n[a]*ds \
+        #         + CiakB[i,a,k,B]*ubar_B[k,B]*n[a]*ds 
+        # That=[]
+        # for i in range(3):
+        #     That += 2*Ciak1[i,a,k]*utilde[k]*n[a]*ds \
+        #         + CiakB[i,a,k,B]*uhat_B[k,B]*n[a]*ds
+        # Ttilde=[]
+        # for i in range(3):
+        #     Ttilde += 3*Ciak1[i,a,k]*ubreve[k]*n[a]*ds \
+        #         + CiakB[i,a,k,B]*utilde_B[k,B]*n[a]*ds 
+        # Tbreve=[]
+        # for i in range(3):
+        #     Tbreve += CiakB[i,a,k,B]*ubreve_B[k,B]*n[a]*ds 
+
         # equation 1,2,3
         L1= 2*Ci1k1[i,k]*utilde[k]*vbar[i]*dx\
             + Ci1kB[i,k,B]*uhat_B[k,B]*vbar[i]*dx \
             - Ciak1[i,a,k]*uhat[k]*vbar_a[i,a]*dx \
             - CiakB[i,a,k,B]*ubar_B[k,B]*vbar_a[i,a]*dx \
-
+            # + Tbar
+        
         # # equation 4,5,6
         L2 = 6*Ci1k1[i,k]*ubreve[k]*vhat[i]*dx\
             + 2*Ci1kB[i,k,B]*utilde_B[k,B]*vhat[i]*dx \
             - 2*Ciak1[i,a,k]*utilde[k]*vhat_a[i,a]*dx \
             - CiakB[i,a,k,B]*uhat_B[k,B]*vhat_a[i,a]*dx \
+            # + That
 
         # equation 7,8,9
         L3 = 3*Ci1kB[i,k,B]*ubreve_B[k,B]*vtilde[i]*dx \
             - 3*Ciak1[i,a,k]*ubreve[k]*vtilde_a[i,a]*dx \
             - CiakB[i,a,k,B]*utilde_B[k,B]*vtilde_a[i,a]*dx\
+            # + Ttilde
 
         #equation 10,11,12
         L4= -CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*dx\
+            # + Tbreve
         
         #construct residual
         residual = L1+L2+L3+L4
@@ -407,6 +438,8 @@ class CrossSection:
             mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
             mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))
             mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))
+            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]-ubar_mode[2]*x[0]))*dx)))
+            # mat[5,mode]=assemble_scalar(form(((ubar_mode[1]*x[1]-ubar_mode[0]*(x[0]))*dx)))
             # CONSTRUCT STRESSES FOR LAST SIX ROWS
 
             #compute strains at x1=0
@@ -415,16 +448,21 @@ class CrossSection:
             # eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
             #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
             #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+
+            gradu = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
+                            [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+                            [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
             
-            eps = as_tensor([[uhat_mode[0],
-                              0.5*(uhat_mode[1]+gradubar[0,0]),
-                              0.5*(uhat_mode[2]+gradubar[0,1])],
-                            [0.5*(gradubar[0,0]+uhat_mode[1]),
-                             gradubar[1,0],
-                             0.5*(gradubar[2,0]+gradubar[1,1])],
-                            [0.5*(gradubar[0,1]+uhat_mode[2]),
-                             0.5*(gradubar[1,1]+gradubar[2,0]),
-                             gradubar[2,1]]])
+            eps = 0.5 * (gradu + gradu.T)
+            # eps = as_tensor([[uhat_mode[0],
+            #                   0.5*(uhat_mode[1]+gradubar[0,0]),
+            #                   0.5*(uhat_mode[2]+gradubar[0,1])],
+            #                 [0.5*(gradubar[0,0]+uhat_mode[1]),
+            #                  gradubar[1,0],
+            #                  0.5*(gradubar[2,0]+gradubar[1,1])],
+            #                 [0.5*(gradubar[0,1]+uhat_mode[2]),
+            #                  0.5*(gradubar[1,1]+gradubar[2,0]),
+            #                  gradubar[2,1]]])
 
             # eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
             #                 [gradubar[0,0],
@@ -450,9 +488,9 @@ class CrossSection:
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
-            T1 = assemble_scalar(form(((x[0])*sigma13 - (x[1])*sigma12)*dx))
-            M2 = assemble_scalar(form((x[1])*sigma11*dx))
-            M3 = assemble_scalar(form(-(x[0])*sigma11*dx))
+            T1 = assemble_scalar(form(((x[0]-0.05)*sigma13 - (x[1]-0.05)*sigma12)*dx))
+            M2 = assemble_scalar(form((x[1]-0.05)*sigma11*dx))
+            M3 = assemble_scalar(form(-(x[0]-0.05)*sigma11*dx))
 
             #THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
             mat[6,mode]=P1
@@ -719,7 +757,8 @@ class CrossSection:
                                 for idx2 in range(6)]
         self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
                         for idx1 in range(6)] 
-                            for idx2 in range(6)])     
+                            for idx2 in range(6)])
+        # dK2dx11 = petsc.assemble_vector(form(self.dK2dx_form[0][0]))     
         self.dK2dx = np.array([[petsc.assemble_vector(form(self.dK2dx_form[idx1][idx2]))
                 for idx1 in range(6)] 
                     for idx2 in range(6)])
@@ -745,7 +784,46 @@ class CrossSection:
         #add terms to get dSdx
         self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
         
+        # #APPROACH TO LIMIT MATRIX MULTIPLICATIONS:
+        # #use chain rule for derivative of flexibility matrix dSdx:
+        # #first term of dSdx
+        # # self.dK1invT = -np.einsum('ijk,ij->ijk',
+        # #                       self.dK1dx.transpose(1,0,2),
+        # #                        self.K1inv.T @ self.K2 ) 
+        # # self.dK1invT = -np.einsum('ijk,ij->ijk',
+        # #                       self.dK1dx.transpose(1,0,2),
+        # #                        self.K1inv.T )
+        # # #second term of dSdx
+        # # self.dK2 = np.einsum('ijk,ij->ijk',
+        # #                 self.K1inv.T@self.dK2dx,
+        # #                 self.K1inv)
+        
+        # #third term of dSdx
+        # # self.dK1inv =  self.K2 @ self.K1inv @ self.dK1dx
+
+        # self.dK1_term = self.K1inv @ self.dK1dx
+
+        # self.K2dK1 = self.K2 @self.dK1_term
+        # self.dK1TK2 = np.einsum('ijk,ij->ijk',
+        #                       self.dK1_term.transpose(1,0,2),
+        #                        self.K2 )
+
+        # #add terms to get dSdx
+        # # self.dSdx = np.einsum('ijk,ij->ijk',
+        # #                       self.K1inv.T @ (- self.dK1invT + self.dK2dx - self.dK1inv ),
+        # #                         self.K1inv)
+        # # self.dSdx = np.einsum('ijk,ij->ijk',
+        # #                       self.K1inv.T @ (- self.dK1inv.transpose(1,0,2) + self.dK2dx - self.dK1inv ),
+        # #                         self.K1inv)
+        # self.dSdx = np.einsum('ijk,ij->ijk',
+        #                       self.K1inv.T @ (- self.dK1TK2 + self.dK2dx - self.K2dK1 ),
+        #                         self.K1inv)
+
         #compute derivative of stiffness matrix (dKdx) from derivative of flexibility matrix (dSdx)
+        # self.dKdx = - np.einsum('ijk,ij->ijk',
+        #                         self.K @ self.dSdx,
+        #                         self.K)
+        
         self.dKdx = - np.einsum('ijk,ij->ijk',
                                 self.K @ self.dSdx,
                                 self.K)
@@ -759,7 +837,11 @@ class CrossSection:
         self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
 
         #find all the indices where the boundary_node is in the boundary_dof_to_vertex_map and save those indices as a list
-        self.dKdx_boundary = self.dKdx
+        
+        boundary_indices = []
+        for i in self.boundary_nodes:
+            boundary_indices.extend(list(np.where(self.boundary_dof_to_vertex_map==i)[0]))
+        self.dKdx_boundary = self.dKdx[:,:,boundary_indices]
 
     def compute_xs_stiffness_matrix_sensitivities_EB(self):
         args = self.K1_form[0][0].arguments()
@@ -801,7 +883,7 @@ class CrossSection:
 
         #add terms to get dSdx
         self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
-        
+
         #compute derivative of stiffness matrix (dKdx) from derivative of flexibility matrix (dSdx)
         self.dKdx = - np.einsum('ijk,ij->ijk',
                                 self.K @ self.dSdx,
@@ -809,19 +891,19 @@ class CrossSection:
         
     def strains_from_warping_fxns(self,ubar_c,uhat_c,utilde_c,ubreve_c):
         gradubar_c=grad(ubar_c)
-        # eps = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
-        #                     [gradubar_c[0,0],gradubar_c[1,0],gradubar_c[2,0]],
-        #                     [gradubar_c[0,1],gradubar_c[1,1],gradubar_c[2,1]]])
+        eps = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
+                            [gradubar_c[0,0],gradubar_c[1,0],gradubar_c[2,0]],
+                            [gradubar_c[0,1],gradubar_c[1,1],gradubar_c[2,1]]])
         
-        eps = as_tensor([[uhat_c[0],
-                              0.5*(uhat_c[1]+gradubar_c[0,0]),
-                              0.5*(uhat_c[2]+gradubar_c[0,1])],
-                            [0.5*(gradubar_c[0,0]+uhat_c[1]),
-                             gradubar_c[1,0],
-                             0.5*(gradubar_c[2,0]+gradubar_c[1,1])],
-                            [0.5*(gradubar_c[0,1]+uhat_c[2]),
-                             0.5*(gradubar_c[1,1]+gradubar_c[2,0]),
-                             gradubar_c[2,1]]])
+        # eps = as_tensor([[uhat_c[0],
+        #                       0.5*(uhat_c[1]+gradubar_c[0,0]),
+        #                       0.5*(uhat_c[2]+gradubar_c[0,1])],
+        #                     [0.5*(gradubar_c[0,0]+uhat_c[1]),
+        #                      gradubar_c[1,0],
+        #                      0.5*(gradubar_c[2,0]+gradubar_c[1,1])],
+        #                     [0.5*(gradubar_c[0,1]+uhat_c[2]),
+        #                      0.5*(gradubar_c[1,1]+gradubar_c[2,0]),
+        #                      gradubar_c[2,1]]])
         
         return eps 
 

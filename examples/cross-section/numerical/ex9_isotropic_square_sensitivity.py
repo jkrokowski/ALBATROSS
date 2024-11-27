@@ -3,7 +3,7 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 20 #number of quad elements per side
+N = 30 #number of quad elements per side
 W = .1 #square height  
 H = .1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
@@ -67,7 +67,7 @@ for i in range(6):
     sensitivity_to_plot = np.zeros((geom.shape[0],2))
 
     # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dSdx[i,i,:].reshape(-1,2)[squareXS.boundary_dofs,:]
-    sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dKdx[i,i,:].reshape(-1,2)[squareXS.boundary_dofs,:]
+    sensitivity_to_plot[squareXS.boundary_nodes,:] = np.abs(squareXS.dKdx[i,i,:].reshape(-1,2)[squareXS.boundary_nodes,:])
 
     # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dKdx[4,4,:]
     # sensitivity_to_plot = squareXS.dKdx[0,0,:]

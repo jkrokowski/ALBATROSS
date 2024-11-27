@@ -7,7 +7,7 @@ from mpi4py import MPI
 import meshio
 from ALBATROSS.utils import gmsh_to_xdmf
 
-# def move_mesh(msh, bcs: List[dolfinx.fem.DirichletBC]):
+# def smooth_mesh(msh, bcs: List[dolfinx.fem.DirichletBC]):
 #      '''Function to apply elliptic smoothing to a mesh
 #      given a prescribed boundary motion
      
