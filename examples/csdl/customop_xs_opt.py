@@ -1,7 +1,7 @@
 import csdl_alpha as csdl
 import ALBATROSS
 import numpy as np
-from dolfinx.mesh import locate_entities_boundary
+from dolfinx.mesh import locate_entities_boundary,locate_entities
 
 # custom cross-sectional model
 class CrossSection(csdl.CustomExplicitOperation):
@@ -26,9 +26,7 @@ class CrossSection(csdl.CustomExplicitOperation):
     def evaluate(self, inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
         self.declare_input('xy',inputs.xy)
-        # self.declare_input('E', inputs.E)
-        # self.declare_input('nu', inputs.nu)
-
+        
         # declare output variables
         if self.xs_analysis_type == 'TS':
             shape = (6,6)
@@ -36,9 +34,6 @@ class CrossSection(csdl.CustomExplicitOperation):
             shape = (4,4)
         K = self.create_output('K', shape)
         A = self.create_output('A',(1,))
-
-        # declare any CONSTANT derivative parameters
-        # self.declare_derivative_parameters('K', 'xy', dependent=False)
 
         # construct output of the model
         output = csdl.VariableGroup()
@@ -94,41 +89,80 @@ class CrossSection(csdl.CustomExplicitOperation):
             self.xs.get_xs_stiffness_matrix_EB()
             self.xs.compute_xs_stiffness_matrix_sensitivities_EB()
 
-# class EllipticSmoothing(csdl.CustomExplicitOperation):
+class EllipticSmoothing(csdl.CustomExplicitOperation):
 
-#     def __init__(self):
-#         super().__init__()
+    def __init__(self,domain,boundary_nodes,interior_nodes):
+        # super().__init__()
+        self.domain = domain
+        self.boundary_nodes = boundary_nodes
+        self.interior_nodes = interior_nodes
 
-#     def evaluate(self):
-#         return super().evaluate()
 
-#     def compute(self, inputs, outputs):
-#         return super().compute(inputs, outputs)
+    def evaluate(self):
+        self.declare_input('xy',inputs.xy)
 
-#     def compute_derivatives(self, inputs, outputs, derivatives):
-#         return super().compute_derivatives(inputs, outputs, derivatives)()
+        # construct output of the model
+        output = csdl.VariableGroup()
+
+        xy_interior = self.create_output('xy_interior',(self.interior_nodes.shape[0],2))
+        xy_prev = self.declare_output('xy_prev',inputs.xy.shape)
+        
+        xy_interior = xy_interior
+        # xy_prev = 
+        return output
+
+    def compute(self, input_vals, output_vals):
+
+        self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
+
+
+
+        domain.geometry.x[interior_nodes,0:2] = ALBATROSS.mesh.smooth_mesh(self.domain,
+                                                        boundary_nodes,
+                                                        displacement,
+                                                        interior_nodes)
+
+
+    # def compute_derivatives(self, inputs, outputs, derivatives):
+    #     return super().compute_derivatives(inputs, outputs, derivatives)()
 
 recorder = csdl.Recorder(inline=True)
 recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 20
+N = 25
 W = .1
 H = .1
 points = [[-W/2,-H/2],[W/2, H/2]]
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
+all_nodes= locate_entities(domain,0,lambda x: np.ones_like(x[0]))
 boundary_nodes = locate_entities_boundary(domain,0,lambda x: np.ones_like(x[0]))
+interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
 
 xy=domain.geometry.x[boundary_nodes,0:2]
 print("shape of xy:")
 print(xy.shape)
 inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
+inputs.xy_prev = csdl.Variable(value=xy,shape=xy.shape,name='xy')
 
 xy = inputs.xy
 
-inputs.xy.set_as_design_variable()
+inputs.xy.set_as_design_variable(scaler=100)
+
+# displacement = inputs.xy - inputs.xy_prev
+
+#update interior node locations based on boundary motion 
+# (uses elliptic smoothing based on Poisson problem)
+# domain.geometry.x[interior_nodes,0:2] = ALBATROSS.mesh.smooth_mesh(domain,
+#                                                         boundary_nodes,
+#                                                         displacement,
+#                                                         interior_nodes)
+
+meshSmoothing = EllipticSmoothing(domain,boundary_nodes,interior_nodes)
+
+outputs = meshSmoothing.evaluate(inputs)
 
 crosssection = CrossSection(domain=domain,
                             xs_analysis_type='TS',
@@ -153,6 +187,7 @@ with csdl.namespace('Area constraint'):
     g1.add_name('g1')
     g1.set_as_constraint(upper=0.011) # constraint
 
+#APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
 
 print(K.value)

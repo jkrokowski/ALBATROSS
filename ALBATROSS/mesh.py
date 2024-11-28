@@ -1,35 +1,68 @@
 import numpy as np
-from dolfinx import mesh,fem
+from dolfinx import mesh,fem,plot
 import ufl
 import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
 import meshio
 from ALBATROSS.utils import gmsh_to_xdmf
+import pyvista
 
-# def smooth_mesh(msh, bcs: List[dolfinx.fem.DirichletBC]):
-#      '''Function to apply elliptic smoothing to a mesh
-#      given a prescribed boundary motion
+def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move):
+     '''Function to apply elliptic smoothing to a mesh
+     given a prescribed boundary motion
      
-#      msh: mesh to be moved
-#      '''
+     msh: mesh which to  
+     '''
 
-#      c_el = msh.ufl_domain().ufl_coordinate_element()
-#      V = fem.functionspace(msh, c_el)
+     c_el = msh.ufl_domain().ufl_coordinate_element()
+     V = fem.functionspace(msh, c_el)
 
-#      msh = V.mesh
-#      uh = fem.Function(V)
-#      fem.petsc.set_bc(uh.vector, bcs)
-#      u = ufl.TrialFunction(V)
-#      v = ufl.TestFunction(V)
-#      a = ufl.inner(ufl.grad(u), ufl.grad(v))*ufl.dx
-#      L = ufl.inner(dolfinx.fem.Constant(mesh, (0., 0.)), v)*ufl.dx
-#      problem = dolfinx.fem.petsc.LinearProblem(a, L, bcs, uh)
-#      problem.solve()
-#      deformation_array = uh.x.array.reshape((-1, mesh.geometry.dim))
-#      msh.geometry.x[:, :mesh.geometry.dim] += deformation_array
+     uh = fem.Function(V)
+     u_bc = fem.Function(V)
+     # use u_bc.x.index_map.local_range
+     # for i in u_bc.x.index_map.local_range:
+     #      moved_dofs.extend(moved_nodes+i)
+     moved_dofs = []
+     for i in range(V.num_sub_spaces):
+          _,dofmap = V.sub(i).collapse()
+          moved_dofs.extend([dofmap[j] for j in moved_nodes])
+     
+     u_bc.vector.array[moved_dofs] += displacement.T.flatten()
+     bc = fem.dirichletbc(u_bc,moved_nodes)
+     
+     # msh.geometry.x[moved_nodes,0:2] += displacement
 
-#      return new_mesh_coords
+     bcs = [bc]
+          
+     #TODO: need to account for case where not all exterior nodes are moved
+     fem.petsc.set_bc(uh.vector, bcs)
+     u = ufl.TrialFunction(V)
+     v = ufl.TestFunction(V)
+     a = ufl.inner(ufl.grad(u), ufl.grad(v))*ufl.dx
+     L = ufl.inner(fem.Constant(msh, (0., 0.)), v)*ufl.dx
+     problem = fem.petsc.LinearProblem(a, L, bcs, uh)
+     problem.solve()
+     deformation_array = uh.x.array.reshape((-1, msh.geometry.dim))
+     new_mesh_coords = msh.geometry.x[nodes_to_move, 0:2] + deformation_array[nodes_to_move,0:2]
+
+     # msh.geometry.x[:,0:2] += deformation_array
+
+     # #plot mesh
+     # pyvista.global_theme.background = [255, 255, 255, 255]
+     # pyvista.global_theme.font.color = 'black'
+     # tdim = msh.topology.dim
+     # topology, cell_types, geometry = plot.vtk_mesh(msh, tdim)
+     # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+     # plotter = pyvista.Plotter()
+     # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+     # plotter.view_xy()
+     # plotter.show_axes()
+     # plotter.show_bounds()
+     # if not pyvista.OFF_SCREEN:
+     #      plotter.show()
+
+     return new_mesh_coords
 
 def beam_interval_mesh_3D(pts,ne,meshname):
      '''
