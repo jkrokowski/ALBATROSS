@@ -6,7 +6,15 @@ from dolfinx.mesh import locate_entities_boundary,locate_entities
 # custom cross-sectional model
 class CrossSection(csdl.CustomExplicitOperation):
 
-    def __init__(self, domain,xs_analysis_type,material_type,material_name,mech_props,boundary_nodes=None):
+    def __init__(self, 
+                 domain,
+                 xs_analysis_type,
+                 material_type,
+                 material_name,
+                 mech_props,
+                 boundary_nodes=None,
+                 interior_nodes=None):
+        
         super().__init__()
 
         self.domain = domain
@@ -23,9 +31,13 @@ class CrossSection(csdl.CustomExplicitOperation):
         if boundary_nodes is not None:
             self.boundary_nodes = boundary_nodes
 
+        if interior_nodes is not None:
+            self.interior_nodes = interior_nodes
+
     def evaluate(self, inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
         self.declare_input('xy',inputs.xy)
+        self.declare_input('xy_interior',inputs.xy_interior)
         
         # declare output variables
         if self.xs_analysis_type == 'TS':
@@ -44,11 +56,14 @@ class CrossSection(csdl.CustomExplicitOperation):
         return output
     
     def compute(self, input_vals, output_vals):     
-        #TODO: simplify xy input to only perimeter values!
-        #TODO: implement mesh deformation subproblem
-        # self.domain.geometry.x[:,0:2] = input_vals['xy']
+        #update boundary nodes:
         if self.boundary_nodes is not None: 
             self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
+        
+        #update interior nodes
+        if self.interior_nodes is not None: 
+            self.domain.geometry.x[self.interior_nodes,0:2]=input_vals['xy_interior']
+        
         else: 
             self.domain.geometry.x[:,0:2]=input_vals['xy']
 
@@ -65,12 +80,17 @@ class CrossSection(csdl.CustomExplicitOperation):
         print(xs.A)
 
     def compute_derivatives(self, input_vals, outputs_vals, derivatives):
+        #update boundary nodes:
         if self.boundary_nodes is not None: 
             self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
+        
+        #update interior nodes
+        if self.interior_nodes is not None: 
+            self.domain.geometry.x[self.interior_nodes,0:2]=input_vals['xy_interior']
+        
         else: 
             self.domain.geometry.x[:,0:2]=input_vals['xy']
-   
-        # print(input_vals['xy'])
+        
         xs = ALBATROSS.cross_section.CrossSection(self.domain,[self.material])
         # xs.plot_mesh()
         if self.xs_analysis_type == 'TS':
@@ -92,39 +112,47 @@ class CrossSection(csdl.CustomExplicitOperation):
 class EllipticSmoothing(csdl.CustomExplicitOperation):
 
     def __init__(self,domain,boundary_nodes,interior_nodes):
-        # super().__init__()
+        super().__init__()
         self.domain = domain
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
 
 
-    def evaluate(self):
+    def evaluate(self, inputs: csdl.VariableGroup):
         self.declare_input('xy',inputs.xy)
+        self.declare_input('xy_prev',inputs.xy)
 
         # construct output of the model
         output = csdl.VariableGroup()
 
+        #create output for new interior node positions
         xy_interior = self.create_output('xy_interior',(self.interior_nodes.shape[0],2))
-        xy_prev = self.declare_output('xy_prev',inputs.xy.shape)
         
-        xy_interior = xy_interior
-        # xy_prev = 
+        #save output
+        output.xy_interior = xy_interior
+
         return output
 
     def compute(self, input_vals, output_vals):
-
+        #update boundary nodes:
         self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
+        
+        displacement = input_vals['xy']-input_vals['xy_prev']
 
-
-
-        domain.geometry.x[interior_nodes,0:2] = ALBATROSS.mesh.smooth_mesh(self.domain,
-                                                        boundary_nodes,
+        # domain.geometry.x[interior_nodes,0:2]
+        xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
+                                                        self.boundary_nodes,
                                                         displacement,
-                                                        interior_nodes)
+                                                        self.interior_nodes)
+
+        output_vals['xy_interior']=xy_interior
+
+    def compute_derivatives(self, inputs, outputs, derivatives):
+        return super().compute_derivatives(inputs, outputs, derivatives)()
 
 
-    # def compute_derivatives(self, inputs, outputs, derivatives):
-    #     return super().compute_derivatives(inputs, outputs, derivatives)()
+        #need to return derivatives of interior mesh node locations w.r.t to 
+        #    boundary nodes
 
 recorder = csdl.Recorder(inline=True)
 recorder.start()
@@ -142,12 +170,16 @@ boundary_nodes = locate_entities_boundary(domain,0,lambda x: np.ones_like(x[0]))
 interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
 
 xy=domain.geometry.x[boundary_nodes,0:2]
+xy_interior = domain.geometry.x[interior_nodes,0:2]
+
 print("shape of xy:")
 print(xy.shape)
 inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-inputs.xy_prev = csdl.Variable(value=xy,shape=xy.shape,name='xy')
+inputs.xy_prev = csdl.Variable(value=xy,shape=xy.shape,name='xy_prev')
+inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
 
 xy = inputs.xy
+xy_interior = inputs.xy_interior
 
 inputs.xy.set_as_design_variable(scaler=100)
 
@@ -162,14 +194,19 @@ inputs.xy.set_as_design_variable(scaler=100)
 
 meshSmoothing = EllipticSmoothing(domain,boundary_nodes,interior_nodes)
 
-outputs = meshSmoothing.evaluate(inputs)
+outputs_mm = meshSmoothing.evaluate(inputs)
+
+inputs.xy_interior= outputs_mm.xy_interior
+
+inputs.xy_prev = inputs.xy
 
 crosssection = CrossSection(domain=domain,
                             xs_analysis_type='TS',
                             material_type='ISOTROPIC',
                             material_name='unobtainium',
                             mech_props={'E':100.0,'nu':0.2},
-                            boundary_nodes=boundary_nodes)
+                            boundary_nodes=boundary_nodes,
+                            interior_nodes=interior_nodes)
 
 #only call one time
 outputs = crosssection.evaluate(inputs)
@@ -200,7 +237,7 @@ print(inputs.xy.value)
 print('current K:      ', sim[K])
 # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
 # dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=0.002)[K,xy]
-dKdx = sim.compute_totals(K,xy)[K,xy]
+# dKdx = sim.compute_totals(K,xy)[K,xy]
 # diff=dKdx-dKdx_FD
 
 # print('dKdx(FD):  ', dKdx_FD, '\n')
