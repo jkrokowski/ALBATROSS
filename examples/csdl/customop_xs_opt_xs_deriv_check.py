@@ -28,16 +28,19 @@ class CrossSection(csdl.CustomExplicitOperation):
                             mech_props=self.mech_props,
                             density=2700)
         
-        if boundary_nodes is not None:
-            self.boundary_nodes = boundary_nodes
+        self.boundary_nodes = boundary_nodes
+        self.interior_nodes = interior_nodes
 
-        if interior_nodes is not None:
-            self.interior_nodes = interior_nodes
+        # if boundary_nodes is not None:
+        #     self.boundary_nodes = boundary_nodes
+
+        # if interior_nodes is not None:
+        #     self.interior_nodes = interior_nodes
 
     def evaluate(self, inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
         self.declare_input('xy',inputs.xy)
-        self.declare_input('xy_interior',inputs.xy_interior)
+        # self.declare_input('xy_interior',inputs.xy_interior)
         
         # declare output variables
         if self.xs_analysis_type == 'TS':
@@ -63,21 +66,22 @@ class CrossSection(csdl.CustomExplicitOperation):
         #update interior nodes
         if self.interior_nodes is not None: 
             self.domain.geometry.x[self.interior_nodes,0:2]=input_vals['xy_interior']
-        
-        else: 
-            self.domain.geometry.x[:,0:2]=input_vals['xy']
+            # self.domain.geometry.x[self.interior_nodes,0:2]=self.smooth_mesh(input_vals['xy'])
+
+        # else: 
+        #     self.domain.geometry.x[:,0:2]=input_vals['xy']
 
         # print(input_vals['xy'])
         
         xs = ALBATROSS.cross_section.CrossSection(self.domain,[self.material])
-        xs.plot_mesh()
+        # xs.plot_mesh()
         if self.xs_analysis_type == 'TS':
             xs.get_xs_stiffness_matrix()
         elif self.xs_analysis_type == 'EB':
             xs.get_xs_stiffness_matrix_EB()
         output_vals['K'] = xs.K
         output_vals['A'] = xs.A
-        print(xs.A)
+        print("Cross-sectional Area:",xs.A)
 
     def compute_derivatives(self, input_vals, outputs_vals, derivatives):
         #update boundary nodes:
@@ -87,9 +91,10 @@ class CrossSection(csdl.CustomExplicitOperation):
         #update interior nodes
         if self.interior_nodes is not None: 
             self.domain.geometry.x[self.interior_nodes,0:2]=input_vals['xy_interior']
+            # self.domain.geometry.x[self.interior_nodes,0:2]=self.smooth_mesh(input_vals['xy'])
         
-        else: 
-            self.domain.geometry.x[:,0:2]=input_vals['xy']
+        # else: 
+        #     self.domain.geometry.x[:,0:2]=input_vals['xy']
         
         xs = ALBATROSS.cross_section.CrossSection(self.domain,[self.material])
         # xs.plot_mesh()
@@ -109,70 +114,14 @@ class CrossSection(csdl.CustomExplicitOperation):
             self.xs.get_xs_stiffness_matrix_EB()
             self.xs.compute_xs_stiffness_matrix_sensitivities_EB()
 
-class EllipticSmoothing(csdl.CustomExplicitOperation):
-
-    def __init__(self,domain,boundary_nodes,interior_nodes):
-        super().__init__()
-        self.domain = domain
-        self.boundary_nodes = boundary_nodes
-        self.interior_nodes = interior_nodes
-
-
-    def evaluate(self, inputs: csdl.VariableGroup):
-        self.declare_input('xy',inputs.xy)
-        # self.declare_input('xy_prev',inputs.xy)
-
-        # construct output of the model
-        output = csdl.VariableGroup()
-
-        #create output for new interior node positions
-        xy_interior = self.create_output('xy_interior',(self.interior_nodes.shape[0],2))
-        
-        #save output
-        output.xy_interior = xy_interior
-
-        return output
-
-    def compute(self, input_vals, output_vals):
-        #update boundary nodes:
-        self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
-        
-        # displacement = input_vals['xy']-input_vals['xy_prev']
-        displacement = input_vals['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
-        
-        xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
-                                                    self.boundary_nodes,
-                                                    displacement,
-                                                    self.interior_nodes)
-
-        output_vals['xy_interior']=xy_interior
-
-    def compute_derivatives(self, input_vals, output_vals, derivatives):
-        # return super().compute_derivatives(inputs, outputs, derivatives)()
-
-        #need to return derivatives of interior mesh node 
-        #   displacement w.r.t to boundary nodes
-
-        displacement = input_vals['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
-
-        xy_interior,duhdx = ALBATROSS.mesh.smooth_mesh(self.domain,
-                                                        self.boundary_nodes,
-                                                        displacement,
-                                                        self.interior_nodes,
-                                                        get_deriv=True)
-
-        # derivatives['xy_interior','xy'] = np.ones_like(xy_interior)
-        derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
-                                                         xy.flatten().shape[0]))
-
 recorder = csdl.Recorder(inline=True)
 recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 15
-W = .1
-H = .1
+N = 10
+W = 1
+H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
@@ -186,38 +135,18 @@ xy_interior = domain.geometry.x[interior_nodes,0:2]
 print("shape of xy:")
 print(xy.shape)
 inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-# inputs.xy_prev = csdl.Variable(value=xy,shape=xy.shape,name='xy_prev')
-inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
+
 
 xy = inputs.xy
-xy_interior = inputs.xy_interior
 
-inputs.xy.set_as_design_variable(scaler=100)
-
-# displacement = inputs.xy - inputs.xy_prev
-
-#update interior node locations based on boundary motion 
-# (uses elliptic smoothing based on Poisson problem)
-# domain.geometry.x[interior_nodes,0:2] = ALBATROSS.mesh.smooth_mesh(domain,
-#                                                         boundary_nodes,
-#                                                         displacement,
-#                                                         interior_nodes)
-
-meshSmoothing = EllipticSmoothing(domain,boundary_nodes,interior_nodes)
-
-outputs_mm = meshSmoothing.evaluate(inputs)
-
-inputs.xy_interior = outputs_mm.xy_interior
-
-# inputs.xy_prev = inputs.xy
+inputs.xy.set_as_design_variable(scaler=10)
 
 crosssection = CrossSection(domain=domain,
                             xs_analysis_type='TS',
                             material_type='ISOTROPIC',
                             material_name='unobtainium',
                             mech_props={'E':100.0,'nu':0.2},
-                            boundary_nodes=boundary_nodes,
-                            interior_nodes=interior_nodes)
+                            boundary_nodes=boundary_nodes)
 
 #only call one time
 outputs = crosssection.evaluate(inputs)
@@ -226,7 +155,7 @@ K = outputs.K
 A = outputs.A
 
 with csdl.namespace('Objective'):
-    f = -K[5,5] + K[0,0]
+    f = -K[5,5]+K[0,0] 
     f.add_name('axial stiffness')
     f.set_as_objective()
 
@@ -243,48 +172,19 @@ print(A.value)
 
 sim = csdl.experimental.PySimulator(recorder)
 
-print(inputs.xy.value)
+# print(inputs.xy.value)
 
 print('current K:      ', sim[K])
 # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
-# dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=0.002)[K,xy]
+dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=0.0001)[K,xy]
 dKdx = sim.compute_totals(K,xy)[K,xy]
-# diff=dKdx-dKdx_FD
+diff=dKdx-dKdx_FD
 
-# print('dKdx(FD):  ', dKdx_FD, '\n')
+print('dKdx(FD):  ', dKdx_FD, '\n')
 print('dKdx:  ', dKdx, '\n')
-# print('diff:', diff)
+print('diff:', diff)
 
-# print('norms:')
-# print(np.linalg.norm(dKdx_FD))
-# print(np.linalg.norm(dKdx))
-# print(np.linalg.norm(diff))
-
-# sim.check_totals()
-
-# sim[inputs.xy] *=2
-
-# sim.run()
-
-# print('current K:      ', sim[K])
-
-# sim.compute_totals(K,inputs.xy)[K,]
-
-from modopt import CSDLAlphaProblem
-from modopt import SLSQP
-
-# Instantiate your problem using the csdl Simulator object and name your problem
-prob = CSDLAlphaProblem(problem_name='bending_stiffness_max',simulator=sim)
-
-optimizer = SLSQP(prob,recording=True,solver_options={'ftol':1e-8, 'maxiter':20})
-
-# Check first derivatives at the initial guess, if needed
-# optimizer.check_first_derivatives(prob.x0,step=0.01)
-
-# Solve your optimization problem
-optimizer.solve()
-
-optimizer.print_results()
-
-print("xy values:")
-print(xy.value)
+print('norms:')
+print(np.linalg.norm(dKdx_FD))
+print(np.linalg.norm(dKdx))
+print(np.linalg.norm(diff))

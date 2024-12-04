@@ -5,14 +5,18 @@ import gmsh
 from dolfinx.io import gmshio,XDMFFile
 from mpi4py import MPI
 import meshio
-from ALBATROSS.utils import gmsh_to_xdmf
+from ALBATROSS.utils import gmsh_to_xdmf,get_pts_and_cells
 import pyvista
+from petsc4py import PETSc
 
-def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move):
+def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False):
      '''Function to apply elliptic smoothing to a mesh
      given a prescribed boundary motion
      
-     msh: mesh which to  
+     msh: mesh to be smoothed
+     moved_nodes: indices of nodes 
+     displacement: 
+     nodes_to_move:   
      '''
 
      c_el = msh.ufl_domain().ufl_coordinate_element()
@@ -24,10 +28,16 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move):
      # for i in u_bc.x.index_map.local_range:
      #      moved_dofs.extend(moved_nodes+i)
      moved_dofs = []
+     dofs_to_move = []
      for i in range(V.num_sub_spaces):
-          _,dofmap = V.sub(i).collapse()
-          moved_dofs.extend([dofmap[j] for j in moved_nodes])
-     
+          # _,dofmap = V.sub(i).collapse()
+          # moved_dofs.extend([dofmap[j] for j in moved_nodes])
+          # dofs_to_move.extend([dofmap[j] for j in nodes_to_move])
+          moved_dofs.extend(fem.locate_dofs_topological(V.sub(i),0,moved_nodes))
+          dofs_to_move.extend(fem.locate_dofs_topological(V.sub(i),0,nodes_to_move))
+     # moved_dofs = fem.locate_dofs_topological(V.sub(0),0,moved_nodes)
+     # dofs_to_move = fem.locate_dofs_topological(V,0,nodes_to_move)
+
      u_bc.vector.array[moved_dofs] += displacement.T.flatten()
      bc = fem.dirichletbc(u_bc,moved_nodes)
      
@@ -45,22 +55,149 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move):
      problem.solve()
      deformation_array = uh.x.array.reshape((-1, msh.geometry.dim))
      new_mesh_coords = msh.geometry.x[nodes_to_move, 0:2] + deformation_array[nodes_to_move,0:2]
+     
+     if get_deriv is True:
+          #TODO: compute only on boundary nodes (currenly computed, then restricted)
+          #TODO: compute entries other than 0,0
+          #compute deriv of interior disp w.r.t. boundary nodes
+          X = ufl.SpatialCoordinate(msh)
+          
+          # #THESE ARE SHAPE DERIVATIVES, not NODAL SENSITIVITIES
+          # duh_form = [[uh[idx1,idx2]*ufl.dx for idx1 in range(2)] for idx2 in range(2)]
+          # args = duh_form[0][0].arguments()
+          # n = max(a.number() for a in args) if args else -1
+          # du=ufl.Argument(V,n+1)
+          # duhdx_form = [[ufl.derivative(duh_form[idx1][idx2],X,du) for idx1 in range(2)] for idx2 in range(2)]
+          # duhdx = np.array([[fem.petsc.assemble_vector(fem.form(duhdx_form[idx1][idx2]))
+          #                     for idx1 in range(2)] for idx2 in range(2)])
+          
+          #assemble the unmodified stiffness matrix (prior to boundary condition application where rows/columns are zeroed out)
+          A = fem.petsc.assemble_matrix(fem.form(a))
+          A.assemble()
+          
+          dofs_to_move_is = PETSc.IS().createGeneral(dofs_to_move, comm=MPI.COMM_WORLD)
+          moved_dofs_is = PETSc.IS().createGeneral(moved_dofs, comm=MPI.COMM_WORLD)
 
-     # msh.geometry.x[:,0:2] += deformation_array
+          # Create submatrices
+          A_II = A.createSubMatrix(dofs_to_move_is, dofs_to_move_is)
+          A_IB = A.createSubMatrix(dofs_to_move_is, moved_dofs_is)
+                    
+          # Create the inverse matrix as a dense matrix
+          A_II_inv = PETSc.Mat().createDense(A_II.getSize())
+          A_II_inv.setUp()
+          A_II_inv.assemble()
 
-     # #plot mesh
-     # pyvista.global_theme.background = [255, 255, 255, 255]
-     # pyvista.global_theme.font.color = 'black'
-     # tdim = msh.topology.dim
-     # topology, cell_types, geometry = plot.vtk_mesh(msh, tdim)
-     # grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-     # plotter = pyvista.Plotter()
-     # plotter.add_mesh(grid, show_edges=True,opacity=0.25)
-     # plotter.view_xy()
-     # plotter.show_axes()
-     # plotter.show_bounds()
-     # if not pyvista.OFF_SCREEN:
-     #      plotter.show()
+          # Create vectors for solving
+          b = PETSc.Vec().createSeq(A_II.size[0])  # RHS vector
+          x = PETSc.Vec().createSeq(A_II.size[0])  # Solution vector
+
+          # Create a KSP solver
+          ksp = PETSc.KSP().create()
+          ksp.setOperators(A_II)
+          ksp.setType('preonly')  # Direct solve
+          ksp.getPC().setType('lu')  # LU decomposition
+
+          # Compute each column of the inverse
+          for i in range(A_II.size[0]):
+               b.set(0.0)  # Reset RHS
+               b[i] = 1.0  # Set the i-th standard basis vector
+               b.assemble()
+               
+               # Solve for the i-th column of the inverse
+               ksp.solve(b, x)
+               x.assemble()
+
+               # Insert the solution as the i-th column of A_inv
+               A_II_inv.setValues(range(A_II.size[0]), [i], x)  # Directly set the entire column
+               
+          A_II_inv.assemble()
+          # A_II_inv.view()
+          # print("these are some words....")
+          
+          # A_IB.view()
+          # print("these are also words....")
+          # A.view()
+
+          # for i in range(A_II.size[0]):
+          #      e = PETSc.Vec().createSeq(A_II.size[0])
+          #      e.setValue(i, 1.0)
+          #      e.assemble()
+          #      identity.setColumn(i, e)
+
+          # A_II_inv = PETSc.Mat().createDense([A_II.size[0], A_II.size[0]])
+          # A_II_inv.setUp()
+          # ksp = PETSc.KSP().create(MPI.COMM_WORLD)
+          # for i in range(A_II.size[0]):
+          #      rhs = identity.getColumnVector(i)
+          #      solution = A_II.createVecRight()
+          #      ksp.solve(rhs, solution)
+          #      A_II_inv.setColumn(i, solution)
+
+          # A_II_inv.assemble()
+
+          # Compute Jacobian: -A_II^-1 * A_IB
+          J = A_II_inv.matMult(A_IB)
+          J.scale(-1.0)
+          # print("These are nearly the same words...")
+          # J.view()
+          duhdx = J.getDenseArray()
+
+          # I = ufl.Identity(2)
+          # F = I+ufl.grad(uh)
+          # J = ufl.det(F) #this is the jacobian determinant, not the jacobian
+
+          # F[0,0]
+
+          # print("Jacobian ufl shape:",J.ufl_shape)
+          #NODAL SENSITIVIES:
+          #these are computed by interpolating a ufl expression for the derivative
+          #  of the displacements wrt to the nodal locations into the appropriate
+          #  function space. This is procedurally (software-wise) different from
+          #  the Gateaux derivatives used for the spatial derivatives.
+
+          #derivative of displacement w.r.t. mesh nodes
+          # grad_uh_ufl = ufl.grad(uh)
+
+          # grad_uh_ufl = ufl.derivative(uh[0]*ufl.dx,uh)
+
+          # grad_uh_form = fem.petsc.assemble_vector(fem.form(grad_uh_ufl))
+          
+          # #Construct expression to evalute
+          # Vd = fem.functionspace(msh,('CG',1,(2,2)))
+          # grad_uh = fem.Function(Vd)
+          # grad_uh.interpolate(fem.Expression(
+          #                     grad_uh_ufl,
+          #                     Vd.element.interpolation_points()
+          #                     ) )
+          
+          # points_on_proc,cells=get_pts_and_cells(msh,msh.geometry.x)
+          # duhdx = grad_uh.eval(points_on_proc,cells)
+          
+          
+
+          # all_dofs= 
+          # dofs_to_move = all_dofs[~np.isin(alldofs,moved_dofs)]
+
+          # duhdx = duhdx[:,:,dofs_to_move]
+
+          return new_mesh_coords,duhdx
+
+     if plot_result is True:
+          msh.geometry.x[:,0:2] += deformation_array
+
+          #plot mesh
+          pyvista.global_theme.background = [255, 255, 255, 255]
+          pyvista.global_theme.font.color = 'black'
+          tdim = msh.topology.dim
+          topology, cell_types, geometry = plot.vtk_mesh(msh, tdim)
+          grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+          plotter = pyvista.Plotter()
+          plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+          plotter.view_xy()
+          plotter.show_axes()
+          plotter.show_bounds()
+          if not pyvista.OFF_SCREEN:
+               plotter.show()
 
      return new_mesh_coords
 

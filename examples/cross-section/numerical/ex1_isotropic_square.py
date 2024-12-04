@@ -3,7 +3,7 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 50 #number of quad elements per side
+N = 25 #number of quad elements per side
 W = .1 #square height  
 H = .1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square

@@ -3,7 +3,7 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 5 #number of quad elements per side
+N = 3 #number of quad elements per side
 H = .1
 W= .1
 tf = 0.01
@@ -71,12 +71,12 @@ for i in range(6):
     # sensitivity_to_plot = squareXS.dKdx[3,3,:].reshape(-1,2)
     sensitivity_to_plot = np.zeros((geom.shape[0],2))
 
-    # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dSdx[i,i,:].reshape(-1,2)[squareXS.boundary_dofs,:]
-    sensitivity_to_plot[IXS.boundary_dofs,:] = IXS.dKdx[i,i,:].reshape(-1,2)[IXS.boundary_dofs,:]
+    # sensitivity_to_plot[squareXS.boundary_nodes,:] = squareXS.dSdx[i,i,:].reshape(-1,2)[squareXS.boundary_nodes,:]
+    sensitivity_to_plot[IXS.boundary_nodes,:] = IXS.dKdx[i,i,:].reshape(-1,2)[IXS.boundary_nodes,:]
 
-    # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dKdx[4,4,:]
+    # sensitivity_to_plot[squareXS.boundary_nodes,:] = squareXS.dKdx[4,4,:]
     # sensitivity_to_plot = squareXS.dKdx[0,0,:]
-    # sensitivity_to_plot[squareXS.boundary_dofs] = squareXS.dSdx[2,2,:]
+    # sensitivity_to_plot[squareXS.boundary_nodes] = squareXS.dSdx[2,2,:]
     sensitivity = np.concatenate([sensitivity_to_plot,np.zeros_like(sensitivity_to_plot)],axis=1)
 
     sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)

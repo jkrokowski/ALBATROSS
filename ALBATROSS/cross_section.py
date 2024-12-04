@@ -445,15 +445,15 @@ class CrossSection:
             #compute strains at x1=0
             #TODO: see if a "symmetric gradient" solves the issues
             gradubar=grad(ubar_mode)
-            # eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
-            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
-
-            gradu = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
+            eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
                             [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
                             [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+
+            # gradu = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
+            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
             
-            eps = 0.5 * (gradu + gradu.T)
+            # eps = 0.5 * (gradu + gradu.T)
             # eps = as_tensor([[uhat_mode[0],
             #                   0.5*(uhat_mode[1]+gradubar[0,0]),
             #                   0.5*(uhat_mode[2]+gradubar[0,1])],
@@ -488,9 +488,9 @@ class CrossSection:
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
-            T1 = assemble_scalar(form(((x[0]-0.05)*sigma13 - (x[1]-0.05)*sigma12)*dx))
-            M2 = assemble_scalar(form((x[1]-0.05)*sigma11*dx))
-            M3 = assemble_scalar(form(-(x[0]-0.05)*sigma11*dx))
+            T1 = assemble_scalar(form(((x[0])*sigma13 - (x[1])*sigma12)*dx))
+            M2 = assemble_scalar(form((x[1])*sigma11*dx))
+            M3 = assemble_scalar(form(-(x[0])*sigma11*dx))
 
             #THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
             mat[6,mode]=P1
@@ -755,35 +755,75 @@ class CrossSection:
         self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
                             for idx1 in range(6)] 
                                 for idx2 in range(6)]
-        self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
-                        for idx1 in range(6)] 
-                            for idx2 in range(6)])
-        # dK2dx11 = petsc.assemble_vector(form(self.dK2dx_form[0][0]))     
-        self.dK2dx = np.array([[petsc.assemble_vector(form(self.dK2dx_form[idx1][idx2]))
-                for idx1 in range(6)] 
-                    for idx2 in range(6)])
+        # self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
+        #                 for idx1 in range(6)] 
+        #                     for idx2 in range(6)])
+        # # dK2dx11 = petsc.assemble_vector(form(self.dK2dx_form[0][0]))     
+        # self.dK2dx = np.array([[petsc.assemble_vector(form(self.dK2dx_form[idx1][idx2]))
+        #         for idx1 in range(6)] 
+        #             for idx2 in range(6)])
         
+        self.dK1dx = [[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
+                        for idx1 in range(6)] 
+                            for idx2 in range(6)]
+        # dK2dx11 = petsc.assemble_vector(form(self.dK2dx_form[0][0]))     
+        self.dK2dx = [[petsc.assemble_vector(form(self.dK2dx_form[idx1][idx2]))
+                for idx1 in range(6)] 
+                    for idx2 in range(6)]
+
+        #TODO: np arrays are likely contributing to numerical inaccuracies
+        # different idea: flatten across the 36 stiffness matrix entries and use sparse matrices in petsc or scipy
+        #make dK2dx matrix:
+        import scipy.sparse as sp
+
+        def return_sparse_mat(l_of_l_of_vec):
+            flat_list = [vec for row in l_of_l_of_vec for vec in row]
+            sparse_list = []
+            for vec in flat_list:
+                sparse_list.append(sparseify(vec.array))
+            sparse_mat = sp.vstack(sparse_list)
+            return sparse_mat
+
+
+        self.dK1dx_sparse = return_sparse_mat(self.dK1dx)
+        self.dK2dx_sparse = return_sparse_mat(self.dK2dx)
+        
+        # K1inv_sparse = sparseify(self.K1inv.flatten())
+        # K1_sparse = sparseify(self.K1inv.flatten())
+        # K2_sparse = sparseify(self.K2.flatten())
+
+        #try to zero out the near zero entries
+        self.K1inv = sparseify(self.K1inv).toarray()
+        self.K1 = sparseify(self.K1).toarray()
+        self.K2 = sparseify(self.K2).toarray()
+
+
+
         #boundary dofs ([:,:,self.boundary_dofs])
         self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         
+        
+
         #use chain rule for derivative of flexibility matrix dSdx:
         #first term of dSdx
-        self.dK1invT = -np.einsum('ijk,ij->ijk',
+        self.dK1invT = -np.einsum('ijk,jl->ilk',
                              self.K1inv.T @ self.dK1dx.transpose(1,0,2),
                                self.K1inv.T @ self.K2 @ self.K1inv ) 
         #second term of dSdx
-        self.dK2 = np.einsum('ijk,ij->ijk',
+        self.dK2 = np.einsum('ijk,jl->ilk',
                         self.K1inv.T@self.dK2dx,
                         self.K1inv)
         
         #third term of dSdx
-        self.dK1inv = -np.einsum('ijk,ij->ijk',
+        self.dK1inv = -np.einsum('ijk,jl->ilk',
                             self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
                               self.K1inv)
-
+    
         #add terms to get dSdx
         self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
-        
+        # self.dSdx = self.dK1inv.transpose(1,0,2) + self.dK2 + self.dK1inv
+        # self.dSdx = self.dK2 + 2*self.dK1inv
+
         # #APPROACH TO LIMIT MATRIX MULTIPLICATIONS:
         # #use chain rule for derivative of flexibility matrix dSdx:
         # #first term of dSdx
@@ -824,7 +864,7 @@ class CrossSection:
         #                         self.K @ self.dSdx,
         #                         self.K)
         
-        self.dKdx = - np.einsum('ijk,ij->ijk',
+        self.dKdx = - np.einsum('ijk,jl->ilk',
                                 self.K @ self.dSdx,
                                 self.K)
         
