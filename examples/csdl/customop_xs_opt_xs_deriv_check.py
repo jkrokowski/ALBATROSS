@@ -188,3 +188,13 @@ print('norms:')
 print(np.linalg.norm(dKdx_FD))
 print(np.linalg.norm(dKdx))
 print(np.linalg.norm(diff))
+
+print('main diagonal entries:')
+print('dKdx(FD)[0,0]:  ', dKdx_FD[0,:])
+print('dKdx(FD)[1,1]:  ', dKdx_FD[7,:])
+print('dKdx(FD)[2,2]:  ', dKdx_FD[14,:])
+print('dKdx(FD)[3,3]:  ', dKdx_FD[21,:])
+print('dKdx(FD)[4,4]:  ', dKdx_FD[28,:])
+print('dKdx(FD)[5,5]:  ', dKdx_FD[35,:])
+
+print()

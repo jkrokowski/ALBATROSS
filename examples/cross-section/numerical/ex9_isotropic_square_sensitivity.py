@@ -3,7 +3,7 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 25 #number of quad elements per side
+N = 10 #number of quad elements per side
 W = 1 #square height  
 H = 1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
@@ -19,7 +19,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
-squareXS.plot_mesh()
+# squareXS.plot_mesh()
 
 #compute the stiffness matrix
 squareXS.get_xs_stiffness_matrix()
@@ -77,10 +77,10 @@ for i in range(6):
     sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)
 
     grids[i].point_data["sensitivity"] = sensitivity
-    # warped.append(grids[i].warp_by_vector("sensitivity",factor=.00001))
+    warped.append(grids[i].warp_by_vector("sensitivity",factor=.00001))
     # plotter.add_mesh(warped,show_edges=True,opacity=0.5)
     plotter.add_mesh(grids[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
-    # plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
+    plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
     plotter.add_text(f'dK/dx({i},{i})')
     plotter.view_xy()
     # plotter.show_bounds()

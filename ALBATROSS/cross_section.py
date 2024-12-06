@@ -387,7 +387,7 @@ class CrossSection:
         #perform matrix multiplication implicitly to construct orthogonal nullspace basis
         self.sols = sparseqr.qmult(QR,X)
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
-        self.sols = self.sparse_sols.toarray()
+        # self.sols = self.sparse_sols.toarray()
 
     def _decouple_modes(self,basis_matrix_only=False):
         #this is a change of basis operation from the standard R^12 basis to
@@ -431,9 +431,9 @@ class CrossSection:
             # mat[0,mode]=assemble_scalar(form(ubar_mode[0]*dx))/self.A
             # mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))/self.A
             # mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))/self.A
-            u0_avg=assemble_scalar(form(ubar_mode[0]*dx))
-            u1_avg=assemble_scalar(form(ubar_mode[1]*dx))
-            u2_avg=assemble_scalar(form(ubar_mode[2]*dx))
+            u0_avg=assemble_scalar(form(ubar_mode[0]*dx))/self.A
+            u1_avg=assemble_scalar(form((ubar_mode[1]-x[0])*dx))/self.A
+            u2_avg=assemble_scalar(form((ubar_mode[2]-x[1])*dx))/self.A
             mat[0,mode]=u0_avg
             mat[1,mode]=u1_avg
             mat[2,mode]=u2_avg
@@ -443,14 +443,31 @@ class CrossSection:
             u2=ubar_mode[2]-u2_avg
 
             #SECOND THREE ROWS : AVERAGE ROTATION (COMPUTED USING UBAR x Xi, WHERE X1=0, X2,XY=Y,Z)
-            mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
-            mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))
-            mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))
+            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
+            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))
+            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))
             
-            
-            # mat[3,mode]=assemble_scalar(form(((u2*(x[0])-u1*(x[1]))*dx)))
-            # mat[4,mode]=assemble_scalar(form(((u0*(x[1]))*dx)))
-            # mat[5,mode]=assemble_scalar(form(((-u0*(x[0]))*dx)))
+            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2)+(x[0]**2))*dx))
+            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))/assemble_scalar(form((x[1]**2)*dx))
+            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))/assemble_scalar(form((x[0]**2)*dx))
+
+            u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2)+(x[1]**2))*dx))
+            u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))/assemble_scalar(form((x[1]**2)*dx))
+            u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))/assemble_scalar(form((x[0]**2)*dx))
+
+            mat[3,mode]=u0_rot
+            mat[4,mode]=u1_rot
+            mat[5,mode]=u2_rot
+
+            u0=ubar_mode[0]-u0_avg-u0_rot
+            u1=ubar_mode[1]-u1_avg-u1_rot
+            u2=ubar_mode[2]-u2_avg-u2_rot
+
+            # mat[3,mode]=assemble_scalar(form(((u2*(x[0])-u1*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2+x[1]**2)*dx)))
+            # mat[4,mode]=assemble_scalar(form(((u0*(x[1]))*dx)))/assemble_scalar(form(((x[1]**2)*dx)))
+            # mat[5,mode]=assemble_scalar(form(((-u0*(x[0]))*dx)))/assemble_scalar(form(((x[0]**2)*dx)))
+
+
             # CONSTRUCT STRESSES FOR LAST SIX ROWS
 
             # uhat0_avg=assemble_scalar(form(uhat_mode[0]*dx))
@@ -461,11 +478,37 @@ class CrossSection:
             # uhat2 = uhat_mode[2]-uhat2_avg
 
             #compute strains at x1=0
-            #TODO: see if a "symmetric gradient" solves the issues
-            gradubar=grad(ubar_mode)
-            eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
-                            [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-                            [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
+            #TODO: NEED TO CHECK THIS SETUP THOROUGHLY BASICALLY, THE AVERAGE STRESSES NEED TO BE 
+            # COMPUTED AND THESE FEED INTO THE AXIAL AND SHEAR VALUES.
+            # THEN, THE 
+            # gradubar=grad(ubar_mode)
+            gradubar=grad(as_tensor([u0,u1,u2]))
+
+            #derivatives of displacement
+            #this is know from our displacement expression
+            dubxdx = uhat_mode[0]
+            dubxdy = gradubar[0,0]
+            dubxdz = gradubar[0,1]
+            dubydx = uhat_mode[1]
+            dubydy = gradubar[1,0]
+            dubydz = gradubar[1,1]
+            dubzdx = uhat_mode[2]
+            dubzdy = gradubar[2,0]
+            dubzdz = gradubar[2,1]
+
+            #form ufl displacement for grad(u_i)
+            gradu = as_tensor([[dubxdx,dubxdy,dubxdz],
+                            [dubydx,dubydy,dubydz],
+                            [dubzdx,dubzdy,dubzdz]])
+            
+            # eps = gradu
+            
+            #ensure that strains are symmetric
+            eps = 0.5 * (gradu + gradu.T)
+
+            # eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
+            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
+            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
 
             # eps = as_tensor([[uhat0,uhat1,uhat2],
             #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
@@ -481,43 +524,25 @@ class CrossSection:
             
             # eps = 0.5 * (gradu + gradu.T)
             
-            # eps = as_tensor([[uhat_mode[0],
-            #                   0.5*(uhat_mode[1]+gradubar[0,0]),
-            #                   0.5*(uhat_mode[2]+gradubar[0,1])],
-            #                 [0.5*(gradubar[0,0]+uhat_mode[1]),
-            #                  gradubar[1,0],
-            #                  0.5*(gradubar[2,0]+gradubar[1,1])],
-            #                 [0.5*(gradubar[0,1]+uhat_mode[2]),
-            #                  0.5*(gradubar[1,1]+gradubar[2,0]),
-            #                  gradubar[2,1]]])
-
-            # eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
-            #                 [gradubar[0,0],
-            #                  0.5*( gradubar[1,0] + gradubar[0,1]) ,
-            #                  gradubar[2,0] ],
-            #                 [0.5*(gradubar[0,1]+gradubar[1,0]),
-            #                  gradubar[1,1],
-            #                  gradubar[2,1]]])
-            
             # construct strain and stress tensors based on u_sol
             sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
 
             #relevant components of stress tensor
             sigma11 = sigma[0,0]
-            sigma12 = sigma[0,1]
-            sigma13 = sigma[0,2]
+            # sigma12 = sigma[0,1]
+            # sigma13 = sigma[0,2]
             # sigma12 = sigma[1,0]
             # sigma13 = sigma[2,0]
-            # sigma12 = 0.5*(sigma[0,1] + sigma[1,0])
-            # sigma13 = 0.5*(sigma[0,2] + sigma[2,0])
+            sigma12 = 0.5*(sigma[0,1] + sigma[1,0])
+            sigma13 = 0.5*(sigma[0,2] + sigma[2,0])
 
             #integrate stresses over cross-section at "root" of beam and construct xs load vector
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
-            T1 = assemble_scalar(form(((x[0])*sigma13 - (x[1])*sigma12)*dx))
-            M2 = assemble_scalar(form((x[1])*sigma11*dx))
-            M3 = assemble_scalar(form(-(x[0])*sigma11*dx))
+            T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
+            M2 = assemble_scalar(form((x[1])*(sigma11)*dx))
+            M3 = assemble_scalar(form((-x[0])*(sigma11)*dx))
 
             #THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
             mat[6,mode]=P1
@@ -618,9 +643,9 @@ class CrossSection:
         P1 = sigma11_c*dx
         V2 = sigma12_c*dx
         V3 = sigma13_c*dx
-        T1 = -((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
-        M2 = -(x[1])*sigma11_c*dx
-        M3 = (x[0])*sigma11_c*dx
+        T1 = ((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
+        M2 = (x[1])*sigma11_c*dx
+        M3 = -(x[0])*sigma11_c*dx
 
         #store loads in a list instead of a ufl vector as we cannot take 
         # variable derivatives of non-scalar forms
@@ -631,24 +656,30 @@ class CrossSection:
         Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
 
         # differentiation the constructed form construction
-        self.K1_form = [[diff(P[idx1],c[idx2]) for idx1 in range(6)] 
-                        for idx2 in range(6)]
-        self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx1 in range(6)]
-                        for idx2 in range(6)]
+        self.K1_form = [[diff(P[idx1],c[idx2]) for idx2 in range(6)] 
+                        for idx1 in range(6)]
+        self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx2 in range(6)]
+                        for idx1 in range(6)]
         
         #assemble the K1 and K2 matrices
         self.K1 = np.array([[assemble_scalar(form(self.K1_form[idx1][idx2]))
-                     for idx1 in range(6)] 
-                        for idx2 in range(6)])
+                     for idx2 in range(6)] 
+                        for idx1 in range(6)])
         self.K2 = np.array([[assemble_scalar(form(self.K2_form[idx1][idx2]))
-                     for idx1 in range(6)] 
-                        for idx2 in range(6)])
+                     for idx2 in range(6)] 
+                        for idx1 in range(6)])
+        
+        self.K1 = sparseify(self.K1).toarray()
+        self.K2 = sparseify(self.K2).toarray()
         
         #store K1^-1 for recovery and sensitivity computation
         self.K1inv = np.linalg.inv(self.K1)
-        
+        self.K1inv = sparseify(self.K1inv).toarray()
+
         #compute Flexibility matrix
         self.S = self.K1inv.T@self.K2@self.K1inv
+
+        self.S = sparseify(self.S).toarray()
         
         #invert Flexibility matrix to find beam constitutive matrix
         self.K = np.linalg.inv(self.S)
@@ -777,11 +808,11 @@ class CrossSection:
         du = Argument(self.VX,n+1)
         # du = Argument(self.VX,0) #there are no arguments in any of these forms?
         self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du)
-                            for idx1 in range(6)] 
-                                for idx2 in range(6)]
+                            for idx2 in range(6)] 
+                                for idx1 in range(6)]
         self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
-                            for idx1 in range(6)] 
-                                for idx2 in range(6)]
+                            for idx2 in range(6)] 
+                                for idx1 in range(6)]
         # self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
         #                 for idx1 in range(6)] 
         #                     for idx2 in range(6)])
@@ -790,12 +821,11 @@ class CrossSection:
         #             for idx2 in range(6)])
         
         self.dK1dx = [[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
-                        for idx1 in range(6)] 
-                            for idx2 in range(6)]
-        # dK2dx11 = petsc.assemble_vector(form(self.dK2dx_form[0][0]))     
+                        for idx2 in range(6)] 
+                            for idx1 in range(6)]
         self.dK2dx = [[petsc.assemble_vector(form(self.dK2dx_form[idx1][idx2]))
-                for idx1 in range(6)] 
-                    for idx2 in range(6)]
+                for idx2 in range(6)] 
+                    for idx1 in range(6)]
 
         #TODO: np arrays are likely contributing to numerical inaccuracies
         # different idea: flatten across the 36 stiffness matrix entries and use sparse matrices in petsc or scipy
@@ -828,32 +858,59 @@ class CrossSection:
         #boundary dofs ([:,:,self.boundary_dofs])
         self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         
-        #TODO: need to confirm that these einsums are computing what we want them to
+        # #TODO: need to confirm that these einsums are computing what we want them to
+        # #ARCHIVAL:
+        # self.dK1invT = -np.einsum('ijk,jl->ilk',
+        #                      self.K1inv.T @ self.dK1dx.transpose(1,0,2),
+        #                        self.K1inv.T @ self.K2 @ self.K1inv ) 
+        # #second term of dSdx
+        # self.dK2 = np.einsum('ijk,jl->ilk',
+        #                 self.K1inv.T@self.dK2dx,
+        #                 self.K1inv)
+        
+        # #third term of dSdx
+        # self.dK1inv = -np.einsum('ijk,jl->ilk',
+        #                     self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
+        #                       self.K1inv)
+        # #END ARCHIVAL
 
         #use chain rule for derivative of flexibility matrix dSdx:
         #first term of dSdx
+
+        dK1invT_dK1dx= np.einsum('ij,kjl->ikl',
+                                 self.K1inv.T,
+                                   self.dK1dx)
         self.dK1invT = -np.einsum('ijk,jl->ilk',
-                             self.K1inv.T @ self.dK1dx.transpose(1,0,2),
-                               self.K1inv.T @ self.K2 @ self.K1inv ) 
+                             dK1invT_dK1dx,
+                               self.S ) 
         #second term of dSdx
+        K1invT_dK2dx = np.einsum('ij,jkl->ikl',
+                        self.K1inv.T,
+                        self.dK2dx)
         self.dK2 = np.einsum('ijk,jl->ilk',
-                        self.K1inv.T@self.dK2dx,
+                        K1invT_dK2dx,
                         self.K1inv)
         
         #third term of dSdx
+        S_dK1dx = np.einsum('ij,jkl->ikl',
+                            self.S,
+                            self.dK1dx)
         self.dK1inv = -np.einsum('ijk,jl->ilk',
-                            self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx.transpose(1,0,2),
+                            S_dK1dx,
                               self.K1inv)
     
         #add terms to get dSdx
-        # self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
+        self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
         # self.dSdx = self.dK1inv.transpose(1,0,2) + self.dK2 + self.dK1inv
         # self.dSdx = self.dK2 + 2*self.dK1inv
+        # self.dSdx = -self.dK2 
         # self.dSdx = self.dK2 
         # self.dSdx = self.dK1inv
         # self.dSdx = self.dK1invT
-        self.dSdx = self.dK1dx
-
+        # self.dSdx = self.dK1dx
+        # self.dSdx = self.dK2dx
+        # self.dSdx = -self.dK1inv-self.dK1invT.transpose(1,0,2)
+        # self.dSdx = 2*self.dK1invT
 
         # #APPROACH TO LIMIT MATRIX MULTIPLICATIONS:
         # #use chain rule for derivative of flexibility matrix dSdx:
@@ -894,9 +951,11 @@ class CrossSection:
         # self.dKdx = - np.einsum('ijk,ij->ijk',
         #                         self.K @ self.dSdx,
         #                         self.K)
-        
+        K_dSdx = np.einsum('ij,jkl->ikl',
+                           self.K,
+                           self.dSdx)
         self.dKdx = - np.einsum('ijk,jl->ilk',
-                                self.K @ self.dSdx,
+                                K_dSdx,
                                 self.K)
         
         #get map from vtx to dofs to restrict to boundary
@@ -912,6 +971,7 @@ class CrossSection:
         boundary_indices = []
         for i in self.boundary_nodes:
             boundary_indices.extend(list(np.where(self.boundary_dof_to_vertex_map==i)[0]))
+        
         self.dKdx_boundary = self.dKdx[:,:,boundary_indices]
 
     def compute_xs_stiffness_matrix_sensitivities_EB(self):
@@ -1087,7 +1147,7 @@ class CrossSection:
             plotter.add_mesh(warped[i],show_edges=True,opacity=.9)
             plotter.add_mesh(grids[i],show_edges=True,opacity=.5,scalar_bar_args={'title': f'warping mode {i}'})
             plotter.add_text(mode[i])
-            plotter.view_isometric()
+            plotter.view_xy()
             plotter.show_bounds()
             
 

@@ -194,8 +194,8 @@ def project(v, target_func, bcs=[]):
     solver.solve(b, target_func.vector)
 
 def sparseify(mat,sparse_format='csr'):
-     # lim = np.finfo(float).eps # this is the numpy precision
-     lim = 1e-10 #choosing a slightly more conservative value 
+     lim = 2*np.finfo(float).eps # this is the numpy precision
+     # lim = 1e-10 #choosing a slightly more conservative value 
      mat.real[abs(mat.real) < lim] = 0.0
      if sparse_format == 'csc':
           return csc_matrix(mat)

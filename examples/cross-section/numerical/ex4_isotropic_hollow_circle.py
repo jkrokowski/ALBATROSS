@@ -4,9 +4,9 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-radius = 1
-wall_thickness = 0.1
-num_el = 3 #number of elements through wall thickness
+radius = .1
+wall_thickness = 0.01
+num_el = 4 #number of elements through wall thickness
 
 domain = ALBATROSS.mesh.create_hollow_circle(radius,wall_thickness,num_el,'hollow_circle')
 
