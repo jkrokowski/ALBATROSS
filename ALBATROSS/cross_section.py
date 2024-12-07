@@ -432,36 +432,210 @@ class CrossSection:
             # mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))/self.A
             # mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))/self.A
             u0_avg=assemble_scalar(form(ubar_mode[0]*dx))/self.A
-            u1_avg=assemble_scalar(form((ubar_mode[1]-x[0])*dx))/self.A
-            u2_avg=assemble_scalar(form((ubar_mode[2]-x[1])*dx))/self.A
+            u1_avg=assemble_scalar(form((ubar_mode[1])*dx))/self.A
+            u2_avg=assemble_scalar(form((ubar_mode[2])*dx))/self.A
             mat[0,mode]=u0_avg
             mat[1,mode]=u1_avg
             mat[2,mode]=u2_avg
 
-            u0=ubar_mode[0]-u0_avg
-            u1=ubar_mode[1]-u1_avg
-            u2=ubar_mode[2]-u2_avg
+            u0_t=ubar_mode[0]-u0_avg
+            u1_t=ubar_mode[1]-u1_avg
+            u2_t=ubar_mode[2]-u2_avg
 
             #SECOND THREE ROWS : AVERAGE ROTATION (COMPUTED USING UBAR x Xi, WHERE X1=0, X2,XY=Y,Z)
-            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
-            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))
-            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))
-            
-            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2)+(x[0]**2))*dx))
-            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))/assemble_scalar(form((x[1]**2)*dx))
-            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))/assemble_scalar(form((x[0]**2)*dx))
+            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0]-u0_avg)-ubar_mode[1]*(x[1]-u1_avg))*dx)))
+            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]-u1_avg))*dx)))
+            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u0_avg))*dx)))
 
-            u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2)+(x[1]**2))*dx))
-            u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))/assemble_scalar(form((x[1]**2)*dx))
-            u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))/assemble_scalar(form((x[0]**2)*dx))
+            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0]-u0_avg)-ubar_mode[1]*(x[1]-u1_avg))*dx)))
+            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]-u1_avg))*dx)))
+            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u0_avg))*dx)))
+
+            # RGB = as_tensor([[ 0,  0,  1],
+            #                  [ 1,  0,  0],
+            #                  [ 0,  1, 0]])
+            x_vec = as_tensor([0,x[0],x[1]])
+            u_avg = as_tensor([u0_avg,u1_avg,u2_avg])
+
+            # x_vec = as_tensor([-x[0]+x[1],x[0],x[1]])
+            ubar_t = as_tensor([u0_t,u1_t,u2_t])
+            # ubar_t = as_tensor([0,u1_t,u2_t])
+
+            u_c = ufl.cross(ubar_mode,x_vec)
+            
+            normie = assemble_scalar(form(inner(ubar_mode,ubar_mode)*dx))
+            c_0  = assemble_scalar(form(u_c[0]*dx))/ normie
+            c_1  = assemble_scalar(form(u_c[1]*dx))/ normie
+            c_2  = assemble_scalar(form(u_c[2]*dx))/ normie
+
+            c = as_tensor([c_0,c_1,c_2])
+
+            # u_rot = ufl.cross(ubar_mode,x_vec-c)
+            u_rot = ufl.cross(ubar_mode,x_vec)
+
+
+            # mat[3,mode]=c_0
+            # mat[4,mode]=c_1
+            # mat[5,mode]=c_2
+            # #skew-symmetrix tensor
+            # w = as_tensor([[0,-x[0],x[1]],
+            #                [x[1],0,0],
+            #                [-x[0],0,0]])
+            
+            # wx = as_tensor([[0,0,0],
+            #                [0,0,1],
+            #                [0,-1,0]])
+            
+            # wy = as_tensor([[0,0,1],
+            #                [0,0,0],
+            #                [-1,0,0]])
+            
+            # wz = as_tensor([[0,-1,0],
+            #                [1,0,0],
+            #                [0,0,0]])
+
+            # ubar_rotx=as_tensor(ubar_t[i]*wx[i,j],(j))
+            # ubar_roty=as_tensor(ubar_t[i]*wy[i,j],(j))
+            # ubar_rotz=as_tensor(ubar_t[i]*wz[i,j],(j))
+            # ubar_rot_tot = ufl.cross(ubar_rotx + ubar_roty + ubar_rotz,x_vec)
+
+            # u0_rot=assemble_scalar(form(ubar_rot_tot[0]*dx))
+            # u1_rot=assemble_scalar(form(ubar_rot_tot[1]*dx))
+            # u2_rot=assemble_scalar(form(ubar_rot_tot[2]*dx))
+
+            
+            # u0_rot=assemble_scalar(form((inner(ubar_rotx,x_vec)*dx)))
+            # u1_rot=assemble_scalar(form((inner(ubar_roty,x_vec)*dx)))
+            # u2_rot=assemble_scalar(form((inner(ubar_rotz,x_vec)*dx)))
+
+
+            # u_rot = ufl.cross(ubar_mode,x_vec)
+            # u_rot = ufl.cross(ubar_t,x_vec)
+            # u_rot = ufl.cross(x_vec,ubar_t)
+            # u_rot = ufl.cross(ubar_t,w)
+
+            # u0_rot=assemble_scalar(form(((u_rot[0])*dx)))
+            # u1_rot=assemble_scalar(form(((u_rot[1])*dx)))
+            # u2_rot=assemble_scalar(form(((u_rot[2])*dx)))
+
+            u0_rot=assemble_scalar(form(((u_rot[0])*dx))) / normie
+            u1_rot=assemble_scalar(form(((u_rot[1])*dx))) / normie
+            u2_rot=assemble_scalar(form(((u_rot[2])*dx))) / normie
 
             mat[3,mode]=u0_rot
             mat[4,mode]=u1_rot
             mat[5,mode]=u2_rot
 
-            u0=ubar_mode[0]-u0_avg-u0_rot
-            u1=ubar_mode[1]-u1_avg-u1_rot
-            u2=ubar_mode[2]-u2_avg-u2_rot
+            # u0_rot=assemble_scalar(form(((u_rot[0]-u_rot[1])*dx)))
+            # u1_rot=assemble_scalar(form(((u_rot[2]-u_rot[0])*dx)))
+            # u2_rot=assemble_scalar(form(((u_rot[1]-u_rot[2])*dx)))
+
+            # u0_rot=assemble_scalar(form(((-x[0])*dx)))
+            # u1_rot=assemble_scalar(form(((x[1])*dx)))
+            # u2_rot=assemble_scalar(form(((x[0]-x[1])*dx)))
+
+            # u0_rot=assemble_scalar(form(((u_rot[0])*dx)))/np.sqrt(assemble_scalar(form(inner(ubar_t,ubar_t)*dx)))
+            # u1_rot=assemble_scalar(form(((u_rot[1])*dx)))/np.sqrt(assemble_scalar(form(inner(ubar_t,ubar_t)*dx)))
+            # u2_rot=assemble_scalar(form(((u_rot[2])*dx)))/np.sqrt(assemble_scalar(form(inner(ubar_t,ubar_t)*dx)))
+
+            # u0_rot=assemble_scalar(form(((u_rot[2]-u_rot[1])*dx)))
+            # u1_rot=assemble_scalar(form(((u_rot[0])*dx)))
+            # u2_rot=assemble_scalar(form(((-u_rot[0])*dx)))
+
+            # u0_rot=assemble_scalar(form((inner(ubar_t,x_vec)*dx)))/assemble_scalar(form((inner(x_vec,x_vec)*dx)))
+            # u1_rot=assemble_scalar(form((inner(ubar_t,x_vec)*dx)))/assemble_scalar(form((inner(x_vec,x_vec)*dx)))
+            # u2_rot=assemble_scalar(form((inner(ubar_t,x_vec)*dx)))/assemble_scalar(form((inner(x_vec,x_vec)*dx)))
+
+            # v0=as_tensor([0,-x[0],x[1]])
+            # v1=as_tensor([0,0,x[1]])
+            # v2=as_tensor([0,-x[0],0])
+
+            # u0_rot=assemble_scalar(form((inner(ubar_t,v0)*dx)))/assemble_scalar(form((inner(v0,v0)*dx)))
+            # u1_rot=assemble_scalar(form((inner(ubar_t,v1)*dx)))/assemble_scalar(form((inner(v1,v1)*dx)))
+            # u2_rot=assemble_scalar(form((inner(ubar_t,v2)*dx)))/assemble_scalar(form((inner(v2,v2)*dx)))
+            
+            # u0_rot=assemble_scalar(form((inner(ufl.cross(ubar_t,x_vec),ufl.cross(ubar_t,x_vec))*dx)))
+            # u1_rot=assemble_scalar(form((inner(ubar_t,v1)*dx)))
+            # u2_rot=assemble_scalar(form((inner(ubar_t,v2)*dx)))
+
+            # u0_rot=assemble_scalar(form(((u_rot[0]*(x[0])-u_rot[0]*(x[1]))*dx)))
+            # u1_rot=assemble_scalar(form((u_rot[1]*(x[0])-u_rot[1]*(x[1]))*dx))
+            # u2_rot=assemble_scalar(form((u_rot[2]*(x[0])+u_rot[2]*(x[1]))*dx))
+            
+            # u0_rot=assemble_scalar(form(((u_rot[2]-u_rot[1])*dx)))
+            # u1_rot=assemble_scalar(form((u_rot[0])*dx))
+            # u2_rot=assemble_scalar(form((-u_rot[0])*dx))
+            
+            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
+            # # u0_rot=assemble_scalar(form(((ufl.sqrt(ubar_mode[1]**2+ubar_mode[2]**2)*(x[0]))
+            # #                              -(ufl.sqrt(ubar_mode[1]**2+ubar_mode[2]**2)*(x[1])))*dx))
+            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))
+            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))
+            
+            # u0_rot=assemble_scalar(form(((u2_t*(x[0])-u1_t*(x[1]))*dx)))
+            # u1_rot=assemble_scalar(form(((u0_t*(x[1]))*dx)))
+            # u2_rot=assemble_scalar(form(((-u0_t*(x[0]))*dx)))
+
+            # u0_rot=assemble_scalar(form(((ubar_mode[2]-ubar_mode[1])*dx)))
+            # u1_rot=assemble_scalar(form(ubar_mode[0]*dx))
+            # u2_rot=assemble_scalar(form(-ubar_mode[0]*dx))
+
+            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2)+(x[0]**2))*dx))
+            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))/assemble_scalar(form((x[1]**2)*dx))
+            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))/assemble_scalar(form((x[0]**2)*dx))
+
+            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2)+(x[1]**2))*dx))
+            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))/assemble_scalar(form((x[1]**2)*dx))
+            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))/assemble_scalar(form((x[0]**2)*dx))
+
+            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0]-u0_avg)-ubar_mode[1]*(x[1]-u1_avg))*dx)))
+            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]-u1_avg))*dx)))
+            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u0_avg))*dx)))
+
+            # u0_rot=assemble_scalar(form(((u2_t*(x[0]-u0_avg)-u1_t*(x[1]-u1_avg))*dx)))
+            # u1_rot=assemble_scalar(form(((u0_t*(x[1]-u1_avg))*dx)))
+            # u2_rot=assemble_scalar(form(((-u0_t*(x[0]-u0_avg))*dx)))
+
+            # u0_rot=assemble_scalar(form(((u2_t*(x[0]-u1_avg)-u1_t*(x[1]-u2_avg))*dx)))
+            # u1_rot=assemble_scalar(form(((u0_t*(x[1]-u2_avg))*dx)))
+            # u2_rot=assemble_scalar(form(((-u0_t*(x[0]-u1_avg))*dx)))
+
+            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0]-u1_avg)+ubar_mode[1]*(x[1]-u2_avg))*dx)))
+            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]-u2_avg)-ubar_mode[2]*(-u0_avg))*dx)))
+            # u2_rot=assemble_scalar(form(((-ubar_mode[1]*(-u2_avg)-ubar_mode[0]*(x[0]-u1_avg))*dx)))
+
+            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0]-u1_avg)-ubar_mode[1]*(x[1]-u2_avg))*dx)))
+            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]-u2_avg))*dx)))
+            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u1_avg))*dx)))
+
+            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0]-u1_avg)-ubar_mode[1]*(x[1]-u2_avg))*dx)))
+            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]-u2_avg))*dx)))
+            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u1_avg))*dx)))
+
+            # u0=ubar_mode[0]-u0_avg-(-u2_rot*x[1]+u1_rot*x[0])
+            # u1=ubar_mode[1]-u1_avg-(u0_rot*x[1])
+            # u2=ubar_mode[2]-u2_avg-(-u0_rot*x[1])
+            
+            # u0=ubar_mode[0]-(-u2_rot*x[1]+u1_rot*x[0])
+            # u1=ubar_mode[1]-(u0_rot*x[1])
+            # u2=ubar_mode[2]-(-u0_rot*x[0])
+
+            # mat[3,mode]=u0_rot
+            # mat[4,mode]=u1_rot
+            # mat[5,mode]=u2_rot
+
+            # mat[3,mode]=u0_avg-(-u2_rot+u1_rot)
+            # mat[4,mode]=u1_avg-u0_rot
+            # mat[5,mode]=u2_avg-(-u0_rot)
+
+            # mat[3,mode]=-u2_rot+u1_rot
+            # mat[4,mode]=u0_rot
+            # mat[5,mode]=-u0_rot
+
+            #need to compute ubar with rigid body rotations and translations filtered out:
+            # u0=ubar_mode[0]-u0_avg-(-u2_rot+u1_rot)
+            # u1=ubar_mode[1]-u1_avg-u0_rot
+            # u2=ubar_mode[2]-u2_avg-(-u0_rot)
 
             # mat[3,mode]=assemble_scalar(form(((u2*(x[0])-u1*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2+x[1]**2)*dx)))
             # mat[4,mode]=assemble_scalar(form(((u0*(x[1]))*dx)))/assemble_scalar(form(((x[1]**2)*dx)))
@@ -481,8 +655,8 @@ class CrossSection:
             #TODO: NEED TO CHECK THIS SETUP THOROUGHLY BASICALLY, THE AVERAGE STRESSES NEED TO BE 
             # COMPUTED AND THESE FEED INTO THE AXIAL AND SHEAR VALUES.
             # THEN, THE 
-            # gradubar=grad(ubar_mode)
-            gradubar=grad(as_tensor([u0,u1,u2]))
+            gradubar=grad(ubar_mode)
+            # gradubar=grad(as_tensor([u0,u1,u2]))
 
             #derivatives of displacement
             #this is know from our displacement expression
@@ -529,20 +703,36 @@ class CrossSection:
 
             #relevant components of stress tensor
             sigma11 = sigma[0,0]
-            # sigma12 = sigma[0,1]
-            # sigma13 = sigma[0,2]
+            sigma12 = sigma[0,1]
+            sigma13 = sigma[0,2]
             # sigma12 = sigma[1,0]
             # sigma13 = sigma[2,0]
-            sigma12 = 0.5*(sigma[0,1] + sigma[1,0])
-            sigma13 = 0.5*(sigma[0,2] + sigma[2,0])
+            # sigma12 = 0.5*(sigma[0,1] + sigma[1,0])
+            # sigma13 = 0.5*(sigma[0,2] + sigma[2,0])
 
             #integrate stresses over cross-section at "root" of beam and construct xs load vector
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
-            V3 = assemble_scalar(form(sigma13*dx))
+            V3 = assemble_scalar(form(-sigma13*dx))
             T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
             M2 = assemble_scalar(form((x[1])*(sigma11)*dx))
-            M3 = assemble_scalar(form((-x[0])*(sigma11)*dx))
+            M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))
+            # T1 = assemble_scalar(form( (((x[0]-u0_avg-u0_rot)*(sigma13)) - ((x[1]-u1_avg-u1_rot)*(sigma12)))*dx))
+            # M2 = assemble_scalar(form((x[1]-u1_avg-u1_rot)*(sigma11)*dx))
+            # M3 = assemble_scalar(form(-(x[0]-u0_avg-u0_rot)*(sigma11)*dx))
+            # T1 = assemble_scalar(form( (((x[0]-u1_avg-u1_rot)*(sigma13)) - ((x[1]-u2_avg-u2_rot)*(sigma12)))*dx))
+            # M2 = assemble_scalar(form((x[1]-u2_avg-u2_rot)*(sigma11)*dx))
+            # M3 = assemble_scalar(form(-(x[0]-u1_avg-u1_rot)*(sigma11)*dx))
+            # T1 = assemble_scalar(form( (((x[0]-u1_avg)*(sigma13)) - ((x[1]-u2_avg)*(sigma12)))*dx))
+            # M2 = assemble_scalar(form((x[1]-u2_avg)*(sigma11)*dx))
+            # M3 = assemble_scalar(form(-(x[0]-u1_avg)*(sigma11)*dx))
+            # T1 = assemble_scalar(form( (((x[0]-u1_avg)*(sigma13)) - ((x[1]-u2_avg)*(sigma12)))*dx))
+            # M2 = assemble_scalar(form((x[1]-u2_avg)*(sigma11)*dx))
+            # M3 = assemble_scalar(form(-(x[0]-u1_avg)*(sigma11)*dx))
+            # T1 = assemble_scalar(form( (((x[0]-u0_avg)*(sigma13)) - ((x[1]-u1_avg)*(sigma12)))*dx))
+            # M2 = assemble_scalar(form((x[1]-u1_avg)*(sigma11)*dx))
+            # M3 = assemble_scalar(form(-(x[0]-u0_avg)*(sigma11)*dx))
+
 
             #THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
             mat[6,mode]=P1
@@ -1114,13 +1304,22 @@ class CrossSection:
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
 
-    def plot_warping_fxns(self):
+    def plot_warping_fxns(self,rigid=False,coup=False):
         pyvista.global_theme.background = [255, 255, 255, 255]
         pyvista.global_theme.font.color = 'black'
         plotter = pyvista.Plotter()
         
-        elastic_sols = self.sols_decoup[:,6:]
-
+        if rigid is True:
+            if coup is True:
+                elastic_sols = self.sols[:,:6]
+            else:
+                elastic_sols = self.sols_decoup[:,:6]
+        else:
+            if coup is True:
+                elastic_sols = self.sols[:,6:]
+            else:
+                elastic_sols = self.sols_decoup[:,6:]
+        
         mode = ['Axial','Shear 1', 'Shear 2', 'Torsion', 'Bending 1', 'Bending 2']
         plotter = pyvista.Plotter(shape=(2,3))
         grids = []

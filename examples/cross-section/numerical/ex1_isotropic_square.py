@@ -25,6 +25,9 @@ squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 squareXS.get_xs_stiffness_matrix()
 
 #show the warping functions
+# squareXS.plot_warping_fxns(rigid=True,coup=True)
+# squareXS.plot_warping_fxns(coup=True)
+squareXS.plot_warping_fxns(rigid=True)
 squareXS.plot_warping_fxns()
 
 # np.set_printoptions(precision=3)
