@@ -5,6 +5,7 @@ from ufl import (Argument,derivative,dot,cross,Identity,sqrt,inner,tr,variable,
 from basix.ufl import element,mixed_element
 from dolfinx.fem import (Constant,Expression,assemble_scalar,form,Function,
                          functionspace,assemble_vector,petsc)
+from dolfinx import fem
 import numpy as np
 from petsc4py import PETSc
 from dolfinx.mesh import locate_entities_boundary
@@ -149,7 +150,7 @@ class CrossSection:
         if self.verbose:
             print('Orthogonalizing w.r.t. elastic modes...')
         self._decouple_modes()
-        self._build_elastic_solution_modes()
+        # self._build_elastic_solution_modes()
         
         if self.verbose:
             print('Computing Beam Constitutive Matrix....')
@@ -405,8 +406,8 @@ class CrossSection:
         #get maps of vertices to displacement coefficients DOFs 
         self.ubar_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(0))
         self.uhat_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(1))
-        self.utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
-        self.ubreve_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(3))
+        # self.utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
+        # self.ubreve_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(3))
 
         #GET UBAR AND UHAT RELATED MODES
         ubar_modes = self.sols[self.ubar_vtx_to_dof,:]
@@ -417,356 +418,46 @@ class CrossSection:
         UHAT = self.V.sub(1).collapse()[0]
         ubar_mode = Function(UBAR)
         uhat_mode = Function(UHAT)
-        vbar_mode = TestFunction(UBAR)
 
         #INITIALIZE DECOUPLING MATRIX (12X12)
-        mat = np.zeros((12,12))
-        
+        mat = np.zeros((6,12))
+
+        #HERES THE NEW APPROACH:
+        #what we want is the set of warping functions Nbar and Nhat
+        # the other warping functions have no effect on the beam stiffness matrix or sensitivities
+        # so we'll first extract ubar and uhat
+        # then we'll use the gram-schmidt process to factor out the rigid body modes from ubar
+        # rigid body translation and displacement only affect ubar, no other warping function
+        # so... we can orthogonalize ubar and explicitly construct a reduced basis transformation matrix M_e
+        # that only considers the elastic modes, which we can decouple with a 6x6 matrix in the same manner as below
+                
         #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
         for mode in range(mat.shape[1]):
             #construct function from mode
             ubar_mode.vector.array = ubar_modes[:,:,mode].flatten()
             uhat_mode.vector.array = uhat_modes[:,:,mode].flatten()
 
-            #FIRST THREE ROWS : AVERAGE UBAR_i VALUE FOR THAT MODE
-            # mat[0,mode]=assemble_scalar(form(ubar_mode[0]*dx))/self.A
-            # mat[1,mode]=assemble_scalar(form(ubar_mode[1]*dx))/self.A
-            # mat[2,mode]=assemble_scalar(form(ubar_mode[2]*dx))/self.A
-            # normie_avg = np.sqrt(assemble_scalar(form(inner(ubar_mode,ubar_mode)*dx)))
-            x_vec = as_tensor([0,x[0],x[1]])
-            # normie = np.sqrt(assemble_scalar(form(inner(x_vec,x_vec)*dx)))
-            # normie_avg = np.sqrt(assemble_scalar(form(inner(ubar_mode,ubar_mode)*dx)))
-            u0_avg=assemble_scalar(form(ubar_mode[0]*dx))*121
-            u1_avg=assemble_scalar(form((ubar_mode[1])*dx))*121
-            u2_avg=assemble_scalar(form((ubar_mode[2])*dx))*121
-            mat[0,mode]=u0_avg
-            mat[1,mode]=u1_avg 
-            mat[2,mode]=u2_avg 
+            #filter rigid body modes out using GS
+            ubar_mode = self._orthonormalize_rbm(ubar_mode)
+            # ubar_mode = self._orthonormalize_rbm(uhat_mode)
 
-            #WHy do this?
-            # u_avg = assemble_vector(form(inner(ubar_mode,vbar_mode)*dx))
-
-            #SECOND THREE ROWS : AVERAGE ROTATION (COMPUTED USING UBAR x Xi, WHERE X1=0, X2,XY=Y,Z)
-            # moment = assemble_scalar(form((x[0]**2 + x[1]**2) * dx))
-            # mat[3,mode]=(assemble_scalar(form(((ubar_mode[2]*(x[0]-u0_avg)-ubar_mode[1]*(x[1]-u1_avg))*dx))) /
-            #               assemble_scalar(form((x[0]**2 + x[1]**2) * dx)) )
-            # mat[4,mode]=(assemble_scalar(form(((ubar_mode[0]*(x[1]-u1_avg))*dx))) /
-            #               assemble_scalar(form((x[0]**2 + x[1]**2) * dx)) )
-            # mat[5,mode]=(assemble_scalar(form(((-ubar_mode[0]*(x[0]-u0_avg))*dx))) /  
-            #               assemble_scalar(form((x[0]**2 + x[1]**2) * dx)) )
-            u0_t=ubar_mode[0]-u0_avg
-            u1_t=ubar_mode[1]-u1_avg
-            u2_t=ubar_mode[2]-u2_avg
-            ubar_t = as_tensor([u0_t,u1_t,u2_t])
+            #update ubar in each mode:
+            # self.sols[self.ubar_vtx_to_dof.flatten(),mode] = ubar_mode.vector.array
+            # self.sols[self.uhat_vtx_to_dof.flatten(),mode] = uhat_mode.vector.array
             
-            # x_c = u1_avg
-            # y_c = u2_avg
-            x_c = u1_avg
-            y_c = u2_avg
-            # x_c = 0.5
-            # y_c = 0.5
-
-            # x_c = assemble_scalar(form((x[0]+ubar_mode[1])*dx))/assemble_scalar(form((1.0)*dx))
-            # y_c = assemble_scalar(form((x[1]+ubar_mode[2])*dx))/assemble_scalar(form((1.0)*dx))
-
-            # inner(ubar_t,x_vec)*dx
-            # x_c1 = assemble_scalar(form(inner(ubar_t,x_vec)*dx))
-
-            # mat[3,mode]=(assemble_scalar(form(((ubar_mode[2]*(x[0]-x_c)-ubar_mode[1]*(x[1]-y_c))*dx))) /
-            #               assemble_scalar(form(((x[0]-x_c)**2 + (x[1]-y_c)**2) * dx)) )
-            # mat[4,mode]=(assemble_scalar(form(((ubar_mode[0]*(x[1]-y_c))*dx))) /
-            #               assemble_scalar(form(((x[0]-x_c)**2 ) * dx)) )
-            # mat[5,mode]=(assemble_scalar(form(((-ubar_mode[0]*(x[0]-x_c))*dx))) /  
-            #               assemble_scalar(form(( (x[1]-y_c)**2) * dx)) )
-            
-            # mat[3,mode]=(assemble_scalar(form(((ubar_t[2]*(x[0])-ubar_t[1]*(x[1]))*dx))) /
-            #               assemble_scalar(form(((x[0])**2 + (x[1]-y_c)**2) * dx)) )
-            # mat[4,mode]=(assemble_scalar(form(((ubar_t[0]*(x[1]-y_c))*dx))) /
-            #               assemble_scalar(form(((x[0])**2 ) * dx)) )
-            # mat[5,mode]=(assemble_scalar(form(((-ubar_t[0]*(x[0]-x_c))*dx))) /  
-            #               assemble_scalar(form(( (x[1])**2) * dx)) )
-            
-            # mat[3,mode]=assemble_scalar(form(((ubar_t[2]*(x[0]-x_c)+ubar_t[1]*(x[1]-y_c))*dx)))
-            # mat[4,mode]=assemble_scalar(form(((ubar_t[0]*(x[1]-y_c))*dx))) 
-            # mat[5,mode]=assemble_scalar(form((-(ubar_t[0]*(x[0]-x_c))*dx)))
-
-            mat[3,mode]=assemble_scalar(form(((ubar_t[2]*(x[0])-ubar_t[1]*(x[1]))*dx)))/np.sqrt(assemble_scalar(form(((x[0]**2+x[1]**2))*dx)))
-            mat[4,mode]=assemble_scalar(form((((ubar_t[0])*(x[0]))*dx)))/np.sqrt(assemble_scalar(form(((x[0]**2))*dx)))
-            mat[5,mode]=assemble_scalar(form((((-ubar_t[0])*(x[1]))*dx)))/np.sqrt(assemble_scalar(form(((x[1]**2))*dx)))
-
-            ur0 = mat[3,mode]
-            ur1 = mat[4,mode]
-            ur2 = mat[5,mode]
-            
-            ubar_r0 = ubar_t[0] - ur0*x[0] - ur0*x[1]
-            ubar_r1 = ubar_t[1] - ur1*x[1]
-            ubar_r2 = ubar_t[2] - ur2*x[0]
-
-            ubar_r = as_tensor([ubar_r0,ubar_r1,ubar_r2])
-
-            # mat[3,mode]=assemble_scalar(form(((ubar_t[2]*(x[0])-ubar_t[1]*(x[1]))*dx)))/assemble_scalar(form((((x[0])*(x[1]))*dx)))
-            # mat[4,mode]=assemble_scalar(form((((ubar_t[0]-ubar_t[2])*(x[0]))*dx)))/assemble_scalar(form((((x[0])*(x[0]))*dx)))
-            # mat[5,mode]=assemble_scalar(form((((ubar_t[1]-ubar_t[0])*(x[1]))*dx)))/assemble_scalar(form((((x[1])*(x[1]))*dx)))
-            
-            # mat[3,mode]=assemble_scalar(form(((ubar_t[2]*(x[0])-ubar_t[1]*(x[1]))*dx)))
-            # mat[4,mode]=assemble_scalar(form(((ubar_t[0]*(x[1]))*dx))) 
-            # mat[5,mode]=assemble_scalar(form(((-ubar_t[0]*(x[0]))*dx)))  
-
-            # mat[3:6, mode] /= np.linalg.norm(mat[3:6, mode])
-            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0]-u0_avg)-ubar_mode[1]*(x[1]-u1_avg))*dx)))
-            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]-u1_avg))*dx)))
-            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u0_avg))*dx)))
-
-            # RGB = as_tensor([[ 0,  0,  1],
-            #                  [ 1,  0,  0],
-            #                  [ 0,  1, 0]])
-            x_vec = as_tensor([0,x[0],x[1]])
-            x0 = as_tensor([1,0,0])
-            x1 = as_tensor([0,1,0])
-            x2 = as_tensor([0,0,1])
-
-            # x_vec = as_tensor([0,x[0],x[1]])
-            # x_vec = as_tensor([x[0]-x[1],x[0],-x[0]])
-            u_avg = as_tensor([u0_avg,u1_avg,u2_avg])
-
-            # x_vec = as_tensor([-x[0]+x[1],x[0],x[1]])
-            ubar_t = as_tensor([u0_t,u1_t,u2_t])
-            # ubar_t = as_tensor([0,u1_t,u2_t])
-
-            # # u_c = ufl.cross(ubar_mode,x_vec)
-            u_c = ufl.cross(x_vec,ubar_t)
-            
-            # # normie = assemble_scalar(form(inner(ubar_mode,ubar_mode)*dx))
-            # normie = np.sqrt(assemble_scalar(form(inner(ubar_t,ubar_t)*dx)))
-            # normie = np.sqrt(assemble_scalar(form(inner(x_vec,x_vec)*dx)))
-            # c_1  = assemble_scalar(form(u_c[1]*dx))/ normie
-            # c_0  = assemble_scalar(form(u_c[0]*dx))/ normie
-            # c_2  = assemble_scalar(form(u_c[2]*dx))/ normie
-
-            # c = as_tensor([c_0,c_1,c_2])
-
-            # u_rot = ufl.cross(ubar_mode,x_vec-c)
-            # # u_rot = ufl.cross(ubar_mode,x_vec)
-            u_rot = ufl.cross(ubar_mode,x_vec)
-            # u_rot = cross(ubar_t,x_vec)
-
-            normie = assemble_scalar(form(inner(u_rot,u_rot)*dx))
-            u0_rot=assemble_scalar(form(((u_rot[0])*dx))) / normie
-            u1_rot=assemble_scalar(form(((u_rot[1])*dx))) / normie
-            u2_rot=assemble_scalar(form(((u_rot[2])*dx))) / normie
-
-            # u0_rot=assemble_scalar(form((inner(cross(ubar_t,x0),x_vec)*dx))) 
-            # u1_rot=assemble_scalar(form((inner(cross(ubar_t,x1),x_vec)*dx)))
-            # u2_rot=assemble_scalar(form((inner(cross(ubar_t,x2),x_vec)*dx)))
-
-            # u0_rot=assemble_scalar(form((inner(cross(ubar_t,x_vec),x0)*dx))) 
-            # u1_rot=assemble_scalar(form((inner(cross(ubar_t,x_vec),x1)*dx)))
-            # u2_rot=assemble_scalar(form((inner(cross(ubar_t,x_vec),x2)*dx)))
-
-            # u0_rot=assemble_scalar(form((inner(cross(ubar_t,x_vec),x_vec)*dx))) / normie
-            # u1_rot=assemble_scalar(form((inner(cross(ubar_t,x_vec),x_vec)*dx))) / normie
-            # u2_rot=assemble_scalar(form((inner(cross(ubar_t,x_vec),x_vec)*dx))) / normie
-
-            # mat[3,mode]=u0_rot
-            # mat[4,mode]=u1_rot
-            # mat[5,mode]=u2_rot
-            # mat[3,mode]=c_0
-            # mat[4,mode]=c_1
-            # mat[5,mode]=c_2
-            # #skew-symmetrix tensor
-            # w = as_tensor([[0,-x[0],x[1]],
-            #                [x[1],0,0],
-            #                [-x[0],0,0]])
-            
-            # wx = as_tensor([[0,0,0],
-            #                [0,0,1],
-            #                [0,-1,0]])
-            
-            # wy = as_tensor([[0,0,1],
-            #                [0,0,0],
-            #                [-1,0,0]])
-            
-            # wz = as_tensor([[0,-1,0],
-            #                [1,0,0],
-            #                [0,0,0]])
-
-            # ubar_rotx=as_tensor(ubar_t[i]*wx[i,j],(j))
-            # ubar_roty=as_tensor(ubar_t[i]*wy[i,j],(j))
-            # ubar_rotz=as_tensor(ubar_t[i]*wz[i,j],(j))
-            # ubar_rot_tot = ufl.cross(ubar_rotx + ubar_roty + ubar_rotz,x_vec)
-
-            # u0_rot=assemble_scalar(form(ubar_rot_tot[0]*dx))
-            # u1_rot=assemble_scalar(form(ubar_rot_tot[1]*dx))
-            # u2_rot=assemble_scalar(form(ubar_rot_tot[2]*dx))
-
-            
-            # u0_rot=assemble_scalar(form((inner(ubar_rotx,x_vec)*dx)))
-            # u1_rot=assemble_scalar(form((inner(ubar_roty,x_vec)*dx)))
-            # u2_rot=assemble_scalar(form((inner(ubar_rotz,x_vec)*dx)))
-
-
-            # u_rot = ufl.cross(ubar_mode,x_vec)
-            # u_rot = ufl.cross(ubar_t,x_vec)
-            # u_rot = ufl.cross(x_vec,ubar_t)
-            # u_rot = ufl.cross(ubar_t,w)
-
-            # u0_rot=assemble_scalar(form(((u_rot[0])*dx)))
-            # u1_rot=assemble_scalar(form(((u_rot[1])*dx)))
-            # u2_rot=assemble_scalar(form(((u_rot[2])*dx)))
-
-            # u0_rot=assemble_scalar(form(((u_rot[0]-u_rot[1])*dx)))
-            # u1_rot=assemble_scalar(form(((u_rot[2]-u_rot[0])*dx)))
-            # u2_rot=assemble_scalar(form(((u_rot[1]-u_rot[2])*dx)))
-
-            # u0_rot=assemble_scalar(form(((-x[0])*dx)))
-            # u1_rot=assemble_scalar(form(((x[1])*dx)))
-            # u2_rot=assemble_scalar(form(((x[0]-x[1])*dx)))
-
-            # u0_rot=assemble_scalar(form(((u_rot[0])*dx)))/np.sqrt(assemble_scalar(form(inner(ubar_t,ubar_t)*dx)))
-            # u1_rot=assemble_scalar(form(((u_rot[1])*dx)))/np.sqrt(assemble_scalar(form(inner(ubar_t,ubar_t)*dx)))
-            # u2_rot=assemble_scalar(form(((u_rot[2])*dx)))/np.sqrt(assemble_scalar(form(inner(ubar_t,ubar_t)*dx)))
-
-            # u0_rot=assemble_scalar(form(((u_rot[2]-u_rot[1])*dx)))
-            # u1_rot=assemble_scalar(form(((u_rot[0])*dx)))
-            # u2_rot=assemble_scalar(form(((-u_rot[0])*dx)))
-
-            # u0_rot=assemble_scalar(form((inner(ubar_t,x_vec)*dx)))/assemble_scalar(form((inner(x_vec,x_vec)*dx)))
-            # u1_rot=assemble_scalar(form((inner(ubar_t,x_vec)*dx)))/assemble_scalar(form((inner(x_vec,x_vec)*dx)))
-            # u2_rot=assemble_scalar(form((inner(ubar_t,x_vec)*dx)))/assemble_scalar(form((inner(x_vec,x_vec)*dx)))
-
-            # v0=as_tensor([0,-x[0],x[1]])
-            # v1=as_tensor([0,0,x[1]])
-            # v2=as_tensor([0,-x[0],0])
-
-            # u0_rot=assemble_scalar(form((inner(ubar_t,v0)*dx)))/assemble_scalar(form((inner(v0,v0)*dx)))
-            # u1_rot=assemble_scalar(form((inner(ubar_t,v1)*dx)))/assemble_scalar(form((inner(v1,v1)*dx)))
-            # u2_rot=assemble_scalar(form((inner(ubar_t,v2)*dx)))/assemble_scalar(form((inner(v2,v2)*dx)))
-            
-            # u0_rot=assemble_scalar(form((inner(ufl.cross(ubar_t,x_vec),ufl.cross(ubar_t,x_vec))*dx)))
-            # u1_rot=assemble_scalar(form((inner(ubar_t,v1)*dx)))
-            # u2_rot=assemble_scalar(form((inner(ubar_t,v2)*dx)))
-
-            # u0_rot=assemble_scalar(form(((u_rot[0]*(x[0])-u_rot[0]*(x[1]))*dx)))
-            # u1_rot=assemble_scalar(form((u_rot[1]*(x[0])-u_rot[1]*(x[1]))*dx))
-            # u2_rot=assemble_scalar(form((u_rot[2]*(x[0])+u_rot[2]*(x[1]))*dx))
-            
-            # u0_rot=assemble_scalar(form(((u_rot[2]-u_rot[1])*dx)))
-            # u1_rot=assemble_scalar(form((u_rot[0])*dx))
-            # u2_rot=assemble_scalar(form((-u_rot[0])*dx))
-            
-            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))
-            # # u0_rot=assemble_scalar(form(((ufl.sqrt(ubar_mode[1]**2+ubar_mode[2]**2)*(x[0]))
-            # #                              -(ufl.sqrt(ubar_mode[1]**2+ubar_mode[2]**2)*(x[1])))*dx))
-            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))
-            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))
-            
-            # u0_rot=assemble_scalar(form(((u2_t*(x[0])-u1_t*(x[1]))*dx)))
-            # u1_rot=assemble_scalar(form(((u0_t*(x[1]))*dx)))
-            # u2_rot=assemble_scalar(form(((-u0_t*(x[0]))*dx)))
-
-            # u0_rot=assemble_scalar(form(((ubar_mode[2]-ubar_mode[1])*dx)))
-            # u1_rot=assemble_scalar(form(ubar_mode[0]*dx))
-            # u2_rot=assemble_scalar(form(-ubar_mode[0]*dx))
-
-            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2)+(x[0]**2))*dx))
-            # mat[4,mode]=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))/assemble_scalar(form((x[1]**2)*dx))
-            # mat[5,mode]=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))/assemble_scalar(form((x[0]**2)*dx))
-
-            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2)+(x[1]**2))*dx))
-            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]))*dx)))/assemble_scalar(form((x[1]**2)*dx))
-            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]))*dx)))/assemble_scalar(form((x[0]**2)*dx))
-
-            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0]-u0_avg)-ubar_mode[1]*(x[1]-u1_avg))*dx)))
-            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]-u1_avg))*dx)))
-            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u0_avg))*dx)))
-
-            # u0_rot=assemble_scalar(form(((u2_t*(x[0]-u0_avg)-u1_t*(x[1]-u1_avg))*dx)))
-            # u1_rot=assemble_scalar(form(((u0_t*(x[1]-u1_avg))*dx)))
-            # u2_rot=assemble_scalar(form(((-u0_t*(x[0]-u0_avg))*dx)))
-
-            # u0_rot=assemble_scalar(form(((u2_t*(x[0]-u1_avg)-u1_t*(x[1]-u2_avg))*dx)))
-            # u1_rot=assemble_scalar(form(((u0_t*(x[1]-u2_avg))*dx)))
-            # u2_rot=assemble_scalar(form(((-u0_t*(x[0]-u1_avg))*dx)))
-
-            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0]-u1_avg)+ubar_mode[1]*(x[1]-u2_avg))*dx)))
-            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]-u2_avg)-ubar_mode[2]*(-u0_avg))*dx)))
-            # u2_rot=assemble_scalar(form(((-ubar_mode[1]*(-u2_avg)-ubar_mode[0]*(x[0]-u1_avg))*dx)))
-
-            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0]-u1_avg)-ubar_mode[1]*(x[1]-u2_avg))*dx)))
-            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]-u2_avg))*dx)))
-            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u1_avg))*dx)))
-
-            # u0_rot=assemble_scalar(form(((ubar_mode[2]*(x[0]-u1_avg)-ubar_mode[1]*(x[1]-u2_avg))*dx)))
-            # u1_rot=assemble_scalar(form(((ubar_mode[0]*(x[1]-u2_avg))*dx)))
-            # u2_rot=assemble_scalar(form(((-ubar_mode[0]*(x[0]-u1_avg))*dx)))
-
-            # u0=ubar_mode[0]-u0_avg-(-u2_rot*x[1]+u1_rot*x[0])
-            # u1=ubar_mode[1]-u1_avg-(u0_rot*x[1])
-            # u2=ubar_mode[2]-u2_avg-(-u0_rot*x[1])
-            
-            # u0=ubar_mode[0]-(-u2_rot*x[1]+u1_rot*x[0])
-            # u1=ubar_mode[1]-(u0_rot*x[1])
-            # u2=ubar_mode[2]-(-u0_rot*x[0])
-
-            # mat[3,mode]=u0_rot
-            # mat[4,mode]=u1_rot
-            # mat[5,mode]=u2_rot
-
-            # mat[3,mode]=u0_avg-(-u2_rot+u1_rot)
-            # mat[4,mode]=u1_avg-u0_rot
-            # mat[5,mode]=u2_avg-(-u0_rot)
-
-            # mat[3,mode]=-u2_rot+u1_rot
-            # mat[4,mode]=u0_rot
-            # mat[5,mode]=-u0_rot
-
-            #need to compute ubar with rigid body rotations and translations filtered out:
-            # u0=ubar_mode[0]-u0_avg-(-u2_rot+u1_rot)
-            # u1=ubar_mode[1]-u1_avg-u0_rot
-            # u2=ubar_mode[2]-u2_avg-(-u0_rot)
-
-            # mat[3,mode]=assemble_scalar(form(((u2*(x[0])-u1*(x[1]))*dx)))/assemble_scalar(form(((x[0]**2+x[1]**2)*dx)))
-            # mat[4,mode]=assemble_scalar(form(((u0*(x[1]))*dx)))/assemble_scalar(form(((x[1]**2)*dx)))
-            # mat[5,mode]=assemble_scalar(form(((-u0*(x[0]))*dx)))/assemble_scalar(form(((x[0]**2)*dx)))
-
-
-            # CONSTRUCT STRESSES FOR LAST SIX ROWS
-
-            # uhat0_avg=assemble_scalar(form(uhat_mode[0]*dx))
-            # uhat1_avg=assemble_scalar(form(uhat_mode[1]*dx))
-            # uhat2_avg=assemble_scalar(form(uhat_mode[2]*dx))
-            # uhat0 = uhat_mode[0]-uhat0_avg
-            # uhat1 = uhat_mode[1]-uhat1_avg
-            # uhat2 = uhat_mode[2]-uhat2_avg
-
             #compute strains at x1=0
-            #TODO: NEED TO CHECK THIS SETUP THOROUGHLY BASICALLY, THE AVERAGE STRESSES NEED TO BE 
-            # COMPUTED AND THESE FEED INTO THE AXIAL AND SHEAR VALUES.
-            # THEN, THE 
             gradubar=grad(ubar_mode)
-            # gradubar=grad(ubar_r)
-            # gradubar=grad(as_tensor([u0,u1,u2]))
 
             #derivatives of displacement
             #this is know from our displacement expression
-            # dubxdx = uhat_mode[0]
-            # dubxdy = gradubar[0,0]
-            # dubxdz = gradubar[0,1]
-            # dubydx = uhat_mode[1]
-            # dubydy = gradubar[1,0]
-            # dubydz = gradubar[1,1]
-            # dubzdx = uhat_mode[2]
-            # dubzdy = gradubar[2,0]
-            # dubzdz = gradubar[2,1]
-
             dubxdx = uhat_mode[0]
-            dubxdy = uhat_mode[1]
-            dubxdz = uhat_mode[2]
-            dubydx = gradubar[0,0]
+            dubxdy = gradubar[0,0]
+            dubxdz = gradubar[0,1]
+            dubydx = uhat_mode[1]
             dubydy = gradubar[1,0]
-            dubydz = gradubar[2,0]
-            dubzdx = gradubar[0,1]
-            dubzdy = gradubar[1,1]
+            dubydz = gradubar[1,1]
+            dubzdx = uhat_mode[2]
+            dubzdy = gradubar[2,0]
             dubzdz = gradubar[2,1]
 
             #form ufl displacement for grad(u_i)
@@ -774,29 +465,9 @@ class CrossSection:
                             [dubydx,dubydy,dubydz],
                             [dubzdx,dubzdy,dubzdz]])
             
-            eps = gradu
-            
             #ensure that strains are symmetric
-            # eps = 0.5 * (gradu + gradu.T)
+            eps = 0.5 * (gradu + gradu.T)
 
-            # eps = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
-            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
-
-            # eps = as_tensor([[uhat0,uhat1,uhat2],
-            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
-
-            # gradu = as_tensor([[uhat_mode[0],uhat_mode[1],uhat_mode[2]],
-            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
-            
-            # gradu = as_tensor([[uhat0,uhat1,uhat2],
-            #                 [gradubar[0,0],gradubar[1,0],gradubar[2,0]],
-            #                 [gradubar[0,1],gradubar[1,1],gradubar[2,1]]])
-            
-            # eps = 0.5 * (gradu + gradu.T)
-            
             # construct strain and stress tensors based on u_sol
             sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
 
@@ -805,51 +476,30 @@ class CrossSection:
             sigma12 = sigma[0,1]
             sigma13 = sigma[0,2]
 
-            # sigma12 = sigma[1,0]
-            # sigma13 = sigma[2,0]
-            # sigma12 = 0.5*(sigma[0,1] + sigma[1,0])
-            # sigma13 = 0.5*(sigma[0,2] + sigma[2,0])
-
             #integrate stresses over cross-section at "root" of beam and construct xs load vector
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
-            T1 = assemble_scalar(form( (((x[1])*(sigma13)) - ((x[0])*(sigma12)))*dx))
-            M2 = assemble_scalar(form((x[1])*(sigma11)*dx))
-            M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))
-            # T1 = assemble_scalar(form( (((x[0]-u0_avg-u0_rot)*(sigma13)) - ((x[1]-u1_avg-u1_rot)*(sigma12)))*dx))
-            # M2 = assemble_scalar(form((x[1]-u1_avg-u1_rot)*(sigma11)*dx))
-            # M3 = assemble_scalar(form(-(x[0]-u0_avg-u0_rot)*(sigma11)*dx))
-            # T1 = assemble_scalar(form( (((x[0]-u1_avg-u1_rot)*(sigma13)) - ((x[1]-u2_avg-u2_rot)*(sigma12)))*dx))
-            # M2 = assemble_scalar(form((x[1]-u2_avg-u2_rot)*(sigma11)*dx))
-            # M3 = assemble_scalar(form(-(x[0]-u1_avg-u1_rot)*(sigma11)*dx))
-            # T1 = assemble_scalar(form( (((x[0]-u1_avg)*(sigma13)) - ((x[1]-u2_avg)*(sigma12)))*dx))
-            # M2 = assemble_scalar(form((x[1]-u2_avg)*(sigma11)*dx))
-            # M3 = assemble_scalar(form(-(x[0]-u1_avg)*(sigma11)*dx))
-            # T1 = assemble_scalar(form( (((x[0]-u1_avg)*(sigma13)) - ((x[1]-u2_avg)*(sigma12)))*dx))
-            # M2 = assemble_scalar(form((x[1]-u2_avg)*(sigma11)*dx))
-            # M3 = assemble_scalar(form(-(x[0]-u1_avg)*(sigma11)*dx))
-            # T1 = assemble_scalar(form( (((x[0]-u0_avg)*(sigma13)) - ((x[1]-u1_avg)*(sigma12)))*dx))
-            # M2 = assemble_scalar(form((x[1]-u1_avg)*(sigma11)*dx))
-            # M3 = assemble_scalar(form(-(x[0]-u0_avg)*(sigma11)*dx))
-
-
+            T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
+            M2 = assemble_scalar(form((x[1])*(sigma11)*dx))          
+            M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))  
+            
             #THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
-            mat[6,mode]=P1
-            mat[7,mode]=V2
-            mat[8,mode]=V3   
+            mat[0,mode]=P1
+            mat[1,mode]=V2
+            mat[2,mode]=V3   
 
             #FOURTH THREE ROWS: AVERAGE MOMENTS (COMPUTED WITH UBAR AND UHAT)
-            mat[9,mode]=T1
-            mat[10,mode]=M2
-            mat[11,mode]=M3
+            mat[3,mode]=T1
+            mat[4,mode]=M2
+            mat[5,mode]=M3
         
         # for i in range(12):
         #     mat[:, mode] /= np.sqrt(np.dot(mat[:,mode], mat[:,mode]))
 
-        for i in range(12):
-            for j in range(12):
-                print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
+        # for i in range(12):
+        #     for j in range(12):
+        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
 
         # mat/=np.linalg.norm(mat,axis=0).reshape((12,1)).T
         # mat/=np.linalg.norm(mat,axis=1)
@@ -857,47 +507,74 @@ class CrossSection:
         # for i in range(12):
         #     for j in range(12):
         #         print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
-        
-        # mat,_ = np.linalg.qr(mat)
 
         self.mat = mat
+
         if basis_matrix_only is False:
             mat_sparse = sparseify(mat,sparse_format='csc')
 
             # self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
-            self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
             # self.sols_decoup = self.sols@np.linalg.inv(mat)
+            ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof.flatten(),self.uhat_vtx_to_dof.flatten()])
+            sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
+            mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
+            self.sols_decoup = sparse_sols.dot(mat_pinv).toarray()
+            # self.sols.decoup=mat@self.sols
 
-    def _build_elastic_solution_modes(self):
         #Initialize a tensor element and mixed tensor function space 
         # for the elastic solution modes
         Ne = element('CG',self.msh.topology.cell_name(),1,shape=(3,6))
-        self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
+        self.N_space = functionspace(self.msh,mixed_element(2*[Ne]))
         self.N = Function(self.N_space)
         
         #extract portions of elastic solution mode function related to each warping fxn
-        self.N_bar, self.N_hat, self.N_tilde, self.N_breve = self.N.split() 
+        self.N_bar, self.N_hat = self.N.split() 
 
         #unpack elastic solution modes
-        elastic_sols = self.sols_decoup[:,6:]
+        elastic_sols = self.sols_decoup
 
         #get map of function dofs 
         N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0))
         N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1))
-        N_tilde_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(2))
-        N_breve_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(3))
 
         #get separate elastic solution mode values
-        N_bar_vals = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]
-        N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten(),:]
-        N_tilde_vals = elastic_sols[self.utilde_vtx_to_dof.flatten(),:]
-        N_breve_vals = elastic_sols[self.ubreve_vtx_to_dof.flatten(),:]
+        N_bar_vals = elastic_sols[:self.ubar_vtx_to_dof.flatten().shape[0],:]
+        N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten().shape[0]:,:]
 
         #populate elastic solution modes to elastic solution mode function
         self.N_bar.vector.array[N_bar_vtx_to_dofs.flatten()] = N_bar_vals.flatten()
         self.N_hat.vector.array[N_hat_vtx_to_dofs.flatten()] = N_hat_vals.flatten()
-        self.N_tilde.vector.array[N_tilde_vtx_to_dofs.flatten()] = N_tilde_vals.flatten()
-        self.N_breve.vector.array[N_breve_vtx_to_dofs.flatten()] = N_breve_vals.flatten()
+
+    # def _build_elastic_solution_modes(self):
+    #     #Initialize a tensor element and mixed tensor function space 
+    #     # for the elastic solution modes
+    #     Ne = element('CG',self.msh.topology.cell_name(),1,shape=(3,6))
+    #     self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
+    #     self.N = Function(self.N_space)
+        
+    #     #extract portions of elastic solution mode function related to each warping fxn
+    #     self.N_bar, self.N_hat, self.N_tilde, self.N_breve = self.N.split() 
+
+    #     #unpack elastic solution modes
+    #     elastic_sols = self.sols_decoup[:,6:]
+
+    #     #get map of function dofs 
+    #     N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0))
+    #     N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1))
+    #     N_tilde_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(2))
+    #     N_breve_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(3))
+
+    #     #get separate elastic solution mode values
+    #     N_bar_vals = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]
+    #     N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten(),:]
+    #     N_tilde_vals = elastic_sols[self.utilde_vtx_to_dof.flatten(),:]
+    #     N_breve_vals = elastic_sols[self.ubreve_vtx_to_dof.flatten(),:]
+
+    #     #populate elastic solution modes to elastic solution mode function
+    #     self.N_bar.vector.array[N_bar_vtx_to_dofs.flatten()] = N_bar_vals.flatten()
+    #     self.N_hat.vector.array[N_hat_vtx_to_dofs.flatten()] = N_hat_vals.flatten()
+    #     self.N_tilde.vector.array[N_tilde_vtx_to_dofs.flatten()] = N_tilde_vals.flatten()
+    #     self.N_breve.vector.array[N_breve_vtx_to_dofs.flatten()] = N_breve_vals.flatten()
 
     def _compute_xs_stiffness_matrix(self):             
         #unpacking values
@@ -910,8 +587,8 @@ class CrossSection:
         #elastic solution mode function related to each warping fxn
         N_bar = self.N_bar
         N_hat = self.N_hat
-        N_tilde = self.N_tilde
-        N_breve = self.N_breve 
+        # N_tilde = self.N_tilde
+        # N_breve = self.N_breve 
 
         #construct fenicsx variables pertaining to elastic solution modes
         c7 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
@@ -926,8 +603,8 @@ class CrossSection:
         #   elastic solution modes and elastic solution mode coefficients
         ubar_c = dot(N_bar,c)
         uhat_c = dot(N_hat,c)
-        utilde_c = dot(N_tilde,c)
-        ubreve_c = dot(N_breve,c)
+        # utilde_c = dot(N_tilde,c)
+        # ubreve_c = dot(N_breve,c)
 
         #these elastic solution modes are related by the general expression 
         # for the displacement as:
@@ -936,8 +613,8 @@ class CrossSection:
                 
         # expressions for the stress and strain in terms of the polynomial 
         # from expansion above:
-        eps_c = self.strains_from_warping_fxns(ubar_c,uhat_c,utilde_c,ubreve_c)
-        sigma_c = self.stress_from_warping_fxns(ubar_c,uhat_c,utilde_c,ubreve_c)
+        eps_c = self.strains_from_warping_fxns(ubar_c,uhat_c)
+        sigma_c = self.stress_from_warping_fxns(ubar_c,uhat_c)
 
         #only stresses with a 1x component are of concern:
         sigma11_c = sigma_c[0,0]
@@ -1327,7 +1004,7 @@ class CrossSection:
                                 self.K @ self.dSdx,
                                 self.K)
         
-    def strains_from_warping_fxns(self,ubar_c,uhat_c,utilde_c,ubreve_c):
+    def strains_from_warping_fxns(self,ubar_c,uhat_c):
         gradubar_c=grad(ubar_c)
         eps = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
                             [gradubar_c[0,0],gradubar_c[1,0],gradubar_c[2,0]],
@@ -1350,9 +1027,9 @@ class CrossSection:
         
         return eps 
 
-    def stress_from_warping_fxns(self,ubar_c,uhat_c,utilde_c,ubreve_c):
+    def stress_from_warping_fxns(self,ubar_c,uhat_c):
         i,j,k,l=self.i,self.j,self.k,self.l
-        eps = self.strains_from_warping_fxns(ubar_c,uhat_c,utilde_c,ubreve_c)
+        eps = self.strains_from_warping_fxns(ubar_c,uhat_c)
 
         stress = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
         
@@ -1390,12 +1067,72 @@ class CrossSection:
         #compute xs mass properties:
         self.M = np.zeros((6,6))
 
-    def update_mesh(self,nodes,disp):
+    def _orthonormalize_rbm(self,fxn):
+        V = fxn.function_space
+        x = self.x
+        dx  = self.dx
+
+        #Rigid Body Modes expression (3D)
+        rbms = [
+            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((1.0,0.0,0.0))),V.element.interpolation_points()),
+            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,1.0,0.0))),V.element.interpolation_points()),
+            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,0.0,1.0))),V.element.interpolation_points()),
+            fem.Expression(ufl.as_vector([0,-x[1],x[0]]),V.element.interpolation_points()),
+            fem.Expression(ufl.as_vector([-x[1],0,x[0]]),V.element.interpolation_points()),
+            fem.Expression(ufl.as_vector([-x[0],x[1],0]),V.element.interpolation_points())
+        ]
+
+        # List of functions to orthogonalise
+        vx = fem.Function(V)
+        vy = fem.Function(V)
+        vz = fem.Function(V)
+        vrx = fem.Function(V)
+        vry = fem.Function(V)
+        vrz = fem.Function(V)
+        vx.interpolate(rbms[0])
+        vy.interpolate(rbms[1])
+        vz.interpolate(rbms[2])
+        vrx.interpolate(rbms[3])
+        vry.interpolate(rbms[4])
+        vrz.interpolate(rbms[5])
+
+        v = list((vx,vy,vz,vrx,vry,vrz))
+
+        # GS Projection
+        def proj(u, v):
+            res = fem.assemble_scalar(fem.form(inner(u, v)*dx))/fem.assemble_scalar(fem.form(inner(u, u)*dx)) * u.vector.array
+            return res
+
+        # GS orthogonalisation
+        def ortho(v):
+            xi = [None]*len(v)
+            xi[0] = v[0]
+            for j in range(1, len(xi)):
+                xi[j] = fem.Function(V)
+                xi[j].vector.array = v[j].vector.array - sum(proj(xi[i], v[j]) for i in range(j))
+            return xi
         
+        xi = ortho(v)
 
+        # Orthonormalised vector basis
+        e = [fem.Function(V) for i in range(len(v))]
+        for i,xi_ in enumerate(xi):
+            e[i].vector.array = xi_.vector.array/fem.assemble_scalar(fem.form(inner(xi_, xi_)*dx))**0.5
+        
+        print("orthonormalisation test:")
+        for i in range(len(xi)):
+            for j in range(i+1):
+                print(f"inner(e[{i}], e[{j}])*dx {fem.assemble_scalar(fem.form(inner(e[i], e[j])*dx))}")
 
-        return
-    
+        new_fxn = Function(V)
+        new_fxn.vector.array  = fxn.vector.array - sum(proj(e_, fxn) for e_ in e)
+        
+        print(f"u norm {fxn.vector.norm(2)}, u_star norm {new_fxn.vector.norm(2)}")
+        print(f"orthogonalisation of u_star with rigid body modes test:")
+        for j in range(len(v)):
+            print(f"(rbms[{j}], u_star) = {fem.assemble_scalar(fem.form(inner(new_fxn, v[j])*dx))}")
+
+        return new_fxn
     # def coeff_to_field(self,fxn,coeff,vtx_to_dof):
     #     #uses vtx_to_dof map to populate field with correct solution coefficients
     #     fxn.vector.array = coeff.flatten()[vtx_to_dof].flatten()
@@ -1453,7 +1190,7 @@ class CrossSection:
             c = np.zeros((6,1))
             c[i,:] = 1
 
-            warping_sol = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]@c
+            warping_sol = elastic_sols[:self.ubar_vtx_to_dof.flatten().shape[0],:]@c
             
             solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
             grids[i][name]= solution_mode/np.max(np.linalg.norm(solution_mode,axis=1))
@@ -1469,44 +1206,6 @@ class CrossSection:
 
         if not pyvista.OFF_SCREEN:
             plotter.show()
-    
-    
-    def plot_sensitivities(self):
-        plotter = pyvista.Plotter(shape=(2,3))
-        grids = []
-        warped = []
-        for i in range(6):
-            row = int(i/3)
-            col = i%3
-            plotter.subplot(row,col)
-            #plot mesh
-            tdim = self.msh.topology.dim
-            topology, cell_types, geom = plot.vtk_mesh(self.msh, tdim)
-            grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
-
-            sensitivity_to_plot = np.zeros((geom.shape[0],2))
-
-            sensitivity_to_plot[self.boundary_nodes,:] = self.dKdx[i,i,:].reshape(-1,2)[self.boundary_nodes,:]
-
-            sensitivity = np.concatenate([sensitivity_to_plot,np.zeros_like(sensitivity_to_plot)],axis=1)
-
-            sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)
-
-            grids[i].point_data["sensitivity"] = sensitivity
-            norm = np.linalg.norm(sensitivity)
-            print(norm)
-            warped.append(grids[i].warp_by_vector("sensitivity",factor=1/norm))
-            plotter.add_mesh(grids[i],show_edges=True,opacity=0.5,scalar_bar_args={'title': f'Sensitivity_{i}'})
-            plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
-            plotter.add_text(f'dK/dx({i},{i})')
-            plotter.view_xy()
-            plotter.add_axes()
-        plotter.subplot(0,0)
-        plotter.show_bounds()
-        if not pyvista.OFF_SCREEN:
-            plotter.show()
-
-
 
 class CoupledXSProblem:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
