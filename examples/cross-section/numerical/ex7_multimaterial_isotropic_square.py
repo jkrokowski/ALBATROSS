@@ -94,3 +94,7 @@ print(squareXS.S)
 #output stiffness matrix
 print('Stiffness matrix:')
 print(squareXS.K)
+
+squareXS.compute_xs_stiffness_matrix_sensitivities()
+
+squareXS.plot_sensitivities()

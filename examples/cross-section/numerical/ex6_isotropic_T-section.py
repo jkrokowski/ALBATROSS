@@ -5,10 +5,10 @@ import numpy as np
 
 #create mesh
 N = 10
-H = .2
-W= .1
-tf = 0.01
-tw = 0.01
+H = 1
+W= 1
+tf = 0.1
+tw = 0.1
 
 dims = [H,W,tf,tw]
 num_el = [N,N]#number of elements through each wall thickness
@@ -60,3 +60,8 @@ I2 = ((tf*W**3)/12) + ((H-tf)*tw**3)/12
 print(E*I2)
 print("Computed bending stiffness 2:")
 print(TXS.K[5,5])
+
+
+TXS.compute_xs_stiffness_matrix_sensitivities()
+
+TXS.plot_sensitivities()

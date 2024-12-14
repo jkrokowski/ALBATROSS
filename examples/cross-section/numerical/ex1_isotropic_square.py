@@ -3,7 +3,7 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 10 #number of quad elements per side
+N = 20 #number of quad elements per side
 W = 1 #square height  
 H = 1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
@@ -25,10 +25,10 @@ squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 squareXS.get_xs_stiffness_matrix()
 
 #show the warping functions
-# squareXS.plot_warping_fxns(rigid=True,coup=True)
+squareXS.plot_warping_fxns(rigid=True,coup=True)
 # squareXS.plot_warping_fxns(coup=True)
 squareXS.plot_warping_fxns(rigid=True)
-squareXS.plot_warping_fxns()
+# squareXS.plot_warping_fxns()
 
 # np.set_printoptions(precision=3)
 

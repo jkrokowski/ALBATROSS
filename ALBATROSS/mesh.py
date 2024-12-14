@@ -1,5 +1,5 @@
 import numpy as np
-from dolfinx import mesh,fem,plot
+from dolfinx import mesh,fem,plot,nls
 import ufl
 import gmsh
 from dolfinx.io import gmshio,XDMFFile
@@ -9,7 +9,7 @@ from ALBATROSS.utils import gmsh_to_xdmf,get_pts_and_cells
 import pyvista
 from petsc4py import PETSc
 
-def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False):
+def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False,mode='poisson'):
      '''Function to apply elliptic smoothing to a mesh
      given a prescribed boundary motion
      
@@ -49,10 +49,63 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
      fem.petsc.set_bc(uh.vector, bcs)
      u = ufl.TrialFunction(V)
      v = ufl.TestFunction(V)
-     a = ufl.inner(ufl.grad(u), ufl.grad(v))*ufl.dx
-     L = ufl.inner(fem.Constant(msh, (0., 0.)), v)*ufl.dx
-     problem = fem.petsc.LinearProblem(a, L, bcs, uh)
-     problem.solve()
+     if mode == 'poisson':
+          a = ufl.inner(ufl.grad(u), ufl.grad(v))*ufl.dx    
+          L = ufl.inner(fem.Constant(msh, (0., 0.)), v)*ufl.dx
+          problem = fem.petsc.LinearProblem(a, L, bcs, uh)
+          problem.solve()
+     elif mode == 'lin_elas':
+          def eps(v):
+               return ufl.sym(ufl.grad(v))
+
+          # E = Constant(domain,1e5)
+          # nu = Constant(domain,0.3)
+          E = 100.0
+          nu = 0.2
+          model = "plane_stress"
+
+          mu = E/2/(1+nu)
+          lmbda = E*nu/(1+nu)/(1-2*nu)
+          if model == "plane_stress":
+               lmbda = 2*mu*lmbda/(lmbda+2*mu)
+
+          def sigma(v):
+               return lmbda*ufl.tr(eps(v))*ufl.Identity(2) + 2.0*mu*eps(v)
+          a = ufl.inner(sigma(v), eps(u))*ufl.dx
+          L = ufl.inner(fem.Constant(msh, (0., 0.)), v)*ufl.dx 
+          problem = fem.petsc.LinearProblem(a, L, bcs, uh)
+          problem.solve()
+     elif mode == 'hyper_elas':
+          # fictitious yperelastic problem:
+          def _F(u):
+               return ufl.grad(u)+ufl.Identity(2)
+          def _sigma(u):
+               F = _F(u)
+               E = 0.5*(F.T*F-ufl.Identity(2))
+               m_jac_stiff_pow = 3
+               # Artificially stiffen the mesh where it is getting crushed:
+               K = 1/pow(ufl.det(F),m_jac_stiff_pow)
+               mu = 1/pow(ufl.det(F),m_jac_stiff_pow)
+               S = K*ufl.tr(E)*ufl.Identity(2) + 2.0*mu*(E - ufl.tr(E)*ufl.Identity(2)/3.0)
+               return S
+          def P(u):
+               return _F(u)*_sigma(u)
+
+          F_m = _F(u)
+          S_m = _sigma(u)
+          P_m = P(u)
+          dS_m = _sigma(v)
+
+          F = ufl.inner(ufl.grad(v),P_m)*ufl.dx
+
+          problem = fem.petsc.NonlinearProblem(F, uh,bcs)
+          
+          solver= nls.NewtonSolver(msh.comm, problem)
+          
+          solver.solve(uh)
+
+     # problem = fem.petsc.LinearProblem(a, L, bcs, uh)
+     # problem.solve()
      deformation_array = uh.x.array.reshape((-1, msh.geometry.dim))
      new_mesh_coords = msh.geometry.x[nodes_to_move, 0:2] + deformation_array[nodes_to_move,0:2]
      
@@ -74,6 +127,11 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
           #assemble the unmodified stiffness matrix (prior to boundary condition application where rows/columns are zeroed out)
           A = fem.petsc.assemble_matrix(fem.form(a))
           A.assemble()
+
+          Anp = A.getValues(range(A.getSize()[0]),range(A.getSize()[1]))
+
+          J = np.linalg.inv(Anp)@Anp
+          duhdx = J[dofs_to_move,:][:,moved_dofs]
           
           dofs_to_move_is = PETSc.IS().createGeneral(dofs_to_move, comm=MPI.COMM_WORLD)
           moved_dofs_is = PETSc.IS().createGeneral(moved_dofs, comm=MPI.COMM_WORLD)
@@ -140,7 +198,7 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
           J.scale(-1.0)
           # print("These are nearly the same words...")
           # J.view()
-          duhdx = J.getDenseArray()
+          # duhdx = J.getDenseArray()
 
           # I = ufl.Identity(2)
           # F = I+ufl.grad(uh)

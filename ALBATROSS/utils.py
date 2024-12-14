@@ -18,33 +18,43 @@ def get_vtx_to_dofs(domain,V):
      '''
      solution from https://fenicsproject.discourse.group/t/application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs/9646
      --------------
-     input: subspace to find DOFs in
-     output: map of DOFs related to their corresponding vertices
+     input: (uncollapsed) subspace to find DOFs in
+     output: map of DOFs related to their corresponding vertices 
+               (shape: num vertices x num dofs per vertex)
      '''
      V0, V0_to_V = V.collapse()
-     dof_layout = V0.dofmap.dof_layout
+     
+     num_vertices_per_cell = dolfinx.cpp.mesh.cell_num_entities(
+          domain.topology.cell_type, 0
+     )
 
-     num_vertices = domain.topology.index_map(0).size_local + domain.topology.index_map(0).num_ghosts
-     vertex_to_par_dof_map = np.zeros(num_vertices, dtype=np.int32)
-     num_cells = domain.topology.index_map(
-          domain.topology.dim).size_local + domain.topology.index_map(
-          domain.topology.dim).num_ghosts
+     dof_layout2 = np.empty((num_vertices_per_cell,), dtype=np.int32)
+     for i in range(num_vertices_per_cell):
+          var = V.dofmap.dof_layout.entity_dofs(0, i)
+          assert len(var) == 1
+          dof_layout2[i] = var[0]
+
+     num_vertices = (
+          domain.topology.index_map(0).size_local + domain.topology.index_map(0).num_ghosts
+     )
+
      c_to_v = domain.topology.connectivity(domain.topology.dim, 0)
-     for cell in range(num_cells):
-          vertices = c_to_v.links(cell)
-          dofs = V0.dofmap.cell_dofs(cell)
-          for i, vertex in enumerate(vertices):
-               vertex_to_par_dof_map[vertex] = dofs[dof_layout.entity_dofs(0, i)]
-
+     assert (
+          c_to_v.offsets[1:] - c_to_v.offsets[:-1] == c_to_v.offsets[1]
+     ).all(), "Single cell type supported"
+     
+     #construct 
+     vertex_to_dof_map = np.empty(num_vertices, dtype=np.int32)
+     vertex_to_dof_map[c_to_v.array] = V0.dofmap.list[:, dof_layout2].reshape(-1)
+     
      geometry_indices = dolfinx.cpp.mesh.entities_to_geometry(
           domain._cpp_object, 0, np.arange(num_vertices, dtype=np.int32), False)
      bs = V0.dofmap.bs
      vtx_to_dof = np.zeros((num_vertices,bs), dtype=np.int32)
      for vertex, geom_index in enumerate(geometry_indices):
-          par_dof = vertex_to_par_dof_map[vertex]
+          par_dof = vertex_to_dof_map[vertex]
           for b in range(bs):
                vtx_to_dof[vertex, b] = V0_to_V[par_dof*bs+b]
-     # vtx_to_dof = np.reshape(vtx_to_dof, (-1,1))
 
      return vtx_to_dof
 

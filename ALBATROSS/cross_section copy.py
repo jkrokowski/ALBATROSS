@@ -436,9 +436,9 @@ class CrossSection:
             x_vec = as_tensor([0,x[0],x[1]])
             # normie = np.sqrt(assemble_scalar(form(inner(x_vec,x_vec)*dx)))
             # normie_avg = np.sqrt(assemble_scalar(form(inner(ubar_mode,ubar_mode)*dx)))
-            u0_avg=assemble_scalar(form(ubar_mode[0]*dx))/self.A 
-            u1_avg=assemble_scalar(form((ubar_mode[1])*dx))/self.A 
-            u2_avg=assemble_scalar(form((ubar_mode[2])*dx))/self.A 
+            u0_avg=assemble_scalar(form(ubar_mode[0]*dx))/self.A
+            u1_avg=assemble_scalar(form((ubar_mode[1])*dx))
+            u2_avg=assemble_scalar(form((ubar_mode[2])*dx))
             mat[0,mode]=u0_avg
             mat[1,mode]=u1_avg 
             mat[2,mode]=u2_avg 
@@ -461,8 +461,8 @@ class CrossSection:
             
             # x_c = u1_avg
             # y_c = u2_avg
-            x_c = u0_avg
-            y_c = u1_avg
+            x_c = u1_avg
+            y_c = u2_avg
             # x_c = 0.5
             # y_c = 0.5
 
@@ -486,21 +486,21 @@ class CrossSection:
             # mat[5,mode]=(assemble_scalar(form(((-ubar_t[0]*(x[0]-x_c))*dx))) /  
             #               assemble_scalar(form(( (x[1])**2) * dx)) )
             
-            # mat[3,mode]=assemble_scalar(form(((ubar_t[2]*(x[0]-x_c)+ubar_t[1]*(x[1]-y_c))*dx)))
-            # mat[4,mode]=assemble_scalar(form(((ubar_t[0]*(x[1]-y_c))*dx))) 
-            # mat[5,mode]=assemble_scalar(form((-(ubar_t[0]*(x[0]-x_c))*dx)))
+            mat[3,mode]=assemble_scalar(form(((ubar_t[2]*(x[0]-x_c)-ubar_t[1]*(x[1]-y_c))*dx)))
+            mat[4,mode]=assemble_scalar(form(((ubar_t[0]*(x[1]-y_c))*dx))) 
+            mat[5,mode]=assemble_scalar(form((-(ubar_t[0]*(x[0]-x_c))*dx)))
 
-            mat[3,mode]=assemble_scalar(form(((ubar_t[2]*(x[0])-ubar_t[1]*(x[1]))*dx)))
-            mat[4,mode]=assemble_scalar(form((((ubar_t[0])*(x[0]))*dx)))
-            mat[5,mode]=assemble_scalar(form((((-ubar_t[0])*(x[1]))*dx)))
+            # mat[3,mode]=assemble_scalar(form(((ubar_mode[2]*(x[0])-ubar_mode[1]*(x[1]))*dx)))#/np.sqrt(assemble_scalar(form(((x[0]**2+x[1]**2))*dx)))
+            # mat[4,mode]=assemble_scalar(form((((ubar_mode[0])*(x[0]))*dx)))#/np.sqrt(assemble_scalar(form(((x[0]**2))*dx)))
+            # mat[5,mode]=assemble_scalar(form((((-ubar_mode[0])*(x[1]))*dx)))#/np.sqrt(assemble_scalar(form(((x[1]**2))*dx)))
 
             ur0 = mat[3,mode]
             ur1 = mat[4,mode]
             ur2 = mat[5,mode]
             
-            ubar_r0 = ubar_t[0] - 10000*ur0*x[0] - 10000*ur0*x[1]
-            ubar_r1 = ubar_t[1] - 100*ur1*x[1]
-            ubar_r2 = ubar_t[2] - 100*ur2*x[0]
+            ubar_r0 = ubar_t[0] - ur2*x[0] + ur1*x[1]
+            ubar_r1 = ubar_t[1] - ur0*x[1]
+            ubar_r2 = ubar_t[2] + ur0*x[0]
 
             ubar_r = as_tensor([ubar_r0,ubar_r1,ubar_r2])
 
@@ -743,8 +743,8 @@ class CrossSection:
             #TODO: NEED TO CHECK THIS SETUP THOROUGHLY BASICALLY, THE AVERAGE STRESSES NEED TO BE 
             # COMPUTED AND THESE FEED INTO THE AXIAL AND SHEAR VALUES.
             # THEN, THE 
-            gradubar=grad(ubar_mode)
-            # gradubar=grad(ubar_r)
+            # gradubar=grad(ubar_mode)
+            gradubar=grad(ubar_r)
             # gradubar=grad(as_tensor([u0,u1,u2]))
 
             #derivatives of displacement
@@ -814,7 +814,7 @@ class CrossSection:
             P1 = assemble_scalar(form(sigma11*dx))
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
-            T1 = assemble_scalar(form( (((x[1])*(sigma13)) - ((x[0])*(sigma12)))*dx))
+            T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
             M2 = assemble_scalar(form((x[1])*(sigma11)*dx))
             M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))
             # T1 = assemble_scalar(form( (((x[0]-u0_avg-u0_rot)*(sigma13)) - ((x[1]-u1_avg-u1_rot)*(sigma12)))*dx))
@@ -847,16 +847,16 @@ class CrossSection:
         # for i in range(12):
         #     mat[:, mode] /= np.sqrt(np.dot(mat[:,mode], mat[:,mode]))
 
-        for i in range(12):
-            for j in range(12):
-                print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
+        # for i in range(12):
+        #     for j in range(12):
+        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
 
         # mat/=np.linalg.norm(mat,axis=0).reshape((12,1)).T
         # mat/=np.linalg.norm(mat,axis=1)
 
-        # for i in range(12):
-        #     for j in range(12):
-        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
+        for i in range(12):
+            for j in range(12):
+                print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
         
         # mat,_ = np.linalg.qr(mat)
 
@@ -1469,6 +1469,44 @@ class CrossSection:
 
         if not pyvista.OFF_SCREEN:
             plotter.show()
+    
+    
+    def plot_sensitivities(self):
+        plotter = pyvista.Plotter(shape=(2,3))
+        grids = []
+        warped = []
+        for i in range(6):
+            row = int(i/3)
+            col = i%3
+            plotter.subplot(row,col)
+            #plot mesh
+            tdim = self.msh.topology.dim
+            topology, cell_types, geom = plot.vtk_mesh(self.msh, tdim)
+            grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+
+            sensitivity_to_plot = np.zeros((geom.shape[0],2))
+
+            sensitivity_to_plot[self.boundary_nodes,:] = self.dKdx[i,i,:].reshape(-1,2)[self.boundary_nodes,:]
+
+            sensitivity = np.concatenate([sensitivity_to_plot,np.zeros_like(sensitivity_to_plot)],axis=1)
+
+            sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)
+
+            grids[i].point_data["sensitivity"] = sensitivity
+            norm = np.linalg.norm(sensitivity)
+            print(norm)
+            warped.append(grids[i].warp_by_vector("sensitivity",factor=1/norm))
+            plotter.add_mesh(grids[i],show_edges=True,opacity=0.5,scalar_bar_args={'title': f'Sensitivity_{i}'})
+            plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
+            plotter.add_text(f'dK/dx({i},{i})')
+            plotter.view_xy()
+            plotter.add_axes()
+        plotter.subplot(0,0)
+        plotter.show_bounds()
+        if not pyvista.OFF_SCREEN:
+            plotter.show()
+
+
 
 class CoupledXSProblem:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 

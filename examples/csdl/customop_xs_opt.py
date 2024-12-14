@@ -159,7 +159,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
                                                         self.boundary_nodes,
                                                         displacement,
                                                         self.interior_nodes,
-                                                        get_deriv=True)
+                                                        get_deriv=True,
+                                                        mode='lin_elas')
 
         # derivatives['xy_interior','xy'] = np.ones_like(xy_interior)
         derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
@@ -171,11 +172,16 @@ recorder.start()
 inputs = csdl.VariableGroup()
 
 N = 15
-W = .1
-H = .1
-points = [[-W/2,-H/2],[W/2, H/2]]
+# W = .1
+# H = .1
+# points = [[-W/2,-H/2],[W/2, H/2]]
 
-domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
+# domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
+
+radius = 1
+num_el = 20 #number of elements through wall thickness
+
+domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 all_nodes= locate_entities(domain,0,lambda x: np.ones_like(x[0]))
 boundary_nodes = locate_entities_boundary(domain,0,lambda x: np.ones_like(x[0]))
 interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
@@ -233,7 +239,7 @@ with csdl.namespace('Objective'):
 with csdl.namespace('Area constraint'):
     g1 = A
     g1.add_name('g1')
-    g1.set_as_constraint(upper=0.011) # constraint
+    g1.set_as_constraint(upper=3.2) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()

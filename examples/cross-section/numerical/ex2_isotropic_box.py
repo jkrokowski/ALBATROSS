@@ -4,16 +4,16 @@ import numpy as np
 
 #create mesh
 N = 10
-W = .1
-H = .1
-t1 = 0.01
-t2 = 0.01
-t3 = 0.01
-t4 = 0.01
+W = 1
+H = 1
+t1 = 0.1
+t2 = 0.1
+t3 = 0.1
+t4 = 0.1
 
 points = [(-W/2,H/2),(W/2,H/2),(W/2,-H/2),(-W/2,-H/2)]
 thicknesses = [t1,t2,t3,t4]
-num_el = 4*[10] #number of elements through each wall thickness
+num_el = 4*[4] #number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_hollow_box(points,thicknesses,num_el,'box_xs')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
@@ -54,3 +54,8 @@ I = (W*H**3)/12 - ((W-t2-t4)*(H-t1-t3)**3)/12
 print(E*I)
 print("Computed bending stiffness:")
 print(boxXS.K[4,4])
+
+
+boxXS.compute_xs_stiffness_matrix_sensitivities()
+
+boxXS.plot_sensitivities()
