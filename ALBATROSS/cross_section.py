@@ -27,8 +27,6 @@ default_scalar_type = PETSc.ScalarType
 
 #TODO: allow user to specify a point to find xs props about
 #TODO: provide a method to translate between different xs values?
-#TODO: use a (CG,2) functionspace for the xs displacement to allow 
-#       for a (CG,1) stress field and higher order convergence
 
 class CrossSection:
     def __init__(self, msh, materials ,celltags=None,verbose=False):
@@ -49,6 +47,9 @@ class CrossSection:
         #geometric dimension
         self.d = 3
         self.tdim = 2
+
+        #Finite element shape function degree: (1=linear,2=quadratic)
+        self.degree = 1
 
         #number of materials
         self.num_mat = len(self.materials)
@@ -104,7 +105,7 @@ class CrossSection:
         
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
-        self.VX = functionspace(self.msh,("CG",2,(self.tdim,)))
+        self.VX = functionspace(self.msh,("CG",self.degree,(self.tdim,)))
         self.n = FacetNormal(self.msh)
         
         #compute cross-sectional area and linear density (used for body forces)
@@ -124,7 +125,7 @@ class CrossSection:
         self.zavg = assemble_scalar(form(self.x[1]*self.dx))/self.A
 
         #vectorfunctionspace for initializing displacement functions
-        self.recovery_V = functionspace(self.msh,('CG',2,(self.d,)))
+        self.recovery_V = functionspace(self.msh,('CG',self.degree,(self.d,)))
 
         #initialize warping displacement fxn space
         self._set_up_fxnspace_and_fxns()
@@ -190,7 +191,7 @@ class CrossSection:
 
     def _set_up_fxnspace_and_fxns(self):
         # Construct Displacement Coefficient mixed function space
-        self.Ve = element("CG",self.msh.topology.cell_name(),2,shape=(self.d,))
+        self.Ve = element("CG",self.msh.topology.cell_name(),self.degree,shape=(self.d,))
         self.V = functionspace(self.msh, mixed_element(4*[self.Ve]))
         
         #displacement and test functions
@@ -441,11 +442,11 @@ class CrossSection:
             
             #filter rigid body modes out using GS
             ubar_mode = self._orthonormalize_rbm(ubar_mode)
-            # ubar_mode = self._orthonormalize_rbm(uhat_mode)
+            # uhat_mode = self._orthonormalize_rbm(uhat_mode)
 
             #update ubar in each mode:
-            # self.sols[self.ubar_vtx_to_dof.flatten(),mode] = ubar_mode.vector.array
-            # self.sols[self.uhat_vtx_to_dof.flatten(),mode] = uhat_mode.vector.array
+            self.sols[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
+            # self.sols[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
             
             #compute strains at x1=0
             gradubar=grad(ubar_mode)
@@ -468,8 +469,8 @@ class CrossSection:
                             [dubzdx,dubzdy,dubzdz]])
             
             #ensure that strains are symmetric
-            # eps = 0.5 * (gradu + gradu.T)
-            eps = gradu
+            eps = 0.5 * (gradu + gradu.T)
+            # eps = gradu
 
             # construct strain and stress tensors based on u_sol
             sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
@@ -484,7 +485,7 @@ class CrossSection:
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
             
-            T1 = assemble_scalar(form( (((x[2])*(sigma13)) - ((x[1])*(sigma12)))*dx))
+            T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
             M2 = assemble_scalar(form((x[1])*(sigma11)*dx))          
             M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))  
             
@@ -527,7 +528,7 @@ class CrossSection:
 
         #Initialize a tensor element and mixed tensor function space 
         # for the elastic solution modes
-        Ne = element('CG',self.msh.topology.cell_name(),2,shape=(3,6))
+        Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,6))
         self.N_space = functionspace(self.msh,mixed_element(2*[Ne]))
         self.N = Function(self.N_space)
         
@@ -554,7 +555,7 @@ class CrossSection:
     # def _build_elastic_solution_modes(self):
     #     #Initialize a tensor element and mixed tensor function space 
     #     # for the elastic solution modes
-    #     Ne = element('CG',self.msh.topology.cell_name(),1,shape=(3,6))
+    #     Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,6))
     #     self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
     #     self.N = Function(self.N_space)
         
@@ -679,7 +680,7 @@ class CrossSection:
     def _build_elastic_solution_modes_EB(self):
         #Initialize a tensor element and mixed tensor function space 
         # for the elastic solution modes
-        Ne = element('CG',self.msh.topology.cell_name(),1,shape=(3,4))
+        Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,4))
         self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
         self.N = Function(self.N_space)
         
@@ -1212,7 +1213,7 @@ class CrossSection:
             warped.append(grids[i].warp_by_vector(name,factor=.1))
 
 
-            plotter.add_mesh(warped[i],show_edges=False,opacity=.9)
+            plotter.add_mesh(warped[i],show_edges=True,opacity=.9)
             plotter.add_mesh(grids[i],show_edges=True,opacity=.5,scalar_bar_args={'title': f'warping mode {i}'})
             plotter.add_text(mode[i])
             plotter.view_xy()

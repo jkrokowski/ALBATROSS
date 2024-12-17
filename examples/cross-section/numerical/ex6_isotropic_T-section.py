@@ -4,7 +4,7 @@ import ALBATROSS
 import numpy as np
 
 #create mesh
-N = 10
+N = 3
 H = 1
 W= 1
 tf = 0.1

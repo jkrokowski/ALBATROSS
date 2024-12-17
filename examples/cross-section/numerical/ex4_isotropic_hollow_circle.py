@@ -6,7 +6,7 @@ import numpy as np
 #cross-section mesh definition
 radius = 1.0
 wall_thickness = 0.2
-num_el = 3 #number of elements through wall thickness
+num_el = 4 #number of nodes through wall thickness
 
 domain = ALBATROSS.mesh.create_hollow_circle(radius,wall_thickness,num_el,'hollow_circle')
 
@@ -23,6 +23,8 @@ hollowCircleXS.plot_mesh()
 
 #compute the stiffness matrix
 hollowCircleXS.get_xs_stiffness_matrix()
+
+hollowCircleXS.plot_warping_fxns()
 
 np.set_printoptions(precision=3)
 
