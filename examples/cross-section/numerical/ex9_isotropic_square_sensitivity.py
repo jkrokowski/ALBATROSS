@@ -3,7 +3,7 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 20 #number of quad elements per side
+N = 10 #number of quad elements per side
 W = 1 #square height  
 H = 1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
@@ -45,52 +45,52 @@ print(squareXS.K[4,4])
 
 squareXS.plot_sensitivities()
 
-# import pyvista
-# import dolfinx.plot as plot
+import pyvista
+import dolfinx.plot as plot
 
-# pyvista.global_theme.background = [255, 255, 255, 255]
-# pyvista.global_theme.font.color = 'black'
-# plotter = pyvista.Plotter(shape=(2,3))
-# grids = []
-# warped = []
-# for i in range(6):
-#     row = int(i/3)
-#     col = i%3
-#     plotter.subplot(row,col)
-#     #plot mesh
-#     tdim = domain.topology.dim
-#     topology, cell_types, geom = plot.vtk_mesh(domain, tdim)
-#     grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+pyvista.global_theme.background = [255, 255, 255, 255]
+pyvista.global_theme.font.color = 'black'
+plotter = pyvista.Plotter(shape=(2,3))
+grids = []
+warped = []
+for i in range(6):
+    row = int(i/3)
+    col = i%3
+    plotter.subplot(row,col)
+    #plot mesh
+    tdim = domain.topology.dim
+    topology, cell_types, geom = plot.vtk_mesh(domain, tdim)
+    grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
 
-#     # sensitivity_to_plot = squareXS.dK1inv[5,5,:]
-#     # sensitivity_to_plot = squareXS.dK2[5,5,:]
-#     # sensitivity_to_plot = squareXS.dK1invT[5,5,:]
-#     # sensitivity_to_plot = squareXS.dKdx[3,3,:].reshape(-1,2)
-#     sensitivity_to_plot = np.zeros((geom.shape[0],2))
+    # sensitivity_to_plot = squareXS.dK1inv[5,5,:]
+    # sensitivity_to_plot = squareXS.dK2[5,5,:]
+    # sensitivity_to_plot = squareXS.dK1invT[5,5,:]
+    # sensitivity_to_plot = squareXS.dKdx[3,3,:].reshape(-1,2)
+    sensitivity_to_plot = np.zeros((geom.shape[0],2))
 
-#     # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dSdx[i,i,:].reshape(-1,2)[squareXS.boundary_dofs,:]
-#     sensitivity_to_plot[squareXS.boundary_nodes,:] = np.abs(squareXS.dKdx[i,i,:].reshape(-1,2)[squareXS.boundary_nodes,:])
+    # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dSdx[i,i,:].reshape(-1,2)[squareXS.boundary_dofs,:]
+    sensitivity_to_plot[squareXS.boundary_nodes,:] = np.abs(squareXS.dKdx[i,i,:].reshape(-1,2)[squareXS.boundary_nodes,:])
 
-#     # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dKdx[4,4,:]
-#     # sensitivity_to_plot = squareXS.dKdx[0,0,:]
-#     # sensitivity_to_plot[squareXS.boundary_dofs] = squareXS.dSdx[2,2,:]
-#     sensitivity = np.concatenate([sensitivity_to_plot,np.zeros_like(sensitivity_to_plot)],axis=1)
+    # sensitivity_to_plot[squareXS.boundary_dofs,:] = squareXS.dKdx[4,4,:]
+    # sensitivity_to_plot = squareXS.dKdx[0,0,:]
+    # sensitivity_to_plot[squareXS.boundary_dofs] = squareXS.dSdx[2,2,:]
+    sensitivity = np.concatenate([sensitivity_to_plot,np.zeros_like(sensitivity_to_plot)],axis=1)
 
-#     sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)
+    sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)
 
-#     grids[i].point_data["sensitivity"] = sensitivity
-#     warped.append(grids[i].warp_by_vector("sensitivity",factor=.00001))
-#     # plotter.add_mesh(warped,show_edges=True,opacity=0.5)
-#     plotter.add_mesh(grids[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
-#     plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
-#     plotter.add_text(f'dK/dx({i},{i})')
-#     plotter.view_xy()
-#     # plotter.show_bounds()
-#     plotter.add_axes()
-# plotter.subplot(0,0)
-# plotter.show_bounds()
-# if not pyvista.OFF_SCREEN:
-#     plotter.show()
+    grids[i].point_data["sensitivity"] = sensitivity
+    warped.append(grids[i].warp_by_vector("sensitivity",factor=.00001))
+    # plotter.add_mesh(warped,show_edges=True,opacity=0.5)
+    plotter.add_mesh(grids[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
+    plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
+    plotter.add_text(f'dK/dx({i},{i})')
+    plotter.view_xy()
+    # plotter.show_bounds()
+    plotter.add_axes()
+plotter.subplot(0,0)
+plotter.show_bounds()
+if not pyvista.OFF_SCREEN:
+    plotter.show()
 
 
 # from dolfinx import cpp

@@ -4,7 +4,7 @@ import numpy as np
 
 #cross-section mesh definition
 radius = 1
-num_el = 10 #number of elements through wall thickness
+num_el = 4 #number of elements thro
 
 domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 
@@ -25,9 +25,9 @@ circleXS.get_xs_stiffness_matrix()
 #show the warping functions
 circleXS.plot_warping_fxns()
 
-circleXS.compute_xs_stiffness_matrix_sensitivities()
+# circleXS.compute_xs_stiffness_matrix_sensitivities()
 
-circleXS.plot_sensitivities()
+# circleXS.plot_sensitivities()
 
 np.set_printoptions(precision=3)
 

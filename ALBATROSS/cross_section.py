@@ -403,21 +403,21 @@ class CrossSection:
         i,j,k,l=self.i,self.j,self.k,self.l
         a,B = self.a,self.B
 
-        # get maps of vertices to displacement coefficients DOFs 
-        self.ubar_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(0)).flatten()
-        self.uhat_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(1)).flatten()
+        # get collapsed subspace and maps from subspaces to parent space 
+        UBAR,self.ubar_vtx_to_dof = self.V.sub(0).collapse()
+        UHAT,self.uhat_vtx_to_dof = self.V.sub(1).collapse()
+        # self.ubar_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(0)).flatten()
+        # self.uhat_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(1)).flatten()
         # self.utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
         # self.ubreve_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(3))
-        # self.ubar_vtx_to_dof = self.V.sub(0).collapse()[1]
-        # self.uhat_vtx_to_dof = self.V.sub(1).collapse()[1]
 
         #GET UBAR AND UHAT RELATED MODES
         ubar_modes = self.sols[self.ubar_vtx_to_dof,:]
         uhat_modes = self.sols[self.uhat_vtx_to_dof,:]
 
         #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
-        UBAR = self.V.sub(0).collapse()[0]
-        UHAT = self.V.sub(1).collapse()[0]
+        # UBAR = self.V.sub(0).collapse()[0]
+        # UHAT = self.V.sub(1).collapse()[0]
         ubar_mode = Function(UBAR)
         uhat_mode = Function(UHAT)
 
@@ -436,8 +436,8 @@ class CrossSection:
         #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
         for mode in range(mat.shape[1]):
             #construct function from mode
-            ubar_mode.vector.array = ubar_modes[:,mode].flatten()
-            uhat_mode.vector.array = uhat_modes[:,mode].flatten()
+            ubar_mode.vector.array = ubar_modes[:,mode]
+            uhat_mode.vector.array = uhat_modes[:,mode]
             
             #filter rigid body modes out using GS
             ubar_mode = self._orthonormalize_rbm(ubar_mode)
@@ -451,7 +451,7 @@ class CrossSection:
             gradubar=grad(ubar_mode)
 
             #derivatives of displacement
-            #this is know from our displacement expression
+            #this is known from our displacement expression
             dubxdx = uhat_mode[0]
             dubxdy = gradubar[0,0]
             dubxdz = gradubar[0,1]
@@ -468,7 +468,8 @@ class CrossSection:
                             [dubzdx,dubzdy,dubzdz]])
             
             #ensure that strains are symmetric
-            eps = 0.5 * (gradu + gradu.T)
+            # eps = 0.5 * (gradu + gradu.T)
+            eps = gradu
 
             # construct strain and stress tensors based on u_sol
             sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
@@ -483,7 +484,7 @@ class CrossSection:
             V2 = assemble_scalar(form(sigma12*dx))
             V3 = assemble_scalar(form(sigma13*dx))
             
-            T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
+            T1 = assemble_scalar(form( (((x[2])*(sigma13)) - ((x[1])*(sigma12)))*dx))
             M2 = assemble_scalar(form((x[1])*(sigma11)*dx))          
             M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))  
             
@@ -537,18 +538,18 @@ class CrossSection:
         elastic_sols = self.sols_decoup
 
         #get map of function dofs 
-        N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0)).flatten()
-        N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1)).flatten()
-        # N_bar_vtx_to_dofs = self.N_space.sub(0).collapse()[1]
-        # N_hat_vtx_to_dofs = self.N_space.sub(1).collapse()[1]
+        # N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0)).flatten()
+        # N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1)).flatten()
+        N_bar_vtx_to_dofs = self.N_space.sub(0).collapse()[1]
+        N_hat_vtx_to_dofs = self.N_space.sub(1).collapse()[1]
 
         #get separate elastic solution mode values
         N_bar_vals = elastic_sols[:len(self.ubar_vtx_to_dof),:]
         N_hat_vals = elastic_sols[len(self.uhat_vtx_to_dof):,:]
 
         #populate elastic solution modes to elastic solution mode function
-        self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals.reshape(len(N_bar_vtx_to_dofs))
-        self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals.reshape(len(N_bar_vtx_to_dofs))
+        self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals.flatten()
+        self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals.flatten()
 
     # def _build_elastic_solution_modes(self):
     #     #Initialize a tensor element and mixed tensor function space 
@@ -672,11 +673,13 @@ class CrossSection:
         
         #invert Flexibility matrix to find beam constitutive matrix
         self.K = np.linalg.inv(self.S)
+        self.K = sparseify(self.K).toarray()
+
 
     def _build_elastic_solution_modes_EB(self):
         #Initialize a tensor element and mixed tensor function space 
         # for the elastic solution modes
-        Ne = element('CG',self.msh.topology.cell_name(),2,shape=(3,4))
+        Ne = element('CG',self.msh.topology.cell_name(),1,shape=(3,4))
         self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
         self.N = Function(self.N_space)
         
@@ -1163,7 +1166,7 @@ class CrossSection:
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
 
-    def plot_warping_fxns(self,rigid=False,coup=False):
+    def plot_warping_fxns(self,rigid=True,coup=False):
         pyvista.global_theme.background = [255, 255, 255, 255]
         pyvista.global_theme.font.color = 'black'
         plotter = pyvista.Plotter()
@@ -1190,28 +1193,69 @@ class CrossSection:
             plotter.subplot(row,col)
             #plot mesh
             tdim = self.msh.topology.dim
-            topology, cell_types, geom = plot.vtk_mesh(self.msh, tdim)
+            # topology, cell_types, geom = plot.vtk_mesh(self.msh, tdim)
+            # grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+            
+            V0,V0_to_V = self.V.sub(0).collapse()
+            topology, cell_types, geom = plot.vtk_mesh(V0)
             grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+            
             c = np.zeros((6,1))
             c[i,:] = 1
 
             warping_sol = elastic_sols[:len(self.ubar_vtx_to_dof),:]@c
-            
+            # ubar = Function(V0)
+            # ubar.vector.array = warping_sol.flatten()
             solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
             grids[i][name]= solution_mode/np.max(np.linalg.norm(solution_mode,axis=1))
+            # grids[i][name]= ubar.vector.array
             warped.append(grids[i].warp_by_vector(name,factor=.1))
 
 
-            plotter.add_mesh(warped[i],show_edges=True,opacity=.9)
+            plotter.add_mesh(warped[i],show_edges=False,opacity=.9)
             plotter.add_mesh(grids[i],show_edges=True,opacity=.5,scalar_bar_args={'title': f'warping mode {i}'})
             plotter.add_text(mode[i])
             plotter.view_xy()
             plotter.show_bounds()
             
-
         if not pyvista.OFF_SCREEN:
             plotter.show()
 
+
+    def plot_sensitivities(self):
+        plotter = pyvista.Plotter(shape=(2,3))
+        grids = []
+        warped = []
+        for i in range(6):
+            row = int(i/3)
+            col = i%3
+            plotter.subplot(row,col)
+            #plot mesh
+            tdim = self.msh.topology.dim
+            topology, cell_types, geom = plot.vtk_mesh(self.msh, tdim)
+            grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+
+            sensitivity_to_plot = np.zeros((geom.shape[0],2))
+
+            sensitivity_to_plot[self.boundary_nodes,:] = self.dKdx[i,i,:].reshape(-1,2)[self.boundary_nodes,:]
+
+            sensitivity = np.concatenate([sensitivity_to_plot,np.zeros_like(sensitivity_to_plot)],axis=1)
+
+            sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)
+
+            grids[i].point_data["sensitivity"] = sensitivity
+            norm = np.linalg.norm(sensitivity)
+            print(norm)
+            warped.append(grids[i].warp_by_vector("sensitivity",factor=1/norm))
+            plotter.add_mesh(grids[i],show_edges=True,opacity=0.5,scalar_bar_args={'title': f'Sensitivity_{i}'})
+            plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
+            plotter.add_text(f'dK/dx({i},{i})')
+            plotter.view_xy()
+            plotter.add_axes()
+        plotter.subplot(0,0)
+        plotter.show_bounds()
+        if not pyvista.OFF_SCREEN:
+            plotter.show()
 class CoupledXSProblem:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
         compute combined beam cross-sectional properties'''
