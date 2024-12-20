@@ -10,7 +10,7 @@ import numpy as np
 from petsc4py import PETSc
 from dolfinx.mesh import locate_entities_boundary
 from dolfinx import geometry # import compute_collisions_trees
-from scipy.sparse.linalg import inv
+from scipy.sparse.linalg import inv,lsqr,spsolve
 import sparseqr
 from scipy.sparse import csr_matrix
 import ufl 
@@ -522,9 +522,21 @@ class CrossSection:
             # self.sols_decoup = self.sols@np.linalg.inv(mat)
             ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
             sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
+
+            #USING PSEUDOINVERSE
             mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
-            self.sols_decoup = sparse_sols.dot(mat_pinv).toarray()
+            # self.sols_decoup = sparse_sols.dot(mat_pinv).toarray()
             # self.sols.decoup=mat@self.sols
+
+            #USING LSQR:
+            # self.sols_decoup2 = lsqr(mat_sparse.T,sparse_sols.T).T
+            self.sols_decoup = sparseify(np.linalg.lstsq(mat_sparse.T.toarray(),sparse_sols.T.toarray())[0].T).toarray()
+
+            # from scipy.sparse.linalg import norm
+            # diff = self.sols_decoup-self.sols_decoup2
+            # diff_norm = norm(diff)
+
+
 
         #Initialize a tensor element and mixed tensor function space 
         # for the elastic solution modes
