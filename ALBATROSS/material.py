@@ -77,12 +77,31 @@ def getMatConstitutiveOrthotropic(E11,E22,E33,G12,G13,G23,nu12,nu13,nu23):
 
     return C
 
+def getMatFlexIsotropic(mesh,E,nu):
+    #lame parameters from Young's Modulus and Poisson Ratio
+    _lam = (E*nu)/((1+nu)*(1-2*nu))
+    mu = (E/(2*(1+nu)))
+
+    #elasticity tensor construction
+    delta = Identity(3)
+    i,j,k,l=indices(4)
+    F = (1/(_lam+2*mu))*as_tensor((delta[i,j]*delta[k,l]) \
+                    - (_lam/(_lam+2*mu))*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
+
+    return F
+
 def voigt2tensor(C_voigt):
-    '''converts a 6x6 matrix into the appropriately constructed
-      3 dimensional, Fourth order tensor
-      '''
-    
-    C = as_tensor([[as_matrix([[C_voigt[0,0],C_voigt[0,3],C_voigt[0,4]],\
+    """
+    Converts a 6x6 Voigt notation matrix into a 3-dimensional, 
+    4th-order tensor (3x3x3x3) for use in finite element analysis.
+
+    Parameters:
+        C_voigt (ufl.Matrix): 6x6 Voigt notation material constitutive matrix.
+
+    Returns:
+        ufl.Tensor: 3x3x3x3 fourth-order tensor representation.
+    """
+    C_tensor = as_tensor([[as_matrix([[C_voigt[0,0],C_voigt[0,3],C_voigt[0,4]],\
                                [C_voigt[0,3],C_voigt[0,1],C_voigt[0,5]],\
                                [C_voigt[0,4],C_voigt[0,5],C_voigt[0,2]]]),\
                    as_matrix([[C_voigt[0,3],C_voigt[3,3],C_voigt[3,4]],\
@@ -109,11 +128,45 @@ def voigt2tensor(C_voigt):
                     as_matrix([[C_voigt[0,2],C_voigt[2,3],C_voigt[2,4]],\
                                [C_voigt[2,3],C_voigt[1,2],C_voigt[2,5]],\
                                [C_voigt[2,4],C_voigt[2,5],C_voigt[2,2]]])]   ])
-    return C
+    return C_tensor
 
-def tensor2voigt(C):
-    
-    return
+def tensor2voigt(C_tensor):
+    """
+    Converts a 3-dimensional, 4th-order tensor (3x3x3x3) into a 6x6 Voigt notation matrix.
+
+    Parameters:
+        C_tensor (ufl.Tensor): 3x3x3x3 fourth-order tensor.
+
+    Returns:
+        ufl.Matrix: 6x6 Voigt notation material constitutive matrix.
+    """
+    C_voigt = as_matrix([
+        [
+            C_tensor[0, 0, 0, 0], C_tensor[0, 0, 1, 1], C_tensor[0, 0, 2, 2],
+            C_tensor[0, 0, 0, 1], C_tensor[0, 0, 0, 2], C_tensor[0, 0, 1, 2]
+        ],
+        [
+            C_tensor[1, 1, 0, 0], C_tensor[1, 1, 1, 1], C_tensor[1, 1, 2, 2],
+            C_tensor[1, 1, 0, 1], C_tensor[1, 1, 0, 2], C_tensor[1, 1, 1, 2]
+        ],
+        [
+            C_tensor[2, 2, 0, 0], C_tensor[2, 2, 1, 1], C_tensor[2, 2, 2, 2],
+            C_tensor[2, 2, 0, 1], C_tensor[2, 2, 0, 2], C_tensor[2, 2, 1, 2]
+        ],
+        [
+            C_tensor[0, 1, 0, 0], C_tensor[0, 1, 1, 1], C_tensor[0, 1, 2, 2],
+            C_tensor[0, 1, 0, 1], C_tensor[0, 1, 0, 2], C_tensor[0, 1, 1, 2]
+        ],
+        [
+            C_tensor[0, 2, 0, 0], C_tensor[0, 2, 1, 1], C_tensor[0, 2, 2, 2],
+            C_tensor[0, 2, 0, 1], C_tensor[0, 2, 0, 2], C_tensor[0, 2, 1, 2]
+        ],
+        [
+            C_tensor[1, 2, 0, 0], C_tensor[1, 2, 1, 1], C_tensor[1, 2, 2, 2],
+            C_tensor[1, 2, 0, 1], C_tensor[1, 2, 0, 2], C_tensor[1, 2, 1, 2]
+        ],
+    ])
+    return C_voigt
 
 def getConstitutiveField():
 

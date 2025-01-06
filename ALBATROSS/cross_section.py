@@ -387,7 +387,9 @@ class CrossSection:
             X[m-1-i,11-i]=1
 
         #perform matrix multiplication implicitly to construct orthogonal nullspace basis
-        self.sols = sparseqr.qmult(QR,X)
+        # self.sols = sparseqr.qmult(QR,X)
+        Q,_ = np.linalg.qr(Acsr.transpose().toarray())
+        self.sols  = Q[:,-12:]
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
         # self.sols = self.sparse_sols.toarray()
 
@@ -421,6 +423,13 @@ class CrossSection:
         # UHAT = self.V.sub(1).collapse()[0]
         ubar_mode = Function(UBAR)
         uhat_mode = Function(UHAT)
+        vbar_mode = TrialFunction(UBAR)
+
+        # Sketch of a newer approach:
+        #We can construct the warping functions in a much more intelligent way, by using the approach of the
+        # self._orthonormalize_rbd() to return the 6 elastic warping modes directly instead of looping through
+        # the existing modes and explicitly constructing the warping functions. 
+        # The key here is set of expression that describe the warping 
 
         #INITIALIZE DECOUPLING MATRIX (12X12)
         mat = np.zeros((6,12))
@@ -439,10 +448,19 @@ class CrossSection:
             #construct function from mode
             ubar_mode.vector.array = ubar_modes[:,mode]
             uhat_mode.vector.array = uhat_modes[:,mode]
-            
+
             #filter rigid body modes out using GS
             ubar_mode = self._orthonormalize_rbm(ubar_mode)
             # uhat_mode = self._orthonormalize_rbm(uhat_mode)
+
+            #compute integrated-derivatives of displacement
+            # the key issue here is the relatively high error in the computation of
+            # the displacement, due to the derivative        
+            ubar_x_y = assemble_vector(form(inner(vbar_mode.dx(0),ubar_mode.dx(0))*dx))
+            ubar_x_z = assemble_vector(form(inner(vbar_mode.dx(1),ubar_mode.dx(1))*dx))
+
+            ubar_x_tot = assemble_vector(form(inner(grad(vbar_mode),grad(ubar_mode))*dx))
+            ubar_x = ubar_x_y.array + ubar_x_z.array
 
             #update ubar in each mode:
             self.sols[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
@@ -515,11 +533,19 @@ class CrossSection:
 
         self.mat = mat
 
+        Q,_ = np.linalg.qr(mat.T,mode='complete')
+        self.mat = Q[-6:,:]
+
+        for i in range(6):
+            for j in range(6):
+                print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
+
         if basis_matrix_only is False:
             mat_sparse = sparseify(mat,sparse_format='csc')
 
             # self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
             # self.sols_decoup = self.sols@np.linalg.inv(mat)
+            self.sols_decoup = self.sols@self.mat.T
             ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
             sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
 
