@@ -27,6 +27,8 @@ default_scalar_type = PETSc.ScalarType
 
 #TODO: allow user to specify a point to find xs props about
 #TODO: provide a method to translate between different xs values?
+#TODO: update sensitivities plotting for higher order basis functions
+#TODO: sparse multiply for QR decomposition
 
 class CrossSection:
     def __init__(self, msh, materials ,celltags=None,verbose=False):
@@ -151,7 +153,7 @@ class CrossSection:
         if self.verbose:
             print('Orthogonalizing w.r.t. elastic modes...')
         self._decouple_modes()
-        # self._build_elastic_solution_modes()
+        self._build_elastic_solution_modes()
         
         if self.verbose:
             print('Computing Beam Constitutive Matrix....')
@@ -387,9 +389,9 @@ class CrossSection:
             X[m-1-i,11-i]=1
 
         #perform matrix multiplication implicitly to construct orthogonal nullspace basis
-        # self.sols = sparseqr.qmult(QR,X)
-        Q,_ = np.linalg.qr(Acsr.transpose().toarray())
-        self.sols  = Q[:,-12:]
+        self.sols = sparseqr.qmult(QR,X)
+        # Q,_ = np.linalg.qr(Acsr.transpose().toarray())
+        # self.sols  = Q[:,-12:]
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
         # self.sols = self.sparse_sols.toarray()
 
@@ -449,49 +451,28 @@ class CrossSection:
             ubar_mode.vector.array = ubar_modes[:,mode]
             uhat_mode.vector.array = uhat_modes[:,mode]
 
-            #filter rigid body modes out using GS
+            #filter rigid body modes out using GS as these are just a function of ubar
             ubar_mode = self._orthonormalize_rbm(ubar_mode)
             # uhat_mode = self._orthonormalize_rbm(uhat_mode)
 
-            #compute integrated-derivatives of displacement
-            # the key issue here is the relatively high error in the computation of
-            # the displacement, due to the derivative        
-            ubar_x_y = assemble_vector(form(inner(vbar_mode.dx(0),ubar_mode.dx(0))*dx))
-            ubar_x_z = assemble_vector(form(inner(vbar_mode.dx(1),ubar_mode.dx(1))*dx))
+            # #compute integrated-derivatives of displacement
+            # # the key issue here is the relatively high error in the computation of
+            # # the displacement, due to the derivative        
+            # ubar_x_y = assemble_vector(form(inner(vbar_mode.dx(0),ubar_mode.dx(0))*dx))
+            # ubar_x_z = assemble_vector(form(inner(vbar_mode.dx(1),ubar_mode.dx(1))*dx))
 
-            ubar_x_tot = assemble_vector(form(inner(grad(vbar_mode),grad(ubar_mode))*dx))
-            ubar_x = ubar_x_y.array + ubar_x_z.array
+            # ubar_x_tot = assemble_vector(form(inner(grad(vbar_mode),grad(ubar_mode))*dx))
+            # ubar_x = ubar_x_y.array + ubar_x_z.array
 
             #update ubar in each mode:
             self.sols[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
             # self.sols[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
             
-            #compute strains at x1=0
-            gradubar=grad(ubar_mode)
+            # #get strain from warping functions
+            # eps = self.warping2strain(ubar_mode,uhat_mode)
 
-            #derivatives of displacement
-            #this is known from our displacement expression
-            dubxdx = uhat_mode[0]
-            dubxdy = gradubar[0,0]
-            dubxdz = gradubar[0,1]
-            dubydx = uhat_mode[1]
-            dubydy = gradubar[1,0]
-            dubydz = gradubar[1,1]
-            dubzdx = uhat_mode[2]
-            dubzdy = gradubar[2,0]
-            dubzdz = gradubar[2,1]
-
-            #form ufl displacement for grad(u_i)
-            gradu = as_tensor([[dubxdx,dubxdy,dubxdz],
-                            [dubydx,dubydy,dubydz],
-                            [dubzdx,dubzdy,dubzdz]])
-            
-            #ensure that strains are symmetric
-            eps = 0.5 * (gradu + gradu.T)
-            # eps = gradu
-
-            # construct strain and stress tensors based on u_sol
-            sigma = as_tensor(C[i,j,k,l]*eps[k,l],(i,j))
+            #get stress from warping functions
+            sigma = self.warping2stress(ubar_mode,uhat_mode)
 
             #relevant components of stress tensor
             sigma11 = sigma[0,0]
@@ -517,15 +498,6 @@ class CrossSection:
             mat[4,mode]=M2
             mat[5,mode]=M3
         
-        # for i in range(12):
-        #     mat[:, mode] /= np.sqrt(np.dot(mat[:,mode], mat[:,mode]))
-
-        # for i in range(12):
-        #     for j in range(12):
-        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
-
-        # mat/=np.linalg.norm(mat,axis=0).reshape((12,1)).T
-        # mat/=np.linalg.norm(mat,axis=1)
 
         for i in range(6):
             for j in range(6):
@@ -533,37 +505,40 @@ class CrossSection:
 
         self.mat = mat
 
-        Q,_ = np.linalg.qr(mat.T,mode='complete')
-        self.mat = Q[-6:,:]
-
-        for i in range(6):
-            for j in range(6):
-                print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
+        # Q,_ = np.linalg.qr(mat.T,mode='complete')
+        # self.mat = Q[-6:,:]
+        # print('---------------')
+        # for i in range(6):
+        #     for j in range(6):
+        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
 
         if basis_matrix_only is False:
             mat_sparse = sparseify(mat,sparse_format='csc')
 
             # self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
             # self.sols_decoup = self.sols@np.linalg.inv(mat)
-            self.sols_decoup = self.sols@self.mat.T
+            # self.sols_decoup = self.sols@self.mat.T
             ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
             sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
+            # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
+            self.sols_decoup = sparse_sols.dot(mat_sparse.T).toarray()
+
 
             #USING PSEUDOINVERSE
-            mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
+            # mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
             # self.sols_decoup = sparse_sols.dot(mat_pinv).toarray()
             # self.sols.decoup=mat@self.sols
 
             #USING LSQR:
             # self.sols_decoup2 = lsqr(mat_sparse.T,sparse_sols.T).T
-            self.sols_decoup = sparseify(np.linalg.lstsq(mat_sparse.T.toarray(),sparse_sols.T.toarray())[0].T).toarray()
+            # self.sols_decoup = sparseify(np.linalg.lstsq(mat_sparse.T.toarray(),sparse_sols.T.toarray())[0].T).toarray()
 
             # from scipy.sparse.linalg import norm
             # diff = self.sols_decoup-self.sols_decoup2
             # diff_norm = norm(diff)
 
 
-
+    def _build_elastic_solution_modes(self):
         #Initialize a tensor element and mixed tensor function space 
         # for the elastic solution modes
         Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,6))
@@ -658,8 +633,8 @@ class CrossSection:
                 
         # expressions for the stress and strain in terms of the polynomial 
         # from expansion above:
-        eps_c = self.strains_from_warping_fxns(ubar_c,uhat_c)
-        sigma_c = self.stress_from_warping_fxns(ubar_c,uhat_c)
+        eps_c = self.warping2strain(ubar_c,uhat_c)
+        sigma_c = self.warping2stress(ubar_c,uhat_c)
 
         #only stresses with a 1x component are of concern:
         sigma11_c = sigma_c[0,0]
@@ -783,8 +758,8 @@ class CrossSection:
                 
         # expressions for the stress and strain in terms of the polynomial 
         # from expansion above:
-        eps_c = self.strains_from_warping_fxns(ubar_c,uhat_c,utilde_c,ubreve_c)
-        sigma_c = self.stress_from_warping_fxns(ubar_c,uhat_c,utilde_c,ubreve_c)
+        eps_c = self.warping2strain(ubar_c,uhat_c,utilde_c,ubreve_c)
+        sigma_c = self.warping2stress(ubar_c,uhat_c,utilde_c,ubreve_c)
 
         #only stresses with a 1x component are of concern:
         sigma11_c = sigma_c[0,0]
@@ -989,7 +964,7 @@ class CrossSection:
                                 K_dSdx,
                                 self.K)
         
-        #get map from vtx to dofs to restrict to boundary
+        #get map from vtx to dofs to restrict to boundary (this only works for CG1)
         self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
         indices_to=[]
         for i in range(self.VX.num_sub_spaces):
@@ -1051,32 +1026,34 @@ class CrossSection:
                                 self.K @ self.dSdx,
                                 self.K)
         
-    def strains_from_warping_fxns(self,ubar_c,uhat_c):
-        gradubar_c=grad(ubar_c)
-        eps = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
-                            [gradubar_c[0,0],gradubar_c[1,0],gradubar_c[2,0]],
-                            [gradubar_c[0,1],gradubar_c[1,1],gradubar_c[2,1]]])
+    def warping2strain(self,ubar,uhat):
+        gradubar=grad(ubar)
+
+        #derivatives of displacement
+        #this is known from our displacement expression
+        dubxdx = uhat[0]
+        dubxdy = gradubar[0,0]
+        dubxdz = gradubar[0,1]
+        dubydx = uhat[1]
+        dubydy = gradubar[1,0]
+        dubydz = gradubar[1,1]
+        dubzdx = uhat[2]
+        dubzdy = gradubar[2,0]
+        dubzdz = gradubar[2,1]
+
+        #form ufl displacement for grad(u_i)
+        gradu = as_tensor([[dubxdx,dubxdy,dubxdz],
+                        [dubydx,dubydy,dubydz],
+                        [dubzdx,dubzdy,dubzdz]])
         
-        # gradu = as_tensor([[uhat_c[0],uhat_c[1],uhat_c[2]],
-        #                     [gradubar_c[0,0],gradubar_c[1,0],gradubar_c[2,0]],
-        #                     [gradubar_c[0,1],gradubar_c[1,1],gradubar_c[2,1]]])
-            
-        # eps = 0.5 * (gradu + gradu.T)
-        # eps = as_tensor([[uhat_c[0],
-        #                       0.5*(uhat_c[1]+gradubar_c[0,0]),
-        #                       0.5*(uhat_c[2]+gradubar_c[0,1])],
-        #                     [0.5*(gradubar_c[0,0]+uhat_c[1]),
-        #                      gradubar_c[1,0],
-        #                      0.5*(gradubar_c[2,0]+gradubar_c[1,1])],
-        #                     [0.5*(gradubar_c[0,1]+uhat_c[2]),
-        #                      0.5*(gradubar_c[1,1]+gradubar_c[2,0]),
-        #                      gradubar_c[2,1]]])
-        
+        #ensure that strains are symmetric
+        eps = 0.5 * (gradu + gradu.T)
+
         return eps 
 
-    def stress_from_warping_fxns(self,ubar_c,uhat_c):
+    def warping2stress(self,ubar_c,uhat_c):
         i,j,k,l=self.i,self.j,self.k,self.l
-        eps = self.strains_from_warping_fxns(ubar_c,uhat_c)
+        eps = self.warping2strain(ubar_c,uhat_c)
 
         stress = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
         
@@ -1091,7 +1068,7 @@ class CrossSection:
         utilde = dot(self.N_tilde,c_const)
         ubreve = dot(self.N_breve,c_const)
 
-        stress = self.stress_from_warping_fxns(ubar,uhat,utilde,ubreve)
+        stress = self.warping2stress(ubar,uhat,utilde,ubreve)
         return stress
         # V_stress = TensorFunctionSpace(self.msh, ("DG", 0),shape=(3,3))
         # stress_expr = Expression(stress, V_stress.element.interpolation_points())
@@ -1114,7 +1091,7 @@ class CrossSection:
         #compute xs mass properties:
         self.M = np.zeros((6,6))
 
-    def _orthonormalize_rbm(self,fxn):
+    def _orthonormalize_rbm(self,fxn,verbose=False):
         V = fxn.function_space
         x = self.x
         dx  = self.dx
@@ -1166,18 +1143,19 @@ class CrossSection:
         for i,xi_ in enumerate(xi):
             e[i].vector.array = xi_.vector.array/fem.assemble_scalar(fem.form(inner(xi_, xi_)*dx))**0.5
         
-        print("orthonormalisation test:")
-        for i in range(len(xi)):
-            for j in range(i+1):
-                print(f"inner(e[{i}], e[{j}])*dx {fem.assemble_scalar(fem.form(inner(e[i], e[j])*dx))}")
-
         new_fxn = Function(V)
         new_fxn.vector.array  = fxn.vector.array - sum(proj(e_, fxn) for e_ in e)
-        
-        print(f"u norm {fxn.vector.norm(2)}, u_star norm {new_fxn.vector.norm(2)}")
-        print(f"orthogonalisation of u_star with rigid body modes test:")
-        for j in range(len(v)):
-            print(f"(rbms[{j}], u_star) = {fem.assemble_scalar(fem.form(inner(new_fxn, v[j])*dx))}")
+
+        if verbose is True:
+            print("orthonormalisation test:")
+            for i in range(len(xi)):
+                for j in range(i+1):
+                    print(f"inner(e[{i}], e[{j}])*dx {fem.assemble_scalar(fem.form(inner(e[i], e[j])*dx))}")
+
+            print(f"u norm {fxn.vector.norm(2)}, u_star norm {new_fxn.vector.norm(2)}")
+            print(f"orthogonalisation of u_star with rigid body modes test:")
+            for j in range(len(v)):
+                print(f"(rbms[{j}], u_star) = {fem.assemble_scalar(fem.form(inner(new_fxn, v[j])*dx))}")
 
         return new_fxn
     # def coeff_to_field(self,fxn,coeff,vtx_to_dof):
@@ -1572,7 +1550,7 @@ class CoupledXSProblem:
         for each region, decouple the modes corresponding to that region
         '''
         #intialize empty basis transformation matrix
-        self.basis_trans_matrix = np.zeros((12,12))
+        self.basis_trans_matrix = np.zeros((6,12))
 
         #compute contribution to basis transformation matrix for each region
         for i,region in zip(self.regions,self.regions.values()):
@@ -1583,10 +1561,12 @@ class CoupledXSProblem:
         # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
         self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix,sparse_format='csc')
 
-        self.sols_decoup = (self.sparse_sols.dot(inv(self.basis_trans_matrix_sparse))).toarray()
+        self.sols_decoup = (self.sparse_sols.dot(self.basis_trans_matrix_sparse.T)).toarray()
 
+        #get the decoupled basis
         for i,region in zip(self.regions,self.regions.values()):
-            self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
+            ubar_uhat_dofs = np.concatenate([self.XSs[i].ubar_vtx_to_dof,self.XSs[i].uhat_vtx_to_dof])
+            self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:][ubar_uhat_dofs,:]
 
 
     def _compute_xs_stiffness_matrix(self):
