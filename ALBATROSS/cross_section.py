@@ -395,6 +395,9 @@ class CrossSection:
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
         # self.sols = self.sparse_sols.toarray()
 
+        #TODO: maybe instead of storing the sols as a numpy array, i should initialize the warping function space here and directly populate
+        #       It may be easier to get values in and out....
+
     def _decouple_modes(self,basis_matrix_only=False):
         #this is a change of basis operation from the standard R^12 basis to
         #   the basis defined by the 6 rigid body modes and the 6 elastic modes
@@ -452,32 +455,22 @@ class CrossSection:
             uhat_mode.vector.array = uhat_modes[:,mode]
 
             #filter rigid body modes out using GS as these are just a function of ubar
-            ubar_mode = self._orthonormalize_rbm(ubar_mode)
+            # ubar_mode = self._orthonormalize_rbm(ubar_mode)
             # uhat_mode = self._orthonormalize_rbm(uhat_mode)
 
-            # #compute integrated-derivatives of displacement
-            # # the key issue here is the relatively high error in the computation of
-            # # the displacement, due to the derivative        
-            # ubar_x_y = assemble_vector(form(inner(vbar_mode.dx(0),ubar_mode.dx(0))*dx))
-            # ubar_x_z = assemble_vector(form(inner(vbar_mode.dx(1),ubar_mode.dx(1))*dx))
-
-            # ubar_x_tot = assemble_vector(form(inner(grad(vbar_mode),grad(ubar_mode))*dx))
-            # ubar_x = ubar_x_y.array + ubar_x_z.array
-
-            #update ubar in each mode:
-            self.sols[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
+            #TODO: cannot just update the ubar values without accounting for how this affects the 
+            # properties of the sols matrix. These ubar values are the desired decoupled ones
+            # self.sols[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
             # self.sols[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
             
-            # #get strain from warping functions
-            # eps = self.warping2strain(ubar_mode,uhat_mode)
-
             #get stress from warping functions
+            # sigma_avg = self.warping2stress(ubar_mode_avg,uhat_mode)
             sigma = self.warping2stress(ubar_mode,uhat_mode)
 
             #relevant components of stress tensor
             sigma11 = sigma[0,0]
-            sigma12 = sigma[0,1]
-            sigma13 = sigma[0,2]
+            sigma12 = sigma[1,0]
+            sigma13 = sigma[2,0]
 
             #integrate stresses over cross-section at "root" of beam and construct xs load vector
             P1 = assemble_scalar(form(sigma11*dx))
@@ -503,7 +496,9 @@ class CrossSection:
             for j in range(6):
                 print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
 
-        self.mat = mat
+        #normalize the orthogonal rows and transpose to get the decoupling matrix
+        self.mat = mat.T/np.linalg.norm(mat,axis=1)
+
 
         # Q,_ = np.linalg.qr(mat.T,mode='complete')
         # self.mat = Q[-6:,:]
@@ -513,7 +508,7 @@ class CrossSection:
         #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
 
         if basis_matrix_only is False:
-            mat_sparse = sparseify(mat,sparse_format='csc')
+            mat_sparse = sparseify(self.mat,sparse_format='csc')
 
             # self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
             # self.sols_decoup = self.sols@np.linalg.inv(mat)
@@ -521,7 +516,23 @@ class CrossSection:
             ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
             sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
             # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
-            self.sols_decoup = sparse_sols.dot(mat_sparse.T).toarray()
+            self.sols_decoup = sparse_sols.dot(mat_sparse).toarray()
+            
+            #TODO: since I have reduced the size of the matrix in sols_decoup, i need to use a new self.ubar_vtx_to_dof
+            #TODO: think about how and why to store some portion of the sols
+            ubar_modes = self.sols_decoup[self.ubar_vtx_to_dof,:]
+            
+            for mode in range(6):
+                #construct function from mode
+                ubar_mode.vector.array = ubar_modes[:,mode]
+                # uhat_mode.vector.array = uhat_modes[:,mode]
+
+                #filter rigid body modes out using GS as these are just a function of ubar
+                ubar_mode = self._orthonormalize_rbm(ubar_mode)
+                # uhat_mode = self._orthonormalize_rbm(uhat_mode)
+
+                #TODO: since I have reduced the size of the matrix in sols_decoup, i need to use a new self.ubar_vtx_to_dof
+                self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
 
 
             #USING PSEUDOINVERSE
@@ -1031,14 +1042,23 @@ class CrossSection:
 
         #derivatives of displacement
         #this is known from our displacement expression
+        # dubxdx = uhat[0]
+        # dubxdy = gradubar[0,0]
+        # dubxdz = gradubar[0,1]
+        # dubydx = uhat[1]
+        # dubydy = gradubar[1,0]
+        # dubydz = gradubar[1,1]
+        # dubzdx = uhat[2]
+        # dubzdy = gradubar[2,0]
+        # dubzdz = gradubar[2,1]
         dubxdx = uhat[0]
-        dubxdy = gradubar[0,0]
-        dubxdz = gradubar[0,1]
-        dubydx = uhat[1]
+        dubxdy = uhat[1]
+        dubxdz = uhat[2]
+        dubydx = gradubar[0,0]
         dubydy = gradubar[1,0]
-        dubydz = gradubar[1,1]
-        dubzdx = uhat[2]
-        dubzdy = gradubar[2,0]
+        dubydz = gradubar[2,0]
+        dubzdx = gradubar[0,1]
+        dubzdy = gradubar[1,1]
         dubzdz = gradubar[2,1]
 
         #form ufl displacement for grad(u_i)
@@ -1047,13 +1067,14 @@ class CrossSection:
                         [dubzdx,dubzdy,dubzdz]])
         
         #ensure that strains are symmetric
-        eps = 0.5 * (gradu + gradu.T)
+        # eps = 0.5 * (gradu + gradu.T)
+        eps = gradu
 
         return eps 
 
-    def warping2stress(self,ubar_c,uhat_c):
+    def warping2stress(self,ubar,uhat):
         i,j,k,l=self.i,self.j,self.k,self.l
-        eps = self.warping2strain(ubar_c,uhat_c)
+        eps = self.warping2strain(ubar,uhat)
 
         stress = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
         
