@@ -21,11 +21,11 @@ lc = 1e-2
 # When the surface has only 3 or 4 points on its boundary the list of corners
 # can be omitted in the `setTransfiniteSurface()' call:
 gmsh.model.geo.addPoint(0, -H/2, 0, 1.0, 1)
-gmsh.model.geo.addPoint(W/2, -H/2, 0, 1.0, 2)
-gmsh.model.geo.addPoint(W/2, H/2, 0, 1.0, 3)
+gmsh.model.geo.addPoint(-W/2, -H/2, 0, 1.0, 2)
+gmsh.model.geo.addPoint(-W/2, H/2, 0, 1.0, 3)
 gmsh.model.geo.addPoint(0, H/2, 0, 1.0, 4)
-gmsh.model.geo.addPoint(-W/2, -H/2, 0, 1.0, 5)
-gmsh.model.geo.addPoint(-W/2, H/2, 0, 1.0, 6)
+gmsh.model.geo.addPoint(W/2, -H/2, 0, 1.0, 5)
+gmsh.model.geo.addPoint(W/2, H/2, 0, 1.0, 6)
 gmsh.model.geo.addLine(1, 2, 1)
 gmsh.model.geo.addLine(2, 3, 2)
 gmsh.model.geo.addLine(3, 4, 3)

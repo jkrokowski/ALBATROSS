@@ -50,7 +50,7 @@ class CrossSection:
         self.d = 3
         self.tdim = 2
 
-        #Finite element shape function degree: (1=linear,2=quadratic)
+        #Finite element shape function degree: (1=linear,2=quadratic,etc)
         self.degree = 1
 
         #number of materials
@@ -455,11 +455,11 @@ class CrossSection:
             uhat_mode.vector.array = uhat_modes[:,mode]
 
             #filter rigid body modes out using GS as these are just a function of ubar
-            # ubar_mode = self._orthonormalize_rbm(ubar_mode)
+            ubar_mode = self._orthonormalize_rbm(ubar_mode)
             # uhat_mode = self._orthonormalize_rbm(uhat_mode)
 
             #TODO: cannot just update the ubar values without accounting for how this affects the 
-            # properties of the sols matrix. These ubar values are the desired decoupled ones
+            # properties of the sols matrix. 
             # self.sols[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
             # self.sols[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
             
@@ -497,7 +497,24 @@ class CrossSection:
                 print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
 
         #normalize the orthogonal rows and transpose to get the decoupling matrix
-        self.mat = mat.T/np.linalg.norm(mat,axis=1)
+        self.mat = (mat.T/np.linalg.norm(mat,axis=1)).T
+        print('--------------------------')
+        print('basis transformation matrix after normalization:')
+        print('--------------------------')
+        for i in range(6):
+            for j in range(6):
+                print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
+        print('--------------------------')
+        print('sols before basis transformation:')
+        print('--------------------------')
+        print("CHECK Normalization")
+        for i in range(6):
+            print(np.linalg.norm(self.sols[:,i]))
+
+        print("Check orthogonality:")
+        for i in range(12):
+            for j in range(12):
+                print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols[:,i], self.sols[:,j])}")
 
 
         # Q,_ = np.linalg.qr(mat.T,mode='complete')
@@ -513,27 +530,75 @@ class CrossSection:
             # self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
             # self.sols_decoup = self.sols@np.linalg.inv(mat)
             # self.sols_decoup = self.sols@self.mat.T
+            # ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
+            # sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
+            # # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
+            # self.sols_decoup = sparse_sols.dot(mat_sparse.T).toarray()
+
             ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
-            sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
             # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
-            self.sols_decoup = sparse_sols.dot(mat_sparse).toarray()
-            
-            #TODO: since I have reduced the size of the matrix in sols_decoup, i need to use a new self.ubar_vtx_to_dof
+            # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())[ubar_uhat_dofs,:]
+            self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())
+
+
+            print('--------------------------')
+            print('sols after basis transformation:')
+            print('--------------------------')
+            print("CHECK Normalization")
+            for i in range(6):
+                print(np.linalg.norm(self.sols_decoup[:,i]))
+
+            print("Check orthogonality:")
+            for i in range(6):
+                for j in range(6):
+                    print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
             #TODO: think about how and why to store some portion of the sols
-            ubar_modes = self.sols_decoup[self.ubar_vtx_to_dof,:]
+            # ubar_modes = self.sols_decoup[:len(self.ubar_vtx_to_dof),:]
             
             for mode in range(6):
                 #construct function from mode
-                ubar_mode.vector.array = ubar_modes[:,mode]
+                # ubar_mode.vector.array = self.sols_decoup[:len(self.ubar_vtx_to_dof),mode]
+                ubar_mode.vector.array = self.sols_decoup[self.ubar_vtx_to_dof,mode]
                 # uhat_mode.vector.array = uhat_modes[:,mode]
 
                 #filter rigid body modes out using GS as these are just a function of ubar
                 ubar_mode = self._orthonormalize_rbm(ubar_mode)
                 # uhat_mode = self._orthonormalize_rbm(uhat_mode)
 
-                #TODO: since I have reduced the size of the matrix in sols_decoup, i need to use a new self.ubar_vtx_to_dof
+                #update decoupled solutions with the rigid body modes removed
                 self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
+            
 
+            print('--------------------------')
+            print('sols after RBM removal:')
+            print('--------------------------')
+            print("CHECK Normalization")
+            for i in range(6):
+                print(np.linalg.norm(self.sols_decoup[:,i]))
+
+            print("Check orthogonality:")
+            for i in range(6):
+                for j in range(6):
+                    print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
+
+            print()
+
+            self.sols_decoup = self.sols_decoup/np.linalg.norm(self.sols_decoup,axis=0)
+
+            #NEED TO RENORMALIZE THE WARPING FUNCTIONS
+            print('--------------------------')
+            print('sols after renormalization:')
+            print('--------------------------')
+            print("CHECK Normalization")
+            for i in range(6):
+                print(np.linalg.norm(self.sols_decoup[:,i]))
+
+            print("Check orthogonality:")
+            for i in range(6):
+                for j in range(6):
+                    print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
+
+            print()
 
             #USING PSEUDOINVERSE
             # mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
@@ -559,22 +624,21 @@ class CrossSection:
         #extract portions of elastic solution mode function related to each warping fxn
         self.N_bar, self.N_hat = self.N.split() 
 
-        #unpack elastic solution modes
-        elastic_sols = self.sols_decoup
-
         #get map of function dofs 
         # N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0)).flatten()
         # N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1)).flatten()
         N_bar_vtx_to_dofs = self.N_space.sub(0).collapse()[1]
         N_hat_vtx_to_dofs = self.N_space.sub(1).collapse()[1]
+        # N_tilde_vtx_to_dofs = self.N_space.sub(2).collapse()[1]
+        # N_breve_vtx_to_dofs = self.N_space.sub().collapse()[1]
 
-        #get separate elastic solution mode values
-        N_bar_vals = elastic_sols[:len(self.ubar_vtx_to_dof),:]
-        N_hat_vals = elastic_sols[len(self.uhat_vtx_to_dof):,:]
+        # #get separate elastic solution mode values
+        # N_bar_vals = self.sols_decoup[self.ubar_vtx_to_dof,:]
+        # N_hat_vals = self.sols_decoup[self.uhat_vtx_to_dof,:]
 
         #populate elastic solution modes to elastic solution mode function
-        self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals.flatten()
-        self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals.flatten()
+        self.N_bar.vector.array[N_bar_vtx_to_dofs] = self.sols_decoup[self.ubar_vtx_to_dof,:].flatten()
+        self.N_hat.vector.array[N_hat_vtx_to_dofs] = self.sols_decoup[self.uhat_vtx_to_dof,:].flatten()
 
     # def _build_elastic_solution_modes(self):
     #     #Initialize a tensor element and mixed tensor function space 
@@ -1080,6 +1144,8 @@ class CrossSection:
         
         return stress 
     
+    # def warping2loads(self,ubar,uhat):
+
     def recover_stress(self,reactions):
         c = self.K1inv@reactions
 
@@ -1213,7 +1279,8 @@ class CrossSection:
             if coup is True:
                 elastic_sols = self.sols[:,:6]
             else:
-                elastic_sols = self.sols_decoup[:,:6]
+                ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
+                elastic_sols = self.sols_decoup[ubar_uhat_dofs,:6]
         else:
             if coup is True:
                 elastic_sols = self.sols[:,6:]

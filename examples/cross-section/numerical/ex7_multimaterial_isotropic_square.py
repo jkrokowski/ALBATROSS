@@ -29,14 +29,14 @@ domain.topology.create_connectivity(domain.topology.dim, domain.topology.dim-1)
 
 #GET material markers
 tdim = 2
-#right
-right_marker=0
-right_facets = ct.find(right_marker)
-right_mt = meshtags(domain, tdim, right_facets, right_marker)
 #left
-left_marker=1
+left_marker=0
 left_facets = ct.find(left_marker)
 left_mt = meshtags(domain, tdim, left_facets, left_marker)
+#right
+right_marker=1
+right_facets = ct.find(right_marker)
+right_mt = meshtags(domain, tdim, right_facets, right_marker)
 
 #plot mesh:
 pyvista.global_theme.background = [255, 255, 255, 255]
@@ -58,7 +58,7 @@ sargs = dict(
         # width=2,
         # color = [1,1,1]
     )
-annotations = {1:"adamantium",0:"unobtainium"}
+annotations = {0:"unobtainium",1:"adamantium"}
 p.add_mesh(grid, show_edges=True,scalar_bar_args=sargs,annotations=annotations)
 p.view_xy()
 p.show()
