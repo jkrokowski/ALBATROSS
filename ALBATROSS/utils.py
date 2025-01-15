@@ -203,8 +203,9 @@ def project(v, target_func, bcs=[]):
     solver.setOperators(A)
     solver.solve(b, target_func.vector)
 
-def sparseify(mat,sparse_format='csr'):
-     lim = 2*np.finfo(float).eps # this is the numpy precision
+def sparseify(mat,sparse_format='csr',lim=None):
+     if lim is None:
+          lim = 2*np.finfo(float).eps # this is the numpy precision
      # lim = 1e-10 #choosing a slightly more conservative value 
      mat.real[abs(mat.real) < lim] = 0.0
      if sparse_format == 'csc':

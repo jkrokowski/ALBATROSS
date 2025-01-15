@@ -455,7 +455,7 @@ class CrossSection:
             uhat_mode.vector.array = uhat_modes[:,mode]
 
             #filter rigid body modes out using GS as these are just a function of ubar
-            ubar_mode = self._orthonormalize_rbm(ubar_mode)
+            # ubar_mode = self._orthonormalize_rbm(ubar_mode)
             # uhat_mode = self._orthonormalize_rbm(uhat_mode)
 
             #TODO: cannot just update the ubar values without accounting for how this affects the 
@@ -492,29 +492,30 @@ class CrossSection:
             mat[5,mode]=M3
         
 
-        for i in range(6):
-            for j in range(6):
-                print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
+        # for i in range(6):
+        #     for j in range(6):
+        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
 
         #normalize the orthogonal rows and transpose to get the decoupling matrix
-        self.mat = (mat.T/np.linalg.norm(mat,axis=1)).T
-        print('--------------------------')
-        print('basis transformation matrix after normalization:')
-        print('--------------------------')
-        for i in range(6):
-            for j in range(6):
-                print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
-        print('--------------------------')
-        print('sols before basis transformation:')
-        print('--------------------------')
-        print("CHECK Normalization")
-        for i in range(6):
-            print(np.linalg.norm(self.sols[:,i]))
+        self.mat = mat
+        # self.mat = (mat.T/np.linalg.norm(mat,axis=1)).T
+        # print('--------------------------')
+        # print('basis transformation matrix after normalization:')
+        # print('--------------------------')
+        # for i in range(6):
+        #     for j in range(6):
+        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
+        # print('--------------------------')
+        # print('sols before basis transformation:')
+        # print('--------------------------')
+        # print("CHECK Normalization")
+        # for i in range(6):
+        #     print(np.linalg.norm(self.sols[:,i]))
 
-        print("Check orthogonality:")
-        for i in range(12):
-            for j in range(12):
-                print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols[:,i], self.sols[:,j])}")
+        # print("Check orthogonality:")
+        # for i in range(12):
+        #     for j in range(12):
+        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols[:,i], self.sols[:,j])}")
 
 
         # Q,_ = np.linalg.qr(mat.T,mode='complete')
@@ -538,72 +539,72 @@ class CrossSection:
             ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
             # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
             # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())[ubar_uhat_dofs,:]
-            self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())
-
-
-            print('--------------------------')
-            print('sols after basis transformation:')
-            print('--------------------------')
-            print("CHECK Normalization")
-            for i in range(6):
-                print(np.linalg.norm(self.sols_decoup[:,i]))
-
-            print("Check orthogonality:")
-            for i in range(6):
-                for j in range(6):
-                    print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
-            #TODO: think about how and why to store some portion of the sols
-            # ubar_modes = self.sols_decoup[:len(self.ubar_vtx_to_dof),:]
-            
-            for mode in range(6):
-                #construct function from mode
-                # ubar_mode.vector.array = self.sols_decoup[:len(self.ubar_vtx_to_dof),mode]
-                ubar_mode.vector.array = self.sols_decoup[self.ubar_vtx_to_dof,mode]
-                # uhat_mode.vector.array = uhat_modes[:,mode]
-
-                #filter rigid body modes out using GS as these are just a function of ubar
-                ubar_mode = self._orthonormalize_rbm(ubar_mode)
-                # uhat_mode = self._orthonormalize_rbm(uhat_mode)
-
-                #update decoupled solutions with the rigid body modes removed
-                self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
-            
-
-            print('--------------------------')
-            print('sols after RBM removal:')
-            print('--------------------------')
-            print("CHECK Normalization")
-            for i in range(6):
-                print(np.linalg.norm(self.sols_decoup[:,i]))
-
-            print("Check orthogonality:")
-            for i in range(6):
-                for j in range(6):
-                    print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
-
-            print()
-
-            self.sols_decoup = self.sols_decoup/np.linalg.norm(self.sols_decoup,axis=0)
-
-            #NEED TO RENORMALIZE THE WARPING FUNCTIONS
-            print('--------------------------')
-            print('sols after renormalization:')
-            print('--------------------------')
-            print("CHECK Normalization")
-            for i in range(6):
-                print(np.linalg.norm(self.sols_decoup[:,i]))
-
-            print("Check orthogonality:")
-            for i in range(6):
-                for j in range(6):
-                    print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
-
-            print()
+            # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())
 
             #USING PSEUDOINVERSE
-            # mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
-            # self.sols_decoup = sparse_sols.dot(mat_pinv).toarray()
-            # self.sols.decoup=mat@self.sols
+            mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
+            self.sols_decoup = self.sparse_sols.dot(mat_pinv).toarray()
+            # self.sols_decoup=mat@self.sols
+
+            # print('--------------------------')
+            # print('sols after basis transformation:')
+            # print('--------------------------')
+            # print("CHECK Normalization")
+            # for i in range(6):
+            #     print(np.linalg.norm(self.sols_decoup[:,i]))
+
+            # print("Check orthogonality:")
+            # for i in range(6):
+            #     for j in range(6):
+            #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
+            # #TODO: think about how and why to store some portion of the sols
+            # # ubar_modes = self.sols_decoup[:len(self.ubar_vtx_to_dof),:]
+            
+            # for mode in range(6):
+            #     #construct function from mode
+            #     # ubar_mode.vector.array = self.sols_decoup[:len(self.ubar_vtx_to_dof),mode]
+            #     ubar_mode.vector.array = self.sols_decoup[self.ubar_vtx_to_dof,mode]
+            #     # uhat_mode.vector.array = uhat_modes[:,mode]
+
+            #     #filter rigid body modes out using GS as these are just a function of ubar
+            #     ubar_mode = self._orthonormalize_rbm(ubar_mode)
+            #     # uhat_mode = self._orthonormalize_rbm(uhat_mode)
+
+            #     #update decoupled solutions with the rigid body modes removed
+            #     self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
+            
+
+            print('--------------------------')
+            # print('sols after RBM removal:')
+            # print('--------------------------')
+            # print("CHECK Normalization")
+            # for i in range(6):
+            #     print(np.linalg.norm(self.sols_decoup[:,i]))
+
+            # print("Check orthogonality:")
+            # for i in range(6):
+            #     for j in range(6):
+            #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
+
+            # print()
+
+            # self.sols_decoup = self.sols_decoup/np.linalg.norm(self.sols_decoup,axis=0)
+
+            # #NEED TO RENORMALIZE THE WARPING FUNCTIONS
+            # print('--------------------------')
+            # print('sols after renormalization:')
+            # print('--------------------------')
+            # print("CHECK Normalization")
+            # for i in range(6):
+            #     print(np.linalg.norm(self.sols_decoup[:,i]))
+
+            # print("Check orthogonality:")
+            # for i in range(6):
+            #     for j in range(6):
+            #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
+
+            # print()
+
 
             #USING LSQR:
             # self.sols_decoup2 = lsqr(mat_sparse.T,sparse_sols.T).T
@@ -632,13 +633,17 @@ class CrossSection:
         # N_tilde_vtx_to_dofs = self.N_space.sub(2).collapse()[1]
         # N_breve_vtx_to_dofs = self.N_space.sub().collapse()[1]
 
-        # #get separate elastic solution mode values
-        # N_bar_vals = self.sols_decoup[self.ubar_vtx_to_dof,:]
-        # N_hat_vals = self.sols_decoup[self.uhat_vtx_to_dof,:]
+        #get separate elastic solution mode values
+        N_bar_vals = sparseify(self.sols_decoup[self.ubar_vtx_to_dof,:]).toarray().flatten()
+        N_hat_vals = sparseify(self.sols_decoup[self.uhat_vtx_to_dof,:]).toarray().flatten()
+        
+
+        # N_bar_vals = self.sols_decoup[self.ubar_vtx_to_dof,:].flatten()/np.linalg.norm(self.sols_decoup[self.ubar_vtx_to_dof,:])
+        # N_hat_vals = self.sols_decoup[self.uhat_vtx_to_dof,:].flatten()/np.linalg.norm(self.sols_decoup[self.uhat_vtx_to_dof,:])
 
         #populate elastic solution modes to elastic solution mode function
-        self.N_bar.vector.array[N_bar_vtx_to_dofs] = self.sols_decoup[self.ubar_vtx_to_dof,:].flatten()
-        self.N_hat.vector.array[N_hat_vtx_to_dofs] = self.sols_decoup[self.uhat_vtx_to_dof,:].flatten()
+        self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals
+        self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals
 
     # def _build_elastic_solution_modes(self):
     #     #Initialize a tensor element and mixed tensor function space 
@@ -704,7 +709,7 @@ class CrossSection:
         #these elastic solution modes are related by the general expression 
         # for the displacement as:
         # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
-        # wereh x1 is the beam axis direction
+        # where x1 is the beam axis direction
                 
         # expressions for the stress and strain in terms of the polynomial 
         # from expansion above:
@@ -734,7 +739,7 @@ class CrossSection:
         # the polynomial expansion:
         Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
 
-        # differentiation the constructed form construction
+        # differentiation of the constructed form 
         self.K1_form = [[diff(P[idx1],c[idx2]) for idx2 in range(6)] 
                         for idx1 in range(6)]
         self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx2 in range(6)]
@@ -755,13 +760,20 @@ class CrossSection:
         self.K1inv = np.linalg.inv(self.K1)
         self.K1inv = sparseify(self.K1inv).toarray()
 
+        #stor K2^-1 for sensitivity computation
+        self.K2inv = np.linalg.inv(self.K2)
+        self.K2inv = sparseify(self.K2inv).toarray()
+        
         #compute Flexibility matrix
         self.S = self.K1inv.T@self.K2@self.K1inv
-
         self.S = sparseify(self.S).toarray()
         
         #invert Flexibility matrix to find beam constitutive matrix
-        self.K = np.linalg.inv(self.S)
+        # self.K = np.linalg.inv(self.S)
+        # self.K = sparseify(self.K).toarray()
+
+        #an alternative approach to avoid multiple inversion of products of inversions
+        self.K = self.K1@sparseify(self.K2inv).toarray()@self.K1.T
         self.K = sparseify(self.K).toarray()
 
 
@@ -886,12 +898,14 @@ class CrossSection:
         #TODO: combine EB and TS sensitivities...
         args = self.K1_form[0][0].arguments()
         n = max(a.number() for a in args) if args else -1
-        du = Argument(self.VX,n+1)
+        du1 = Argument(self.VX,n+1)
+        n = max(a.number() for a in args) if args else -1
+        du2 = Argument(self.VX,n+1)
         # du = Argument(self.VX,0) #there are no arguments in any of these forms?
-        self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du)
+        self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du1)
                             for idx2 in range(6)] 
                                 for idx1 in range(6)]
-        self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
+        self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du2)
                             for idx2 in range(6)] 
                                 for idx1 in range(6)]
         # self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
@@ -981,7 +995,7 @@ class CrossSection:
                               self.K1inv)
     
         #add terms to get dSdx
-        self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
+        self.dSdx = self.dK1invT + self.dK2 + self.dK1inv.transpose(1,0,2)
         # self.dSdx = self.dK1inv.transpose(1,0,2) + self.dK2 + self.dK1inv
         # self.dSdx = self.dK2 + 2*self.dK1inv
         # self.dSdx = -self.dK2 
@@ -1035,10 +1049,36 @@ class CrossSection:
         K_dSdx = np.einsum('ij,jkl->ikl',
                            self.K,
                            self.dSdx)
-        self.dKdx = - np.einsum('ijk,jl->ilk',
-                                K_dSdx,
-                                self.K)
+        # self.dKdx = - np.einsum('ijk,jl->ilk',
+        #                         K_dSdx,
+        #                         self.K)
+
+        #first term of dKdx
+        dK1dxK2invK1T = np.einsum('ijl,jk->ikl',
+                           self.dK1dx,
+                           self.K2inv@self.K1.T)
+
+        #second term of dKdx
+        K1K2invdK2dx = np.einsum('ij,jkl->ikl',
+                        self.K1@self.K2inv,
+                        self.dK2dx)
+        K1K2invdK2dxK2invK1T = np.einsum('ijk,jl->ilk',
+                        K1K2invdK2dx,
+                        self.K2inv@self.K1.T)
         
+        #third term of dKdx
+        K1K3invdK1dxT = np.einsum('ij,kjl->ikl',
+                            self.K1@self.K2inv,
+                            self.dK1dx)
+        
+        #add terms to get dSdx
+        # self.dKdx = K1K2invdK2dxK2invK1T 
+        # self.dKdx = dK1dxK2invK1T + K1K3invdK1dxT
+        # self.dKdx = dK1dxK2invK1T + K1K2invdK2dxK2invK1T + K1K3invdK1dxT
+        # self.dKdx =  K1K3invdK1dxT
+        self.dKdx = dK1dxK2invK1T + K1K2invdK2dxK2invK1T + K1K3invdK1dxT
+
+
         #get map from vtx to dofs to restrict to boundary (this only works for CG1)
         self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
         indices_to=[]
@@ -1188,9 +1228,9 @@ class CrossSection:
             fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((1.0,0.0,0.0))),V.element.interpolation_points()),
             fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,1.0,0.0))),V.element.interpolation_points()),
             fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,0.0,1.0))),V.element.interpolation_points()),
-            fem.Expression(ufl.as_vector([0,-x[1],x[0]]),V.element.interpolation_points()),
-            fem.Expression(ufl.as_vector([x[1],0,0]),V.element.interpolation_points()),
-            fem.Expression(ufl.as_vector([-x[0],0,0]),V.element.interpolation_points())
+            fem.Expression(ufl.as_vector([0,-x[1],x[0]]),V.element.interpolation_points())#,
+            # fem.Expression(ufl.as_vector([x[1],0,0]),V.element.interpolation_points()),
+            # fem.Expression(ufl.as_vector([-x[0],0,0]),V.element.interpolation_points())
         ]
 
         # List of functions to orthogonalise
@@ -1198,16 +1238,17 @@ class CrossSection:
         vy = fem.Function(V)
         vz = fem.Function(V)
         vrx = fem.Function(V)
-        vry = fem.Function(V)
-        vrz = fem.Function(V)
+        # vry = fem.Function(V)
+        # vrz = fem.Function(V)
         vx.interpolate(rbms[0])
         vy.interpolate(rbms[1])
         vz.interpolate(rbms[2])
         vrx.interpolate(rbms[3])
-        vry.interpolate(rbms[4])
-        vrz.interpolate(rbms[5])
+        # vry.interpolate(rbms[4])
+        # vrz.interpolate(rbms[5])
 
-        v = list((vx,vy,vz,vrx,vry,vrz))
+        # v = list((vx,vy,vz,vrx,vry,vrz))
+        v = list((vx,vy,vz,vrx))
 
         # GS Projection
         def proj(u, v):
