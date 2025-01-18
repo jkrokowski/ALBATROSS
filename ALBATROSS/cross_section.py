@@ -560,21 +560,22 @@ class CrossSection:
             # #TODO: think about how and why to store some portion of the sols
             # # ubar_modes = self.sols_decoup[:len(self.ubar_vtx_to_dof),:]
             
-            # for mode in range(6):
-            #     #construct function from mode
-            #     # ubar_mode.vector.array = self.sols_decoup[:len(self.ubar_vtx_to_dof),mode]
-            #     ubar_mode.vector.array = self.sols_decoup[self.ubar_vtx_to_dof,mode]
-            #     # uhat_mode.vector.array = uhat_modes[:,mode]
+            for mode in range(6):
+                #construct function from mode
+                # ubar_mode.vector.array = self.sols_decoup[:len(self.ubar_vtx_to_dof),mode]
+                ubar_mode.vector.array = self.sols_decoup[self.ubar_vtx_to_dof,mode]
+                # uhat_mode.vector.array = uhat_modes[:,mode]
 
-            #     #filter rigid body modes out using GS as these are just a function of ubar
-            #     ubar_mode = self._orthonormalize_rbm(ubar_mode)
-            #     # uhat_mode = self._orthonormalize_rbm(uhat_mode)
+                #filter rigid body modes out using GS as these are just a function of ubar
+                ubar_mode = self._orthonormalize_rbm(ubar_mode)
+                # uhat_mode = self._orthonormalize_rbm(uhat_mode)
 
-            #     #update decoupled solutions with the rigid body modes removed
-            #     self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
+                #update decoupled solutions with the rigid body modes removed
+                self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
+                # self.sols_decoup[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
             
 
-            print('--------------------------')
+            # print('--------------------------')
             # print('sols after RBM removal:')
             # print('--------------------------')
             # print("CHECK Normalization")
@@ -691,12 +692,12 @@ class CrossSection:
         # N_breve = self.N_breve 
 
         #construct fenicsx variables pertaining to elastic solution modes
-        c7 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c8 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c9 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c10 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c11 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c12 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+        c7 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c8 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c9 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c10 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c11 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c12 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
         c = as_tensor([c7,c8,c9,c10,c11,c12])
 
         #construct general warping displacement functions in terms of the 
@@ -724,7 +725,7 @@ class CrossSection:
         #construct expression for the load applied to a cross-section in 
         # terms of stress and strain expressions defined based on  the 
         # polynomial expansion:
-        P1 = sigma11_c*dx
+        P1 =sigma11_c*dx
         V2 = sigma12_c*dx
         V3 = sigma13_c*dx
         T1 = ((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
@@ -765,16 +766,18 @@ class CrossSection:
         self.K2inv = sparseify(self.K2inv).toarray()
         
         #compute Flexibility matrix
-        self.S = self.K1inv.T@self.K2@self.K1inv
-        self.S = sparseify(self.S).toarray()
+        # self.S = self.K1inv.T@self.K2@self.K1inv
+        # self.S = sparseify(self.S).toarray()
+        self.S = self.K2
         
         #invert Flexibility matrix to find beam constitutive matrix
         # self.K = np.linalg.inv(self.S)
         # self.K = sparseify(self.K).toarray()
 
         #an alternative approach to avoid multiple inversion of products of inversions
-        self.K = self.K1@sparseify(self.K2inv).toarray()@self.K1.T
-        self.K = sparseify(self.K).toarray()
+        # self.K = self.K1@sparseify(self.K2inv).toarray()@self.K1.T
+        # self.K = sparseify(self.K).toarray()
+        self.K = self.K2inv
 
 
     def _build_elastic_solution_modes_EB(self):
@@ -1076,9 +1079,13 @@ class CrossSection:
         # self.dKdx = dK1dxK2invK1T + K1K3invdK1dxT
         # self.dKdx = dK1dxK2invK1T + K1K2invdK2dxK2invK1T + K1K3invdK1dxT
         # self.dKdx =  K1K3invdK1dxT
-        self.dKdx = dK1dxK2invK1T + K1K2invdK2dxK2invK1T + K1K3invdK1dxT
-
-
+        # self.dKdx = dK1dxK2invK1T + K1K2invdK2dxK2invK1T + K1K3invdK1dxT
+        
+        self.dKdx = np.einsum('ijk,ji->ijk',
+                                self.K @ self.dK2dx,
+                                self.K)
+        # self.dKdx = self.dK2dx
+        
         #get map from vtx to dofs to restrict to boundary (this only works for CG1)
         self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
         indices_to=[]
@@ -1171,8 +1178,8 @@ class CrossSection:
                         [dubzdx,dubzdy,dubzdz]])
         
         #ensure that strains are symmetric
-        # eps = 0.5 * (gradu + gradu.T)
-        eps = gradu
+        eps = 0.5 * (gradu + gradu.T)
+        # eps = gradu
 
         return eps 
 
@@ -1349,7 +1356,7 @@ class CrossSection:
             c = np.zeros((6,1))
             c[i,:] = 1
 
-            warping_sol = elastic_sols[:len(self.ubar_vtx_to_dof),:]@c
+            warping_sol = elastic_sols[:len(self.ubar_vtx_to_dof):,:]@c
             # ubar = Function(V0)
             # ubar.vector.array = warping_sol.flatten()
             solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
@@ -1390,9 +1397,9 @@ class CrossSection:
             sensitivity = np.concatenate([sensitivity_to_plot,np.zeros((sensitivity_to_plot.shape[0],1))],axis=1)
 
             grids[i].point_data["sensitivity"] = sensitivity
-            norm = np.linalg.norm(sensitivity)
-            print(norm)
-            warped.append(grids[i].warp_by_vector("sensitivity",factor=1/norm))
+            norm = np.linalg.norm(sensitivity,2)
+            # print(norm)
+            warped.append(grids[i].warp_by_vector("sensitivity",factor=1/(norm)))
             plotter.add_mesh(grids[i],show_edges=True,opacity=0.5,scalar_bar_args={'title': f'Sensitivity_{i}'})
             plotter.add_mesh(warped[i],show_edges=True,opacity=1,scalar_bar_args={'title': f'Sensitivity_{i}'})
             plotter.add_text(f'dK/dx({i},{i})')

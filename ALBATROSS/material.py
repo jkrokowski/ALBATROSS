@@ -44,7 +44,7 @@ def getMatConstitutiveIsotropic(mesh,E,nu):
     delta = Identity(3)
     i,j,k,l=indices(4)
     C = as_tensor(_lam*(delta[i,j]*delta[k,l]) \
-                    + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[j,k])  ,(i,j,k,l))
+                    + mu*(delta[i,k]*delta[j,l]+ delta[i,l]*delta[k,j])  ,(i,j,k,l))
 
     return C
 
