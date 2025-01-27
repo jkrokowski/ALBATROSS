@@ -560,19 +560,19 @@ class CrossSection:
             # #TODO: think about how and why to store some portion of the sols
             # # ubar_modes = self.sols_decoup[:len(self.ubar_vtx_to_dof),:]
             
-            for mode in range(6):
-                #construct function from mode
-                # ubar_mode.vector.array = self.sols_decoup[:len(self.ubar_vtx_to_dof),mode]
-                ubar_mode.vector.array = self.sols_decoup[self.ubar_vtx_to_dof,mode]
-                # uhat_mode.vector.array = uhat_modes[:,mode]
+            # for mode in range(6):
+            #     #construct function from mode
+            #     # ubar_mode.vector.array = self.sols_decoup[:len(self.ubar_vtx_to_dof),mode]
+            #     ubar_mode.vector.array = self.sols_decoup[self.ubar_vtx_to_dof,mode]
+            #     # uhat_mode.vector.array = uhat_modes[:,mode]
 
-                #filter rigid body modes out using GS as these are just a function of ubar
-                ubar_mode = self._orthonormalize_rbm(ubar_mode)
-                # uhat_mode = self._orthonormalize_rbm(uhat_mode)
+            #     #filter rigid body modes out using GS as these are just a function of ubar
+            #     ubar_mode = self._orthonormalize_rbm(ubar_mode)
+            #     # uhat_mode = self._orthonormalize_rbm(uhat_mode)
 
-                #update decoupled solutions with the rigid body modes removed
-                self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
-                # self.sols_decoup[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
+            #     #update decoupled solutions with the rigid body modes removed
+            #     self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
+            #     # self.sols_decoup[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
             
 
             # print('--------------------------')
@@ -1505,7 +1505,8 @@ class CoupledXSProblem:
                 elif collisions_bbtree_ij.size == 0:
                     separations_i[j]=Separation()
                     
-            #add all collisions to dictionary list        
+            #add all collisions to dictionary list
+            # TODO: JJK need to not add empty dictionaries     
             collisions[i] = collisions_i
             separations[i] = separations_i
 
@@ -1636,15 +1637,15 @@ class CoupledXSProblem:
                 A_list[idx[0]][idx[1]].scale(-1.0)
 
 
-                #apply the correction for the overlap
-                dx_correction = ufl.Measure("dx", 
-                                            domain=self.XSs[idx[0]].msh,
-                                            subdomain_data= self.collisions[idx[0]][idx[1]].celltags[0])
-                res = self.XSs[idx[0]]._construct_residual(dx=dx_correction,
-                                                           return_residual=True)
-                correction = self.XSs[idx[0]]._assemble_system_matrix(residual=res)
-                # correction.view()
-                A_list[idx[0]][idx[0]].axpy(-0.5,correction)
+                # #apply the correction for the overlap
+                # dx_correction = ufl.Measure("dx", 
+                #                             domain=self.XSs[idx[0]].msh,
+                #                             subdomain_data= self.collisions[idx[0]][idx[1]].celltags[0])
+                # res = self.XSs[idx[0]]._construct_residual(dx=dx_correction,
+                #                                            return_residual=True)
+                # correction = self.XSs[idx[0]]._assemble_system_matrix(residual=res)
+                # # correction.view()
+                # A_list[idx[0]][idx[0]].axpy(-0.5,correction)
 
 
         A = PETSc.Mat()
@@ -1695,14 +1696,17 @@ class CoupledXSProblem:
             self.basis_trans_matrix += self.XSs[i].mat
         #perform the basis transformation (use the sparse matrix to prevent numerical inaccuracies during inversion)
         # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
-        self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix,sparse_format='csc')
+        self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix)#,sparse_format='csc')
+        
+        self.basis_trans_matrix_pinv = sparseify(np.linalg.pinv(self.basis_trans_matrix_sparse.toarray()))
 
-        self.sols_decoup = (self.sparse_sols.dot(self.basis_trans_matrix_sparse.T)).toarray()
+        self.sols_decoup = (self.sparse_sols.dot(self.basis_trans_matrix_pinv)).toarray()
 
         #get the decoupled basis
         for i,region in zip(self.regions,self.regions.values()):
-            ubar_uhat_dofs = np.concatenate([self.XSs[i].ubar_vtx_to_dof,self.XSs[i].uhat_vtx_to_dof])
-            self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:][ubar_uhat_dofs,:]
+            # ubar_uhat_dofs = np.concatenate([self.XSs[i].ubar_vtx_to_dof,self.XSs[i].uhat_vtx_to_dof])
+            # self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:][ubar_uhat_dofs,:]
+            self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
 
 
     def _compute_xs_stiffness_matrix(self):

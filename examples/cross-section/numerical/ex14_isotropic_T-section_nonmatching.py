@@ -10,13 +10,13 @@ np.set_printoptions(precision=3)
 # m1,n1 = 54,5
 # m2,n2 = 4,45
 # m3,n3 = 54,5
-m1,n1 = 100,10
-m2,n2 = 10,100
+m1,n1 = 100,8
+m2,n2 = 5,50
 
-H = 0.1
-W = 0.1
-tf = .01
-tw = .01
+H = 1
+W = 1
+tf = .1
+tw = .1
 
 
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
@@ -97,11 +97,11 @@ print(TXS_nm.K[5,5])
 
 #compare to conformal approach:
 #create mesh
-N = 10
-H = .1
-W= .1
-tf = 0.01
-tw = 0.01
+N = 1
+H = 1
+W= 1
+tf = 0.1
+tw = 0.1
 
 dims = [H,W,tf,tw]
 num_el = [N,N]#number of elements through each wall thickness
