@@ -5,15 +5,16 @@ from petsc4py import PETSc
 import basix
 from mpi4py import MPI
 import ufl
+from scipy.sparse import csr_matrix
 
 
 class Collision:
     '''
     Collection of information about each overlapping section
     '''
-    def __init__(self,collision_bbtree,collision_points,celltags,penalty_dofs):
+    def __init__(self,collision_bbtree,celltags,penalty_dofs):
         self.collision_bbtree = collision_bbtree
-        self.collision_points = collision_points
+        # self.collision_points = collision_points
         self.celltags = celltags
         self.penalty_dofs = penalty_dofs
         
@@ -292,6 +293,15 @@ class CoupledProblem:
     
 
     
+def convert_petsc_to_numpy(mat,sparse='False'):
+    mataij = mat.convert('aij')
+    mat_sparse = csr_matrix(mataij.getValuesCSR()[::-1], shape=mataij.size)
+    mat_np = mat_sparse.toarray()
+    
+    if sparse is True:
+        return mat,mat_sparse
+    else:
+        return mat_np
 
 def mark_cells(msh, cell_index):
     num_cells = msh.topology.index_map(
@@ -311,15 +321,35 @@ def extract_cell_geometry(input_mesh, cell: int):
     return input_mesh.geometry.x[mesh_nodes]
 
 
-def celltags_to_dofs(V,cell_tags):
-    cells = cell_tags.indices[cell_tags.values==1]
-    vertices = np.unique(V.mesh.geometry.dofmap[cells,:].flatten())
-    indices=[]
-    for i in range(V.num_sub_spaces):
-        _,dofmap = V.sub(i).collapse()
-        indices.extend([dofmap[j] for j in vertices])
+def celltags_to_dofs(V,celltags):
+    cells = celltags.indices[celltags.values==1]
+    indices = np.unique(V.dofmap.list[cells,:].flatten())
+    # vertices = np.unique(V.mesh.geometry.dofmap[cells,:].flatten())
+    # indices=[]
+    # for i in range(V.num_sub_spaces):
+    #     _,dofmap = V.sub(i).collapse()
+    #     indices.extend([dofmap[j] for j in vertices])
     return indices
 
+def get_points_from_cells(mesh, cell_indices):
+    """
+    Get the unique points (vertices) that belong to a given set of cells.
+    
+    Parameters:
+    - mesh: dolfinx.Mesh object
+    - cell_indices: list or array of cell indices
+
+    Returns:
+    - np.ndarray of unique vertex coordinates
+    """
+    # Get connectivity from cells to vertices
+    cell_to_vertex = mesh.topology.connectivity(2, 0)
+    
+    # Get the unique vertex indices from the selected cells
+    vertex_indices = np.unique(np.concatenate([cell_to_vertex.links(cell) for cell in cell_indices]))
+
+    # Retrieve the coordinates of these vertices
+    return mesh.geometry.x[vertex_indices]
 
 def get_collision_celltags(mesh0,mesh1,collisions,tol=1e-14):
     '''return celltags for of the mesh'''
@@ -489,7 +519,7 @@ def get_interpolation_matrix(V_1,V_0,mixed=False):
     '''
     returns the interpolation matrix from one functionspace on a mesh to another
     '''
-    #Need to handle mixed function spaces by passing the passing a 
+    #Need to handle mixed function spaces by passing the
     #   collapsed subspace to the interpolation_matrix_nonmatching_meshes()
     #   method
     if mixed is True:
@@ -502,9 +532,11 @@ def get_interpolation_matrix(V_1,V_0,mixed=False):
     M01.assemble()
 
     #expand the interpolation matrix based on the ordering of the subspace
-    M01_expanded = permute_and_expand_matrix(V_1,V_0,M01)
-
-    return M01_expanded
+    if len(V_1.value_shape) != 0:
+        M01_expanded = permute_and_expand_matrix(V_1,V_0,M01)
+        return M01_expanded
+    else:
+        return M01
 
 
 def solve_coupled_system(A1,A2,b1,b2,uh1,uh2,M12,M21,subdofs1,subdofs2,alpha,w=1):

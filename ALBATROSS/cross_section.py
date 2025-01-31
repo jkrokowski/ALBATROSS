@@ -22,7 +22,10 @@ from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,sparseify
 from ALBATROSS.nonmatching_utils import (Region,Separation,Collision,
                                          get_bbtrees,get_collision_celltags,
                                          pts_to_dofs,get_petsc_system,
-                                         get_interpolation_matrix)
+                                         celltags_to_dofs,
+                                         get_interpolation_matrix,
+                                         convert_petsc_to_numpy,
+                                         get_points_from_cells)
 default_scalar_type = PETSc.ScalarType    
 
 #TODO: allow user to specify a point to find xs props about
@@ -1412,7 +1415,7 @@ class CrossSection:
 class CoupledXSProblem:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
         compute combined beam cross-sectional properties'''
-    def __init__(self,XSs,pen=1e5):
+    def __init__(self,XSs,pen=1e2):
 
         self.XSs = XSs
 
@@ -1484,17 +1487,64 @@ class CoupledXSProblem:
                 collisions_bbtree_ij = geometry.compute_collisions_trees(self.bb_trees[i], self.bb_trees[j])
                 
                 if collisions_bbtree_ij.size != 0:
+                    #update the adjaceny matrix
                     adjacency[i,j] = 1
-                    collision_points_ij = geometry.compute_collisions_points(self.bb_trees[j],self.meshes[i].geometry.x)
-                    celltags_i,celltags_j = get_collision_celltags(self.meshes[i],self.meshes[j],collisions_bbtree_ij)
 
-                    penalty_dofs = pts_to_dofs(self.regions[i].fxn_space,collision_points_ij)
+                    meshptsi = self.meshes[i].geometry.x
+                    meshptsj = self.meshes[j].geometry.x
+
+                    bbleaves_ij = geometry.compute_collisions_points(self.bb_trees[j],meshptsi)
+                    bbleaves_ji = geometry.compute_collisions_points(self.bb_trees[i],meshptsj)
+                    celltags_i,celltags_j = get_collision_celltags(self.meshes[i],self.meshes[j],collisions_bbtree_ij)
                     
+                    #cells making up the collision zone
+                    # cells_i = np.unique(collisions_bbtree_ij[:,0])
+                    # cells_j = np.unique(collisions_bbtree_ij[:,1])
+
+                    #points of the cells in collision zone
+                    # pts_i = get_points_from_cells(self.regions[i].msh,cells_i)
+                    # pts_j = get_points_from_cells(self.regions[j].msh,cells_j)
+                    
+
+                    # # Compute actual colliding cells for each input point
+                    # potential_colliding_cells = geometry.compute_collisions_points(self.bb_trees[i], pts_j)
+                    adj_list_ij = geometry.compute_colliding_cells(self.regions[j].msh, bbleaves_ij, meshptsi)
+                    adj_list_ji = geometry.compute_colliding_cells(self.regions[i].msh, bbleaves_ji, meshptsj)
+
+                    # Filter out points that actually intersect the mesh
+                    pts_i = [i for i in range(len(meshptsi)) if len(adj_list_ij.links(i)) > 0]
+                    pts_j = [i for i in range(len(meshptsj)) if len(adj_list_ji.links(i)) > 0]
+
+                    #check if pts i are in mesh j
+                    # collision_points_ij = geometry.compute_collisions_points(self.bb_trees[j],pts_i)
+                    # collision_points_ji =geometry.compute_collisions_points(self.bb_trees[i],pts_j)
+
+                    #create vertex-to-cell connectivity has been created if it hasn't been done yet
+                    if self.regions[i].msh.topology.connectivity(0,2) is None:
+                        self.regions[i].msh.topology.create_connectivity(0,2)
+                    if self.regions[j].msh.topology.connectivity(0,2) is None:
+                        self.regions[j].msh.topology.create_connectivity(0,2)
+                    
+                    #get the penalty dofs:
+                    penalty_dofs_i=fem.locate_dofs_topological(self.regions[i].fxn_space,0,pts_i)
+                    penalty_dofs_j=fem.locate_dofs_topological(self.regions[j].fxn_space,0,pts_j)
+
+                    #TODO: just need to remove celltags for any 
+                    #JJK 1/27/25: this is not returning the proper penalty dofs!
+                    # penalty_dofs = pts_to_dofs(self.regions[i].fxn_space,collision_points_ij)
+
+                    #JJK 1/29/25: this returns additional dofs outside of the 
+                    #get the dofs correspondings to cells that are part of the overlap
+                    # penalty_dofs_i = celltags_to_dofs(self.regions[i].fxn_space,celltags_i)
+                    # penalty_dofs_j = celltags_to_dofs(self.regions[j].fxn_space,celltags_j)
+
+                    #need to check if  
+
                     #information about a collision of mesh i on mesh j
                     collision_ij = Collision(collisions_bbtree_ij,
-                                             collision_points_ij,
+                                            #  collision_points_ij,
                                              (celltags_i,celltags_j),
-                                             penalty_dofs)
+                                             (penalty_dofs_i,penalty_dofs_j))
 
                     pen_vec = self._build_penalty_vector(self.regions[i],collision_ij)
                     
@@ -1518,11 +1568,11 @@ class CoupledXSProblem:
     def _build_penalty_vector(self,region_i,collision_ij):
         '''
         Build the vector of penalty terms per dof
-        This is a PETSc Vector that can be directly multiplied by 
+        This is a PETSc Vector that can be directly multiplied by the interpolation matrix
         '''
         #initialize empty PETSc vector
         pen_vec = PETSc.Vec().create()
-        vec_size = region_i.fxn_space.dofmap.index_map.size_global * region_i.fxn_space.num_sub_spaces
+        vec_size = region_i.fxn_space.dofmap.index_map.size_global #* region_i.fxn_space.num_sub_spaces
         pen_vec.setSizes(vec_size)
         pen_vec.setFromOptions()
 
@@ -1536,9 +1586,9 @@ class CoupledXSProblem:
 
         #create connectivity between cells and vertices (if not already created)
         region_i.msh.topology.create_connectivity(0,2)
-        pen_values = np.zeros((len(collision_ij.penalty_dofs),),dtype=float)
+        pen_values = np.zeros((len(collision_ij.penalty_dofs[0]),),dtype=float)
         #return a list of penalty values for each dof
-        for i,dof in enumerate(collision_ij.penalty_dofs):
+        for i,dof in enumerate(collision_ij.penalty_dofs[0]):
             #get the corresponding vertex for a specific dof
             vtx = region_i.dof_to_vertex_map[dof]
 
@@ -1550,7 +1600,7 @@ class CoupledXSProblem:
             pen_values[i] = self.pen * np.sum(cell_areas.array[cells])
 
         #populate the PETSc vector with the values at the proper indices
-        for idx,val in zip(collision_ij.penalty_dofs,pen_values):
+        for idx,val in zip(collision_ij.penalty_dofs[0],pen_values):
             pen_vec.setValue(idx,val)
         
         return pen_vec
@@ -1602,7 +1652,7 @@ class CoupledXSProblem:
                 self.separations[idx[0]][idx[1]].mat.assemble()
 
         #populate an array of the same size as the adjacency matrix of the petsc matrices
-        #  using a *stupidly* incomprehensible list "comprehension" 
+        #  using a *nearly* incomprehensible list "comprehension" 
         # this adds the unadultered system to the diagonals, the interpolation matrices where there is a collision
         # and the assembled empty matrices where there is a "separation"
         A_list = [ [self.regions[i].system_mat if i==j
@@ -1611,6 +1661,16 @@ class CoupledXSProblem:
                         for i in range(self.num_meshes)]
                      for j in range(self.num_meshes) ]
         
+        #assemble uncoupled nested matrix for debugging
+        A_uncoupled_petsc = PETSc.Mat()
+        A_uncoupled_petsc.createNest(A_list)
+        A_uncoupled_petsc.assemble()
+        A_aij = A_uncoupled_petsc.convert('aij')
+        A_uncoupled = csr_matrix(A_aij.getValuesCSR()[::-1], shape=A_aij.size).toarray()
+        print(f"uncoupled system zero body modes: {A_uncoupled.shape[0]-np.linalg.matrix_rank(A_uncoupled)}")
+        
+        #TODO: it seems that the penalty dofs and the penalty term are not matching up well
+        #       there is definitely some bug here that needs some inspection
         # add the penalty to the relevant block of A_list
         for idx,val in np.ndenumerate(self.adjacency):
             # if idx[0]==idx[1]:
@@ -1619,7 +1679,7 @@ class CoupledXSProblem:
                 pen_term.assemble()
                 diag = pen_term.getDiagonal()
                 #set diagonal values to the pre-computed penalty vector values
-                for val in self.collisions[idx[0]][idx[1]].penalty_dofs:
+                for val in self.collisions[idx[0]][idx[1]].penalty_dofs[0]:
                     diag[val] = self.collisions[idx[0]][idx[1]].pen_vec[val]
                 pen_term.setDiagonal(diag)
                 # penalty_term = PETSc.Mat().createAIJ(I_mat.getSize())
@@ -1633,9 +1693,9 @@ class CoupledXSProblem:
 
                 #add penalty term to off diagonal block                
                 A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
+                # A_list[idx[0]][idx[1]] = self.collisions[idx[1]][idx[0]].inter_mat
                 A_list[idx[0]][idx[1]].assemble()
                 A_list[idx[0]][idx[1]].scale(-1.0)
-
 
                 # #apply the correction for the overlap
                 # dx_correction = ufl.Measure("dx", 
@@ -1652,6 +1712,9 @@ class CoupledXSProblem:
         A.createNest(A_list)
         
         A.assemble()
+        A_aij = A.convert('aij')
+        A_coupled = csr_matrix(A_aij.getValuesCSR()[::-1], shape=A_aij.size).toarray()
+        print(f"coupled system zero body modes: {A_coupled.shape[0]-np.linalg.matrix_rank(A_coupled)}")
 
         self.system_mat = A
 

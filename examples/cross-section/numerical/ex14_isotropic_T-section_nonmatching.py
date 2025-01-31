@@ -10,8 +10,8 @@ np.set_printoptions(precision=3)
 # m1,n1 = 54,5
 # m2,n2 = 4,45
 # m3,n3 = 54,5
-m1,n1 = 100,8
-m2,n2 = 5,50
+m1,n1 = 20,4
+m2,n2 = 4,20
 
 H = 1
 W = 1
@@ -26,12 +26,16 @@ mesh_0.geometry.x[:, 1] *= tf
 mesh_0.geometry.x[:, 0] *= W
 mesh_0.geometry.x[:, 1] += H/2 - tf/2
 
+mesh_0.name = 'f'
+
 mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.quadrilateral)
 # mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2)
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= W
 # mesh_1.geometry.x[:, 0] += T2/2
+
+mesh_1.name = 'w'
 
 
 #PLOT meshes:
@@ -42,6 +46,11 @@ def add_mesh(msh):
     topology, cell_types, geom = plot.vtk_mesh(msh, 2)
     grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
     plotter.add_mesh(grid,show_edges=True,opacity=0.25)
+     
+    # # Add cell labels
+    # cell_centers = grid.cell_centers()
+    # for i, center in enumerate(cell_centers.points):
+    #     plotter.add_point_labels(center, [msh.name+str(i)], font_size=10, point_color='black', text_color='black')
 add_mesh(mesh_0)
 add_mesh(mesh_1)
 # add_mesh(mesh_2)
@@ -60,7 +69,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=5e4)
+TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e2)
 
 TXS_nm.get_xs_stiffness_matrix()
 
