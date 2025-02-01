@@ -11,7 +11,7 @@ np.set_printoptions(precision=3)
 # m2,n2 = 4,45
 # m3,n3 = 54,5
 m1,n1 = 20,4
-m2,n2 = 4,20
+m2,n2 = 3,20
 
 H = 1
 W = 1

@@ -12,10 +12,11 @@ class Collision:
     '''
     Collection of information about each overlapping section
     '''
-    def __init__(self,collision_bbtree,celltags,penalty_dofs):
+    def __init__(self,collision_bbtree,celltags,pts,penalty_dofs):
         self.collision_bbtree = collision_bbtree
         # self.collision_points = collision_points
         self.celltags = celltags
+        self.pts = pts
         self.penalty_dofs = penalty_dofs
         
     def add_pen_vec(self,pen_vec):
@@ -475,6 +476,7 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
 
 def permute_and_expand_matrix(V_to,V_from,M_scalar):
     '''return assembled PETSc matrix that interpolates from one mesh to another'''
+    # if there is a mixed space, e.g. num_sub_spaces != value_size, need to loop through subspaces of subspaces
     indices_to = []
     indices_from = []
     for i in range(V_to.num_sub_spaces):
@@ -519,9 +521,8 @@ def get_interpolation_matrix(V_1,V_0,mixed=False):
     '''
     returns the interpolation matrix from one functionspace on a mesh to another
     '''
-    #Need to handle mixed function spaces by passing the
-    #   collapsed subspace to the interpolation_matrix_nonmatching_meshes()
-    #   method
+    # In order to properly handle vector fxn spaces and mixed function spaces, 
+    #   we need to us the dofmaps and the interpolation matrix from the scalar fxn space
     if mixed is True:
         M01 = interpolation_matrix_nonmatching_meshes(V_1.sub(0).collapse()[0],
                                                       V_0.sub(0).collapse()[0])

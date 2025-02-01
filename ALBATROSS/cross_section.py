@@ -1538,12 +1538,11 @@ class CoupledXSProblem:
                     # penalty_dofs_i = celltags_to_dofs(self.regions[i].fxn_space,celltags_i)
                     # penalty_dofs_j = celltags_to_dofs(self.regions[j].fxn_space,celltags_j)
 
-                    #need to check if  
-
                     #information about a collision of mesh i on mesh j
                     collision_ij = Collision(collisions_bbtree_ij,
                                             #  collision_points_ij,
                                              (celltags_i,celltags_j),
+                                             (pts_i,pts_j),
                                              (penalty_dofs_i,penalty_dofs_j))
 
                     pen_vec = self._build_penalty_vector(self.regions[i],collision_ij)
@@ -1587,17 +1586,20 @@ class CoupledXSProblem:
         #create connectivity between cells and vertices (if not already created)
         region_i.msh.topology.create_connectivity(0,2)
         pen_values = np.zeros((len(collision_ij.penalty_dofs[0]),),dtype=float)
-        #return a list of penalty values for each dof
-        for i,dof in enumerate(collision_ij.penalty_dofs[0]):
+        #for each pt, update the penalty value for that vertex
+        for i,pt in enumerate(collision_ij.pts[0]):
             #get the corresponding vertex for a specific dof
-            vtx = region_i.dof_to_vertex_map[dof]
+            # vtx = region_i.dof_to_vertex_map[dof]
 
             #get the cells connected to the penalty dof
-            cells = region_i.msh.topology.connectivity(0,2).links(vtx)
+            cells = region_i.msh.topology.connectivity(0,2).links(pt)
+
+            dofs = fem.locate_dofs_topological(region_i.fxn_space,0,[pt])
             
             #add up area of all cells that are incident to the penalty dof
             #  adjust penalty proportionately to the supported area
-            pen_values[i] = self.pen * np.sum(cell_areas.array[cells])
+            indices=np.where(np.isin(collision_ij.penalty_dofs[0],dofs))
+            pen_values[indices] = self.pen * np.sum(cell_areas.array[cells])
 
         #populate the PETSc vector with the values at the proper indices
         for idx,val in zip(collision_ij.penalty_dofs[0],pen_values):
@@ -1677,11 +1679,13 @@ class CoupledXSProblem:
             if val==1:
                 pen_term = PETSc.Mat().createAIJ(A_list[idx[0]][idx[0]].getSize())
                 pen_term.assemble()
-                diag = pen_term.getDiagonal()
+                # diag = pen_term.getDiagonal()
                 #set diagonal values to the pre-computed penalty vector values
-                for val in self.collisions[idx[0]][idx[1]].penalty_dofs[0]:
-                    diag[val] = self.collisions[idx[0]][idx[1]].pen_vec[val]
-                pen_term.setDiagonal(diag)
+                # for val in self.collisions[idx[0]][idx[1]].penalty_dofs[0]:
+                #     diag[val] = self.collisions[idx[0]][idx[1]].pen_vec[val]
+                # pen_term.setDiagonal(diag)
+                pen_term.setDiagonal(self.collisions[idx[0]][idx[1]].pen_vec)
+                pen_term.assemble()
                 # penalty_term = PETSc.Mat().createAIJ(I_mat.getSize())
                 # I_mat.multTranspose(self.collisions[idx[0]][idx[1]].pen_vec,penalty_term)
 

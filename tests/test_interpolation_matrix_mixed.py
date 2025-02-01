@@ -1,4 +1,5 @@
 import numpy as np
+from basix.ufl import mixed_element,element
 from dolfinx import mesh, fem, geometry, plot
 from mpi4py import MPI
 from petsc4py import PETSc
@@ -42,8 +43,9 @@ def test_interpolation_matrix():
     target_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0.5, 0.5], [1.5, 1.5]], [8,8], mesh.CellType.triangle)
     
     # Define function spaces
-    source_space = fem.functionspace(source_mesh, ("CG", 1,(2,)))
-    target_space = fem.functionspace(target_mesh, ("CG", 1,(2,)))
+    ele = element('CG',source_mesh.topology.cell_name(),1,shape=(3,))
+    source_space = fem.functionspace(source_mesh,mixed_element(4*[ele]))
+    target_space = fem.functionspace(source_mesh,mixed_element(4*[ele]))
     
     # Create an example function on the source space
     u = fem.Function(source_space)
