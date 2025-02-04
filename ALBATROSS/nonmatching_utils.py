@@ -474,16 +474,49 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     return I
 
 
-def permute_and_expand_matrix(V_to,V_from,M_scalar):
+def permute_and_expand_matrix(V_to,V_from,M_scalar,mixed=False):
     '''return assembled PETSc matrix that interpolates from one mesh to another'''
     # if there is a mixed space, e.g. num_sub_spaces != value_size, need to loop through subspaces of subspaces
     indices_to = []
     indices_from = []
+    # if mixed is True:
+    #     sub_indices_to = []
+    #     sub_indices_from = []
+
     for i in range(V_to.num_sub_spaces):
-        _,map_to = V_to.sub(i).collapse()
-        _,map_from = V_from.sub(i).collapse()
-        indices_to.extend(map_to)
-        indices_from.extend(map_from)
+        if mixed is False:
+            _,map_to = V_to.sub(i).collapse()
+            _,map_from = V_from.sub(i).collapse()
+            indices_to.extend(map_to)
+            indices_from.extend(map_from)
+
+        elif mixed is True:
+            for j in range(V_to.sub(i).num_sub_spaces):
+                _,map_to = V_to.sub(i).sub(j).collapse()
+                _,map_from = V_from.sub(i).sub(j).collapse()
+                
+                indices_to.extend(map_to)
+                indices_from.extend(map_from)
+
+        # #sort sub-subspaces if using a mixed formulation
+        # if mixed is True:
+            
+        #     for j in range(V_to.sub(i).num_sub_spaces):
+        #         _, sub_map_to = V_to.sub(i).sub(j).collapse()
+        #         _, sub_map_from = V_from.sub(i).sub(j).collapse()
+                
+        #         sub_indices_to.extend(sub_map_to)
+        #         sub_indices_from.extend(sub_map_from)
+
+        #     # Sort sub_indices_to based on sub_map_to order
+        #     #   this returns the map from subspace to the sub-subspace
+        #     sub_sort_to = np.argsort(sub_indices_to)
+        #     sub_sort_from = np.argsort(sub_indices_from)
+
+        #     map_to = list(np.array(map_to)[sub_sort_to])
+        #     map_from = list(np.array(map_from)[sub_sort_from])
+                
+        
 
     #provide the permutations to sort these indices from the block diagonal form
     sort_to = np.argsort(indices_to)
@@ -495,7 +528,7 @@ def permute_and_expand_matrix(V_to,V_from,M_scalar):
     M0.setSizes((dim0, dim1))
     M0.setUp()
     
-    #list comprehension to construct that blocks for the nested PETSc matrix
+    #list comprehension to construct blocks for the nested PETSc matrix
     M_list = [[M_scalar if i==j
                else M0
                 for i in range(V_to.value_shape[0])]
@@ -520,6 +553,8 @@ def permute_and_expand_matrix(V_to,V_from,M_scalar):
 def get_interpolation_matrix(V_1,V_0,mixed=False):
     '''
     returns the interpolation matrix from one functionspace on a mesh to another
+    V_1: functionspace to interpolate to
+    V_0: functionspace to interpolate from
     '''
     # In order to properly handle vector fxn spaces and mixed function spaces, 
     #   we need to us the dofmaps and the interpolation matrix from the scalar fxn space
@@ -534,7 +569,7 @@ def get_interpolation_matrix(V_1,V_0,mixed=False):
 
     #expand the interpolation matrix based on the ordering of the subspace
     if len(V_1.value_shape) != 0:
-        M01_expanded = permute_and_expand_matrix(V_1,V_0,M01)
+        M01_expanded = permute_and_expand_matrix(V_1,V_0,M01,mixed=mixed)
         return M01_expanded
     else:
         return M01

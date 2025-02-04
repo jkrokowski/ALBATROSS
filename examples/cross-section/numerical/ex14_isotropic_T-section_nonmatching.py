@@ -47,10 +47,10 @@ def add_mesh(msh):
     grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
     plotter.add_mesh(grid,show_edges=True,opacity=0.25)
      
-    # # Add cell labels
-    # cell_centers = grid.cell_centers()
-    # for i, center in enumerate(cell_centers.points):
-    #     plotter.add_point_labels(center, [msh.name+str(i)], font_size=10, point_color='black', text_color='black')
+    # Add cell labels
+    cell_centers = grid.cell_centers()
+    for i, center in enumerate(cell_centers.points):
+        plotter.add_point_labels(center, [msh.name+str(i)], font_size=10, point_color='black', text_color='black')
 add_mesh(mesh_0)
 add_mesh(mesh_1)
 # add_mesh(mesh_2)

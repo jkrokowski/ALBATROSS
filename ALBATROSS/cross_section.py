@@ -1639,6 +1639,7 @@ class CoupledXSProblem:
         # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
         for idx,val in np.ndenumerate(self.adjacency):
             if val == 1:
+                print(self.collisions[idx[0]][idx[1]].pts)
                 #get the interpolation matrix
                 self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
                                                                                      self.regions[idx[0]].fxn_space,
@@ -1695,7 +1696,11 @@ class CoupledXSProblem:
                 #TODO: need to come up with a better way of populating the 
                 #   nested list than simply filling with the interpolation matrix, then overwriting it...
 
-                #add penalty term to off diagonal block                
+                #add penalty term to off diagonal block
+                # TODO: There is a mismatch between the points detected as "penalty points" in the collision
+                #           detection and the points the interpolation matrix seems to use
+                #           NEED TO figure out which points should be included. 
+                #               Need to check the ordering of dofs vs pts as well             
                 A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
                 # A_list[idx[0]][idx[1]] = self.collisions[idx[1]][idx[0]].inter_mat
                 A_list[idx[0]][idx[1]].assemble()
