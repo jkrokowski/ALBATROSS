@@ -559,8 +559,8 @@ def get_interpolation_matrix(V_1,V_0,mixed=False):
     # In order to properly handle vector fxn spaces and mixed function spaces, 
     #   we need to us the dofmaps and the interpolation matrix from the scalar fxn space
     if mixed is True:
-        M01 = interpolation_matrix_nonmatching_meshes(V_1.sub(0).collapse()[0],
-                                                      V_0.sub(0).collapse()[0])
+        M01 = interpolation_matrix_nonmatching_meshes(V_1.sub(0).sub(0).collapse()[0],
+                                                      V_0.sub(0).sub(0).collapse()[0])
     else: 
         M01 = interpolation_matrix_nonmatching_meshes(V_1,V_0)
 

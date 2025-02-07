@@ -16,8 +16,8 @@ m2,n2 = 4,40
 
 H = 1
 W = 1
-tf = .15
-tw = .1
+tf = .1
+tw = .2
 
 
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
@@ -34,6 +34,8 @@ mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= W
+mesh_1.geometry.x[:, 0] -= H/2 - tw/2
+
 # mesh_1.geometry.x[:, 0] += T2/2
 
 mesh_1.name = 'w'
@@ -48,10 +50,10 @@ def add_mesh(msh):
     grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
     plotter.add_mesh(grid,show_edges=True,opacity=0.25)
      
-    # # Add cell labels
-    # cell_centers = grid.cell_centers()
-    # for i, center in enumerate(cell_centers.points):
-    #     plotter.add_point_labels(center, [msh.name+str(i)], font_size=10, point_color='black', text_color='black')
+    # Add cell labels
+    cell_centers = grid.cell_centers()
+    for i, center in enumerate(cell_centers.points):
+        plotter.add_point_labels(center, [msh.name+str(i)], font_size=10, point_color='black', text_color='black')
 add_mesh(mesh_0)
 add_mesh(mesh_1)
 # add_mesh(mesh_2)
@@ -70,38 +72,40 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e6)
+LXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e8)
 
-TXS_nm.get_xs_stiffness_matrix()
+LXS_nm.get_xs_stiffness_matrix()
 
-TXS_nm.plot_warping_fxns()
+LXS_nm.plot_warping_fxns()
 
 np.set_printoptions(precision=3)
 
 #output stiffness matrix
 print('Stiffness matrix:')
-print(TXS_nm.K)
+print(LXS_nm.K)
 
 print("Analytical axial stiffness (EA):")
-A = tf*W + tw*(H-tf)
+A = tw*W + tf*(H-tw)
 E=unobtainium.E
 print(E*A)
 print("Computed Axial Stiffness:")
-print(TXS_nm.K[0,0])
+print(LXS_nm.K[0,0])
 
-print("Analytical Bending stiffness (EI1):")
-I1 = ( (tw*H**3)/12 + 
-      ( (((W-tw)*tf**3)/12) 
-       + ((tf*(W-tw)))*((H-tf)/2)**2) )
+print("Analytical Bending stiffness (EI):")
+I1 = ((tw*H**3)/12 
+      + (tf**3*(W-tf))/12 
+      + tf*(W-tw)*(H/2-tf/2)**2 )
 print(E*I1)
 print("Computed bending stiffness 1:")
-print(TXS_nm.K[4,4])
+print(LXS_nm.K[4,4])
 
-print("Analytical Bending stiffness (EI2):")
-I2 = ((tf*W**3)/12) + ((H-tf)*tw**3)/12
+print("Analytical Bending stiffness (EI):")
+I2 = ((tf*W**3)/12 
+      + (tw**3*(H-tf))/12 
+      + tw*(H-tf)*(W/2-tf/2)**2 )
 print(E*I2)
 print("Computed bending stiffness 2:")
-print(TXS_nm.K[5,5])
+print(LXS_nm.K[5,5])
 
 
 #compare to conformal approach:
@@ -109,12 +113,12 @@ print(TXS_nm.K[5,5])
 N = 4
 H = 1
 W= 1
-tf = 0.15
-tw = 0.1
+tfh = 0.2
+tfw = 0.1
 
-dims = [H,W,tf,tw]
+dims = [H,W,tfh,tfw]
 num_el = [N,N]#number of elements through each wall thickness
-domain = ALBATROSS.mesh.create_T_section(dims,num_el,'T_section')
+domain = ALBATROSS.mesh.create_L_section(dims,num_el,'L_section')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -122,48 +126,54 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            density=2700)
 
 #initialize cross-section object
-TXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
+LXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
-TXS.plot_mesh()
+LXS.plot_mesh()
 
 #compute the stiffness matrix
-TXS.get_xs_stiffness_matrix()
+LXS.get_xs_stiffness_matrix()
 
-TXS.plot_warping_fxns()
+LXS.plot_warping_fxns()
 
 np.set_printoptions(precision=3)
 
+#output flexibility matrix
+print('Flexibility matrix:')
+print(LXS.S)
+
 #output stiffness matrix
 print('Stiffness matrix:')
-print(TXS.K)
+print(LXS.K)
 
 print("Analytical axial stiffness (EA):")
-A = tf*W + tf*(H-tw)
+A = tfw*(W-tfh) + tfh*(H-tfw) + tfh*tfw
 E=unobtainium.E
 print(E*A)
 print("Computed Axial Stiffness:")
-print(TXS.K[0,0])
+print(LXS.K[0,0])
 
 print("Analytical Bending stiffness (EI):")
-I1 = ( (tw*H**3)/12 + 
-      ( (((W-tw)*tf**3)/12) 
-       + ((tf*(W-tw)))*((H-tf)/2)**2) )
+I1 = ((tfh*H**3)/12 
+      + (tfw**3*(W-tfh))/12 
+      + tfw*(W-tfh)*(H/2-tfw/2)**2 )
 print(E*I1)
 print("Computed bending stiffness 1:")
-print(TXS.K[4,4])
+print(LXS.K[4,4])
 
 print("Analytical Bending stiffness (EI):")
-I2 = ((tf*W**3)/12) + ((H-tf)*tw**3)/12
+I2 = ((tfw*W**3)/12 
+      + (tfh**3*(H-tfw))/12 
+      + tfh*(H-tfw)*(W/2-tfh/2)**2 )
 print(E*I2)
 print("Computed bending stiffness 2:")
-print(TXS.K[5,5])
+print(LXS.K[5,5])
 
 
 
 #compute difference between matrix entries of beam constituitive matrix
-abs_diff = TXS_nm.K - TXS.K
-rel_diff = abs_diff/TXS.K
+abs_diff = LXS_nm.K - LXS.K
+rel_diff = abs_diff/LXS.K
 
 print("Total difference:")
 print(abs_diff)

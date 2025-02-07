@@ -85,7 +85,7 @@ squareXS.get_xs_stiffness_matrix()
 
 squareXS.plot_warping_fxns()
 
-np.set_printoptions(precision=10,suppress=True)
+np.set_printoptions(precision=12,suppress=True)
 
 #output flexibility matrix
 print('Flexibility matrix:')

@@ -10,9 +10,14 @@ np.set_printoptions(precision=3)
 # m1,n1 = 54,5
 # m2,n2 = 4,45
 # m3,n3 = 54,5
-m1,n1 = 50,5
-m2,n2 = 5,50
-m3,n3 = 50,5
+
+# m1,n1 = 50,5
+# m2,n2 = 5,50
+# m3,n3 = 50,5
+
+m1,n1 = 30,3
+m2,n2 = 3,30
+m3,n3 = 30,3
 
 H = 0.1
 L = 0.1
@@ -20,23 +25,22 @@ T1 = .01
 T2 = .01
 T3 = .01
 
-
-# mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
-mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1)
+mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
+# mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1)
 mesh_0.geometry.x[:, :2] -= .5
 mesh_0.geometry.x[:, 1] *= T1
 mesh_0.geometry.x[:, 0] *= L
 mesh_0.geometry.x[:, 1] += H/2 - T1/2
 
-# mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.quadrilateral)
-mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2)
+mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.quadrilateral)
+# mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2)
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= T2
 mesh_1.geometry.x[:, 1] *= H
 # mesh_1.geometry.x[:, 0] += T2/2
 
-# mesh_2 = mesh.create_unit_square(MPI.COMM_WORLD, m3, n3,cell_type=mesh.CellType.quadrilateral)
-mesh_2 = mesh.create_unit_square(MPI.COMM_WORLD, m3, n3)
+mesh_2 = mesh.create_unit_square(MPI.COMM_WORLD, m3, n3,cell_type=mesh.CellType.quadrilateral)
+# mesh_2 = mesh.create_unit_square(MPI.COMM_WORLD, m3, n3)
 mesh_2.geometry.x[:, :2] -= .5
 mesh_2.geometry.x[:, 1] *= T1
 mesh_2.geometry.x[:, 0] *= L
@@ -68,7 +72,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-IXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=5e4)
+IXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e12)
 
 IXS_nm.get_xs_stiffness_matrix()
 
@@ -96,7 +100,7 @@ print(IXS_nm.K[4,4])
 
 #compare to conformal approach:
 #create mesh
-N = 10
+N = 3
 H = .1
 W= .1
 tf = 0.01

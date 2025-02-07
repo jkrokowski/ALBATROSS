@@ -63,7 +63,6 @@ print(E*I2)
 print("Computed bending stiffness 2:")
 print(LXS.K[5,5])
 
+# LXS.compute_xs_stiffness_matrix_sensitivities()
 
-LXS.compute_xs_stiffness_matrix_sensitivities()
-
-LXS.plot_sensitivities()
+# LXS.plot_sensitivities()

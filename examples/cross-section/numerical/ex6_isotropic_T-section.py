@@ -61,7 +61,6 @@ print(E*I2)
 print("Computed bending stiffness 2:")
 print(TXS.K[5,5])
 
-
 TXS.compute_xs_stiffness_matrix_sensitivities()
 
 TXS.plot_sensitivities()

@@ -417,21 +417,14 @@ class CrossSection:
         # get collapsed subspace and maps from subspaces to parent space 
         UBAR,self.ubar_vtx_to_dof = self.V.sub(0).collapse()
         UHAT,self.uhat_vtx_to_dof = self.V.sub(1).collapse()
-        # self.ubar_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(0)).flatten()
-        # self.uhat_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(1)).flatten()
-        # self.utilde_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(2))
-        # self.ubreve_vtx_to_dof = get_vtx_to_dofs(self.msh,self.V.sub(3))
 
         #GET UBAR AND UHAT RELATED MODES
         ubar_modes = self.sols[self.ubar_vtx_to_dof,:]
         uhat_modes = self.sols[self.uhat_vtx_to_dof,:]
 
         #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
-        # UBAR = self.V.sub(0).collapse()[0]
-        # UHAT = self.V.sub(1).collapse()[0]
         ubar_mode = Function(UBAR)
         uhat_mode = Function(UHAT)
-        vbar_mode = TrialFunction(UBAR)
 
         # Sketch of a newer approach:
         #We can construct the warping functions in a much more intelligent way, by using the approach of the
@@ -728,7 +721,7 @@ class CrossSection:
         #construct expression for the load applied to a cross-section in 
         # terms of stress and strain expressions defined based on  the 
         # polynomial expansion:
-        P1 =sigma11_c*dx
+        P1 = sigma11_c*dx
         V2 = sigma12_c*dx
         V3 = sigma13_c*dx
         T1 = ((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
@@ -769,19 +762,113 @@ class CrossSection:
         self.K2inv = sparseify(self.K2inv).toarray()
         
         #compute Flexibility matrix
-        # self.S = self.K1inv.T@self.K2@self.K1inv
+        self.S = self.K1inv.T@self.K2@self.K1inv
         # self.S = sparseify(self.S).toarray()
-        self.S = self.K2
+        # self.S = self.K2
         
         #invert Flexibility matrix to find beam constitutive matrix
         # self.K = np.linalg.inv(self.S)
         # self.K = sparseify(self.K).toarray()
 
         #an alternative approach to avoid multiple inversion of products of inversions
-        # self.K = self.K1@sparseify(self.K2inv).toarray()@self.K1.T
+        self.K = self.K1@sparseify(self.K2inv).toarray()@self.K1.T
         # self.K = sparseify(self.K).toarray()
-        self.K = self.K2inv
+        # self.K = self.K2inv
 
+    def _get_stiffness_contribution(self,dx=None):             
+        #unpacking values
+        x = self.x
+        if dx is None:
+            dx = self.dx
+        #indices
+        i,j,k,l=self.i,self.j,self.k,self.l
+        a,B = self.a,self.B
+   
+        #elastic solution mode function related to each warping fxn
+        N_bar = self.N_bar
+        N_hat = self.N_hat
+
+        #construct fenicsx variables pertaining to elastic solution modes
+        c7 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c8 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c9 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c10 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c11 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c12 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
+        c = as_tensor([c7,c8,c9,c10,c11,c12])
+
+        #construct general warping displacement functions in terms of the 
+        #   elastic solution modes and elastic solution mode coefficients
+        ubar_c = dot(N_bar,c)
+        uhat_c = dot(N_hat,c)
+        # utilde_c = dot(N_tilde,c)
+        # ubreve_c = dot(N_breve,c)
+
+        #these elastic solution modes are related by the general expression 
+        # for the displacement as:
+        # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
+        # where x1 is the beam axis direction
+                
+        # expressions for the stress and strain in terms of the polynomial 
+        # from expansion above:
+        eps_c = self.warping2strain(ubar_c,uhat_c)
+        sigma_c = self.warping2stress(ubar_c,uhat_c)
+
+        #only stresses with a 1x component are of concern:
+        sigma11_c = sigma_c[0,0]
+        sigma12_c = sigma_c[0,1]
+        sigma13_c = sigma_c[0,2]
+
+        #construct expression for the load applied to a cross-section in 
+        # terms of stress and strain expressions defined based on  the 
+        # polynomial expansion:
+        P1 = sigma11_c*dx
+        V2 = sigma12_c*dx
+        V3 = sigma13_c*dx
+        T1 = ((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
+        M2 = (x[1])*sigma11_c*dx
+        M3 = -(x[0])*sigma11_c*dx
+
+        #store loads in a list instead of a ufl vector as we cannot take 
+        # variable derivatives of non-scalar forms
+        P = [P1,V2,V3,T1,M2,M3]
+        
+        # construct expression for the internal energy of the beam based on
+        # the polynomial expansion:
+        Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
+
+        # differentiation of the constructed form 
+        K1_form = [[diff(P[idx1],c[idx2]) for idx2 in range(6)] 
+                        for idx1 in range(6)]
+        K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx2 in range(6)]
+                        for idx1 in range(6)]
+        
+        #assemble the K1 and K2 matrices
+        K1 = np.array([[assemble_scalar(form(K1_form[idx1][idx2]))
+                     for idx2 in range(6)] 
+                        for idx1 in range(6)])
+        K2 = np.array([[assemble_scalar(form(K2_form[idx1][idx2]))
+                     for idx2 in range(6)] 
+                        for idx1 in range(6)])
+        
+        K1 = sparseify(K1).toarray()
+        K2 = sparseify(K2).toarray()
+        
+        #store K1^-1 for recovery and sensitivity computation
+        K1inv = np.linalg.inv(K1)
+        K1inv = sparseify(K1inv).toarray()
+
+        #store K2^-1 for sensitivity computation
+        K2inv = np.linalg.inv(K2)
+        K2inv = sparseify(K2inv).toarray()
+        
+        #compute Flexibility matrix
+        S = K1inv.T@K2@K1inv
+
+        #compute stiffness matrix
+        K = K1@sparseify(K2inv).toarray()@K1.T
+
+        return K
 
     def _build_elastic_solution_modes_EB(self):
         #Initialize a tensor element and mixed tensor function space 
@@ -1373,9 +1460,9 @@ class CrossSection:
             plotter.add_text(mode[i])
             plotter.view_xy()
             plotter.show_bounds()
-            
         if not pyvista.OFF_SCREEN:
             plotter.show()
+
 
 
     def plot_sensitivities(self):
@@ -1412,6 +1499,9 @@ class CrossSection:
         plotter.show_bounds()
         if not pyvista.OFF_SCREEN:
             plotter.show()
+
+
+
 class CoupledXSProblem:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
         compute combined beam cross-sectional properties'''
@@ -1664,13 +1754,12 @@ class CoupledXSProblem:
                         for i in range(self.num_meshes)]
                      for j in range(self.num_meshes) ]
         
-        #assemble uncoupled nested matrix for debugging
-        A_uncoupled_petsc = PETSc.Mat()
-        A_uncoupled_petsc.createNest(A_list)
-        A_uncoupled_petsc.assemble()
-        A_aij = A_uncoupled_petsc.convert('aij')
-        A_uncoupled = csr_matrix(A_aij.getValuesCSR()[::-1], shape=A_aij.size).toarray()
-        print(f"uncoupled system zero body modes: {A_uncoupled.shape[0]-np.linalg.matrix_rank(A_uncoupled)}")
+        # #assemble uncoupled nested matrix for debugging
+        # A_uncoupled_petsc = PETSc.Mat()
+        # A_uncoupled_petsc.createNest(A_list)
+        # A_uncoupled_petsc.assemble()
+        # A_uncoupled = convert_petsc_to_numpy(A_uncoupled_petsc)
+        # print(f"uncoupled system zero body modes: {A_uncoupled.shape[0]-np.linalg.matrix_rank(A_uncoupled)}")
         
         #TODO: it seems that the penalty dofs and the penalty term are not matching up well
         #       there is definitely some bug here that needs some inspection
@@ -1706,6 +1795,8 @@ class CoupledXSProblem:
                 A_list[idx[0]][idx[1]].assemble()
                 A_list[idx[0]][idx[1]].scale(-1.0)
 
+                #TODO: this correction modifies the warping function discovery, which
+                #       does NOT modify the discovered stiffness matrix properly
                 # #apply the correction for the overlap
                 # dx_correction = ufl.Measure("dx", 
                 #                             domain=self.XSs[idx[0]].msh,
@@ -1721,9 +1812,9 @@ class CoupledXSProblem:
         A.createNest(A_list)
         
         A.assemble()
-        A_aij = A.convert('aij')
-        A_coupled = csr_matrix(A_aij.getValuesCSR()[::-1], shape=A_aij.size).toarray()
-        print(f"coupled system zero body modes: {A_coupled.shape[0]-np.linalg.matrix_rank(A_coupled)}")
+
+        # A_coupled = convert_petsc_to_numpy(A)
+        # print(f"coupled system zero body modes: {A_coupled.shape[0]-np.linalg.matrix_rank(A_coupled)}")
 
         self.system_mat = A
 
@@ -1744,16 +1835,8 @@ class CoupledXSProblem:
         #perform matrix multiplication implicitly to construct orthogonal nullspace basis
         self.sols = sparseqr.qmult(QR,X)
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
-    
-    #TODO: Decoupling routine at the xs level needs to be cleaned up a bit
-    #       then, construct a decoupling matrix for the full system modes
 
-    #       next, efficiently get the warping functions
 
-    #       then to compute the stiffness matrix, we can compile K1_form and K2_form for each region
-    #       K1 and K2 can be assembled and added together (as they both contribute to the loading and the internal energy)
-    #       finally, K can be determined from the coupled system level K1 and K2 in the standard way
-    
     def _decouple_modes(self):
         ''' 
         for each region, decouple the modes corresponding to that region
@@ -1783,30 +1866,94 @@ class CoupledXSProblem:
 
     def _compute_xs_stiffness_matrix(self):
         '''
-        for each region, get the elastic solution modes
+        for each region, get the elastic solution modes and compute the stiffness
+        store the accumulated matrices for recovery, etc
         '''
         self.K = np.zeros((6,6))
         # self.K1 = np.zeros((6,6))
         # self.K2 = np.zeros((6,6))
         # self.S = np.zeros((6,6))
+
+        #TODO: subtract off the 1/2 of the contribution of the stiffness from each mesh in the collision 
         for i,region in zip(self.regions,self.regions.values()):
             self.XSs[i]._build_elastic_solution_modes()
             self.XSs[i]._compute_xs_stiffness_matrix()
-            # self.S += self.XSs[i].S
+        #   self.S += self.XSs[i].S
+        #   self.K1 += self.XSs[i].K1
+        #   self.K2 += self.XSs[i].K2
+
             self.K += self.XSs[i].K
-        #     self.K1 += self.XSs[i].K1
-        #     self.K2 += self.XSs[i].K2
-        # self.K1inv = np.linalg.inv(self.K1)
+
+        #TODO:for each collision, subtract off the stiffness contribution for each collision from that mesh
+        for idx,val in np.ndenumerate(self.adjacency):
+            if val == 0:
+                continue
+            else:           
+                dx_region = Measure("dx", domain=self.regions[idx[0]].msh, subdomain_data=self.collisions[idx[0]][idx[1]].celltags[1])
+                self.K -= 0.5*self.XSs[idx[0]]._get_stiffness_contribution(dx_region(1))
+
+    def plot_warping_fxns(self,coup=False):
         
-        # #compute Flexibility matrix
-        # self.S = self.K1inv.T@self.K2@self.K1inv
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
+        plotter = pyvista.Plotter()
+                
+        mode = ['Axial','Shear 1', 'Shear 2', 'Torsion', 'Bending 1', 'Bending 2']
+        plotter = pyvista.Plotter(shape=(2,3))
+        grids = []
+        warped = []
+        for i in range(6):
+            row = int(i/3)
+            col = i%3
+            name = f'mode_{i}'
+            plotter.subplot(row,col)
+            #plot mesh
+            solution_modes=[]
+            indiv_grids = []
+            indiv_warped = []
+            for j,xs in enumerate(self.XSs):
+                tdim = xs.msh.topology.dim
 
-        # #invert Flexibility matrix to find beam constitutive matrix
-        # self.K = np.linalg.inv(self.S)
+                if coup is True:
+                    elastic_sols = xs.sols[:,6:]
+                else:
+                    # elastic_sols = xs.sols_decoup
+                    ubar_uhat_dofs = np.concatenate([xs.ubar_vtx_to_dof,xs.uhat_vtx_to_dof])
+                    elastic_sols = xs.sols_decoup[ubar_uhat_dofs,:6]
+                
+                V0,V0_to_V = xs.V.sub(0).collapse()
+                topology, cell_types, geom = plot.vtk_mesh(V0)
+                indiv_grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+                
+                c = np.zeros((6,1))
+                c[i,:] = 1
 
-    def plot_warping_fxns(self):
-        for xs in self.XSs:
-            xs.plot_warping_fxns()
+                warping_sol = elastic_sols[:len(xs.ubar_vtx_to_dof):,:]@c
+                # warping_sol = elastic_sols@c
+
+                solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
+                solution_modes.append(solution_mode)
+            
+            for j,xs in enumerate(self.XSs):
+                # print(np.max(np.linalg.norm(solution_mode,axis=1)))
+                scaling_factor = np.max(np.vstack([solution_mode for solution_mode in solution_modes]))
+                indiv_grids[j][name]= solution_modes[j]/scaling_factor
+                
+                indiv_warped.append(indiv_grids[j].warp_by_vector(name,factor=.1))
+
+                plotter.add_mesh(indiv_warped[j],show_edges=True,opacity=.9)
+                plotter.add_mesh(indiv_grids[j],show_edges=True,opacity=.5,scalar_bar_args={'title': f'warping mode {i}'})
+            
+            grids.append(indiv_grids)
+            warped.append(indiv_warped)
+            
+            plotter.add_text(mode[i])
+        
+            plotter.view_xy()
+        plotter.show_bounds()
+        if not pyvista.OFF_SCREEN:
+            plotter.show()
+
 
 class CrossSectionAnalytical:
     def __init__(self,params):
