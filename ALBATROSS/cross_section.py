@@ -34,7 +34,7 @@ default_scalar_type = PETSc.ScalarType
 #TODO: sparse multiply for QR decomposition
 
 class CrossSection:
-    def __init__(self, msh, materials ,celltags=None,verbose=False):
+    def __init__(self, msh, materials ,celltags=None,verbose=False,degree=1):
         #analysis domain
         self.msh = msh
         self.verbose = verbose
@@ -54,7 +54,7 @@ class CrossSection:
         self.tdim = 2
 
         #Finite element shape function degree: (1=linear,2=quadratic,etc)
-        self.degree = 1
+        self.degree = degree
 
         #number of materials
         self.num_mat = len(self.materials)
@@ -1579,35 +1579,22 @@ class CoupledXSProblem:
                 if collisions_bbtree_ij.size != 0:
                     #update the adjaceny matrix
                     adjacency[i,j] = 1
-
+                    
+                    #nodal points of geometry
                     meshptsi = self.meshes[i].geometry.x
                     meshptsj = self.meshes[j].geometry.x
 
+                    # get the bounding boxe trees for the overlap between mesh i and j
                     bbleaves_ij = geometry.compute_collisions_points(self.bb_trees[j],meshptsi)
                     bbleaves_ji = geometry.compute_collisions_points(self.bb_trees[i],meshptsj)
-                    celltags_i,celltags_j = get_collision_celltags(self.meshes[i],self.meshes[j],collisions_bbtree_ij)
-                    
-                    #cells making up the collision zone
-                    # cells_i = np.unique(collisions_bbtree_ij[:,0])
-                    # cells_j = np.unique(collisions_bbtree_ij[:,1])
 
-                    #points of the cells in collision zone
-                    # pts_i = get_points_from_cells(self.regions[i].msh,cells_i)
-                    # pts_j = get_points_from_cells(self.regions[j].msh,cells_j)
-                    
-
-                    # # Compute actual colliding cells for each input point
-                    # potential_colliding_cells = geometry.compute_collisions_points(self.bb_trees[i], pts_j)
+                    # Get the adjacency list of the cells in mesh i that collide with mesh points j
                     adj_list_ij = geometry.compute_colliding_cells(self.regions[j].msh, bbleaves_ij, meshptsi)
                     adj_list_ji = geometry.compute_colliding_cells(self.regions[i].msh, bbleaves_ji, meshptsj)
 
-                    # Filter out points that actually intersect the mesh
+                    # find the points of each mesh that are contained within the bounds of the other mesh
                     pts_i = [i for i in range(len(meshptsi)) if len(adj_list_ij.links(i)) > 0]
                     pts_j = [i for i in range(len(meshptsj)) if len(adj_list_ji.links(i)) > 0]
-
-                    #check if pts i are in mesh j
-                    # collision_points_ij = geometry.compute_collisions_points(self.bb_trees[j],pts_i)
-                    # collision_points_ji =geometry.compute_collisions_points(self.bb_trees[i],pts_j)
 
                     #create vertex-to-cell connectivity has been created if it hasn't been done yet
                     if self.regions[i].msh.topology.connectivity(0,2) is None:
@@ -1618,15 +1605,26 @@ class CoupledXSProblem:
                     #get the penalty dofs:
                     penalty_dofs_i=fem.locate_dofs_topological(self.regions[i].fxn_space,0,pts_i)
                     penalty_dofs_j=fem.locate_dofs_topological(self.regions[j].fxn_space,0,pts_j)
+                    
+                    #TODO: JJK 2/13/25 Modify the celldofs to tag the cells that straddle the overlap boundary
+                    #       as '2' so we can distinguish btwn the overestimated area (celltags = 1 & 2) 
+                    #       and the underestimated area (celltags = 1)
 
-                    #TODO: just need to remove celltags for any 
-                    #JJK 1/27/25: this is not returning the proper penalty dofs!
-                    # penalty_dofs = pts_to_dofs(self.regions[i].fxn_space,collision_points_ij)
+                    #IDEA:if all nodes in the cell to nodal connectivity are in pts_i/j, modify that celltag to be "2"
+                    
+                    #get the celltags object for restricting the domain
 
-                    #JJK 1/29/25: this returns additional dofs outside of the 
-                    #get the dofs correspondings to cells that are part of the overlap
-                    # penalty_dofs_i = celltags_to_dofs(self.regions[i].fxn_space,celltags_i)
-                    # penalty_dofs_j = celltags_to_dofs(self.regions[j].fxn_space,celltags_j)
+                    #REF CODE:
+                    # for n in range(len(cells_j)):
+                    #     print(np.isin(self.regions[j].msh.topology.connectivity(2,0).links(cells_j[n]),pts_j).all())
+
+
+                    celltags_i,celltags_j = get_collision_celltags(self.meshes[i],
+                                                                   self.meshes[j],
+                                                                   collisions_bbtree_ij,
+                                                                   partial=True,
+                                                                   pts=(pts_i,pts_j))
+
 
                     #information about a collision of mesh i on mesh j
                     collision_ij = Collision(collisions_bbtree_ij,
@@ -1670,7 +1668,7 @@ class CoupledXSProblem:
         v = ufl.TestFunction(DG0)
         # dx_overlap = ufl.Measure("dx", domain=region_i.msh, subdomain_id = 1, subdomain_data=collision_ij.celltags)
         dx_overlap = ufl.Measure("dx", domain=region_i.msh, subdomain_data=collision_ij.celltags[0])
-        cell_area_form = form(v*dx_overlap(1))
+        cell_area_form = form(v*dx_overlap((1,2)))
         cell_areas = assemble_vector(cell_area_form)
 
         #create connectivity between cells and vertices (if not already created)
@@ -1890,7 +1888,10 @@ class CoupledXSProblem:
                 continue
             else:           
                 dx_region = Measure("dx", domain=self.regions[idx[0]].msh, subdomain_data=self.collisions[idx[0]][idx[1]].celltags[1])
-                self.K -= 0.5*self.XSs[idx[0]]._get_stiffness_contribution(dx_region(1))
+                K_gamma_plus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1,2)))
+                K_gamma_minus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1)))
+
+                self.K -= 0.25*(K_gamma_plus+K_gamma_minus)
 
     def plot_warping_fxns(self,coup=False):
         
@@ -2208,7 +2209,7 @@ class CrossSectionAnalytical:
             J = 1/3 * (2*self.t_h**3*self.w + self.t_w**3*self.h)
             GJ = G*J
             EI1 = self.E*((self.w*self.h**3 /12 ) - (( (self.w-self.t_w) * (self.h - 2*self.t_h)**3 ) /12 ))
-            EI2 = self.E*((self.h-2*self.t_h)*self.t_w**3 /12 ) + 2*(self.t_h*self.w**3 / 12)
+            EI2 = self.E*(((self.h-2*self.t_h)*self.t_w**3 /12 ) + 2*(self.t_h*self.w**3 / 12))
             self.K =  np.diag(np.array([EA,kGA1,kGA2,GJ,EI1,EI2]))            
         
         else:

@@ -7,16 +7,20 @@ import numpy as np
 
 # np.set_printoptions(precision=3)
 
+m1,n1 = 102,10
+m2,n2 = 9,104
 # m1,n1 = 54,5
 # m2,n2 = 4,45
-m1,n1 = 40,4
-m2,n2 = 4,40
+# m1,n1 = 40,4
+# m2,n2 = 4,40
+# m1,n1 = 12,3
+# m2,n2 = 2,16
 # m1,n1 = 10,1
 # m2,n2 = 1,9
 
 H = 1
 W = 1
-tf = .15
+tf = .1
 tw = .1
 
 
@@ -70,7 +74,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e6)
+TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e10)
 
 TXS_nm.get_xs_stiffness_matrix()
 
@@ -106,10 +110,10 @@ print(TXS_nm.K[5,5])
 
 #compare to conformal approach:
 #create mesh
-N = 4
+N = 1
 H = 1
 W= 1
-tf = 0.15
+tf = 0.1
 tw = 0.1
 
 dims = [H,W,tf,tw]

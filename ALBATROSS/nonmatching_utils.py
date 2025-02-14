@@ -304,13 +304,23 @@ def convert_petsc_to_numpy(mat,sparse='False'):
     else:
         return mat_np
 
-def mark_cells(msh, cell_index):
+def mark_cells(msh, cell_index,partial=False,pts=None):
     num_cells = msh.topology.index_map(
         msh.topology.dim).size_local + msh.topology.index_map(
         msh.topology.dim).num_ghosts
     cells = np.arange(0, num_cells, dtype=np.int32)
     values = np.full(cells.shape, 0, dtype=np.int32)
-    values[cell_index] = np.full(len(cell_index), 1, dtype=np.int32)
+    if partial:
+        # if msh.topology.connectivity(0,2) is None:
+        #     msh.topology.create_connectivity(0,2)
+        values[cell_index] = np.full(len(cell_index), 1, dtype=np.int32)
+        #find cells that are straddling the boundary
+        boundary_cell_indices = cell_index[[np.isin(msh.topology.connectivity(2,0).links(cell_index[n]),pts).all() for n in range(len(cell_index))]]
+        values[boundary_cell_indices] = np.full(len(boundary_cell_indices), 2, dtype=np.int32)
+
+    else:
+        values[cell_index] = np.full(len(cell_index), 1, dtype=np.int32)
+
     cell_tag = mesh.meshtags(msh, msh.topology.dim, cells, values)
     return cell_tag
 
@@ -352,8 +362,15 @@ def get_points_from_cells(mesh, cell_indices):
     # Retrieve the coordinates of these vertices
     return mesh.geometry.x[vertex_indices]
 
-def get_collision_celltags(mesh0,mesh1,collisions,tol=1e-14):
-    '''return celltags for of the mesh'''
+def get_collision_celltags(mesh0,mesh1,collisions,tol=1e-14,partial=False,pts=None):
+    '''
+    return celltags object for the collision between two meshes
+    celltags are marked:
+        0: not part of overlap region
+        1: entirely contained in overlap region
+    if 'partial' flag is True, 
+        2: partially contained in overlap (overwritten from 1)
+    '''
     cells0 = []
     cells1 = []
     for i, (cell0, cell1) in enumerate(collisions):
@@ -363,8 +380,12 @@ def get_collision_celltags(mesh0,mesh1,collisions,tol=1e-14):
         if np.linalg.norm(distance) <= tol:
             cells0.append(cell0)
             cells1.append(cell1)
-    celltags0 = mark_cells(mesh0, np.asarray(cells0, dtype=np.int32))
-    celltags1 = mark_cells(mesh1, np.asarray(cells1, dtype=np.int32))
+    if partial:
+        celltags0 = mark_cells(mesh0, np.asarray(cells0, dtype=np.int32),partial=partial,pts=pts[0])
+        celltags1 = mark_cells(mesh1, np.asarray(cells1, dtype=np.int32),partial=partial,pts=pts[1])
+    else:
+        celltags0 = mark_cells(mesh0, np.asarray(cells0, dtype=np.int32))
+        celltags1 = mark_cells(mesh1, np.asarray(cells1, dtype=np.int32))
 
     return celltags0,celltags1
 
