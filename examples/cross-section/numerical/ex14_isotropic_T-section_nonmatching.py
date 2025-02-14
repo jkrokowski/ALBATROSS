@@ -7,14 +7,14 @@ import numpy as np
 
 # np.set_printoptions(precision=3)
 
-m1,n1 = 102,10
-m2,n2 = 9,104
+# m1,n1 = 102,10
+# m2,n2 = 9,104
 # m1,n1 = 54,5
 # m2,n2 = 4,45
 # m1,n1 = 40,4
 # m2,n2 = 4,40
-# m1,n1 = 12,3
-# m2,n2 = 2,16
+m1,n1 = 28,3
+m2,n2 = 3,28
 # m1,n1 = 10,1
 # m2,n2 = 1,9
 
@@ -110,7 +110,7 @@ print(TXS_nm.K[5,5])
 
 #compare to conformal approach:
 #create mesh
-N = 1
+N = 3
 H = 1
 W= 1
 tf = 0.1
@@ -163,8 +163,6 @@ print(E*I2)
 print("Computed bending stiffness 2:")
 print(TXS.K[5,5])
 
-
-
 #compute difference between matrix entries of beam constituitive matrix
 abs_diff = TXS_nm.K - TXS.K
 rel_diff = abs_diff/TXS.K
@@ -175,5 +173,14 @@ print(abs_diff)
 print("Relative Difference:")
 print(rel_diff)
 
-print("maximum relative difference:")
+print("Maximum Absolute Difference of Diagonal Entries:")
+print(np.max(np.abs(np.diag(abs_diff))))
+
+print("Maximum Relative Difference of Diagonal Entries:")
 print(np.max(np.abs(np.diag(rel_diff))))
+
+print("Frobenius Norm of Absolute Difference:")
+print(np.linalg.norm(abs_diff))
+
+print("Relative Frobenius Norm of Absolute Difference:")
+print(np.linalg.norm(abs_diff)/np.linalg.norm(TXS.K))

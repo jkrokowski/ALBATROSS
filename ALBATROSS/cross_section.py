@@ -1521,7 +1521,7 @@ class CoupledXSProblem:
         self._find_overlap()
 
         
-    def get_xs_stiffness_matrix(self):
+    def get_xs_stiffness_matrix(self,correction='avg'):
         #assemble each region's system matrix
         self._assemble_system_mats()
 
@@ -1541,18 +1541,12 @@ class CoupledXSProblem:
         self._get_modes()
         print("null modes found!")
         
-        #populate each individual cross-section's solution modes:
-        # self._map_modes_to_region()
-
-
         #need to "decouple" the modes
         self._decouple_modes()
         
         #map elastic solutions to construct warping functions
-        self._compute_xs_stiffness_matrix()
+        self._compute_xs_stiffness_matrix(correction=correction)
         
-        #populate each individual region with the null mode corresponding
-
 
     def _find_overlap(self):
         '''
@@ -1563,7 +1557,10 @@ class CoupledXSProblem:
 
         #compute all collisions
         # TODO: some collision detection computational time can be saved by avoiding 
-        # the collision detection on the inverse mesh combination with a non-overlapping section         
+        # the collision detection on the inverse mesh combination with a non-overlapping section 
+        # 
+        # TODO: JJK 2/14/25 Need to add the computation of the collision area estimate at this stage,
+        #           as well as add the measure corresponding to the collision celltags      
         collisions = {}
         separations = {}
         adjacency = np.zeros((self.num_meshes,self.num_meshes),dtype=int)
@@ -1606,25 +1603,13 @@ class CoupledXSProblem:
                     penalty_dofs_i=fem.locate_dofs_topological(self.regions[i].fxn_space,0,pts_i)
                     penalty_dofs_j=fem.locate_dofs_topological(self.regions[j].fxn_space,0,pts_j)
                     
-                    #TODO: JJK 2/13/25 Modify the celldofs to tag the cells that straddle the overlap boundary
-                    #       as '2' so we can distinguish btwn the overestimated area (celltags = 1 & 2) 
-                    #       and the underestimated area (celltags = 1)
-
-                    #IDEA:if all nodes in the cell to nodal connectivity are in pts_i/j, modify that celltag to be "2"
-                    
-                    #get the celltags object for restricting the domain
-
-                    #REF CODE:
-                    # for n in range(len(cells_j)):
-                    #     print(np.isin(self.regions[j].msh.topology.connectivity(2,0).links(cells_j[n]),pts_j).all())
-
-
+                    #tag cells based on whether they are in the overlap (1),
+                    #    on the boundary(2) or outside the overlap (0)
                     celltags_i,celltags_j = get_collision_celltags(self.meshes[i],
                                                                    self.meshes[j],
                                                                    collisions_bbtree_ij,
                                                                    partial=True,
                                                                    pts=(pts_i,pts_j))
-
 
                     #information about a collision of mesh i on mesh j
                     collision_ij = Collision(collisions_bbtree_ij,
@@ -1676,9 +1661,6 @@ class CoupledXSProblem:
         pen_values = np.zeros((len(collision_ij.penalty_dofs[0]),),dtype=float)
         #for each pt, update the penalty value for that vertex
         for i,pt in enumerate(collision_ij.pts[0]):
-            #get the corresponding vertex for a specific dof
-            # vtx = region_i.dof_to_vertex_map[dof]
-
             #get the cells connected to the penalty dof
             cells = region_i.msh.topology.connectivity(0,2).links(pt)
 
@@ -1727,7 +1709,6 @@ class CoupledXSProblem:
         # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
         for idx,val in np.ndenumerate(self.adjacency):
             if val == 1:
-                print(self.collisions[idx[0]][idx[1]].pts)
                 #get the interpolation matrix
                 self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
                                                                                      self.regions[idx[0]].fxn_space,
@@ -1862,7 +1843,7 @@ class CoupledXSProblem:
             self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
 
 
-    def _compute_xs_stiffness_matrix(self):
+    def _compute_xs_stiffness_matrix(self,correction='avg'):
         '''
         for each region, get the elastic solution modes and compute the stiffness
         store the accumulated matrices for recovery, etc
@@ -1891,7 +1872,17 @@ class CoupledXSProblem:
                 K_gamma_plus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1,2)))
                 K_gamma_minus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1)))
 
-                self.K -= 0.25*(K_gamma_plus+K_gamma_minus)
+                if correction == 'avg':
+                    self.K -= 0.25*(K_gamma_plus+K_gamma_minus)
+
+                elif correction == 'plus':
+                    self.K -= 0.5*(K_gamma_plus)
+
+                elif correction == 'minus':
+                    self.K -= 0.5*(K_gamma_minus)
+
+                else:
+                    continue
 
     def plot_warping_fxns(self,coup=False):
         
