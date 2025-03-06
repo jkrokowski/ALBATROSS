@@ -11,12 +11,18 @@ import numpy as np
 # m2,n2 = 9,104
 # m1,n1 = 54,5
 # m2,n2 = 4,45
-# m1,n1 = 40,4
-# m2,n2 = 4,40
-m1,n1 = 28,3
-m2,n2 = 3,28
+# m1,n1 = 40+1,4
+# m2,n2 = 4,40+1
+# m1,n1 = 30,3
+# m2,n2 = 3,30
 # m1,n1 = 10,1
 # m2,n2 = 1,9
+
+N = 4 
+offset = 1
+
+m1,n1 = N*10+offset,N
+m2,n2 = N,N*10+offset
 
 H = 1
 W = 1
@@ -74,11 +80,15 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e10)
+TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e3)
 
-TXS_nm.get_xs_stiffness_matrix()
+TXS_nm.get_xs_stiffness_matrix(correction='minus')
 
 TXS_nm.plot_warping_fxns()
+
+# for i in range(3):
+#     for j in range(3):
+#         TXS_nm.plot_warping_strains(component=(i,j))
 
 np.set_printoptions(precision=3)
 
@@ -110,12 +120,6 @@ print(TXS_nm.K[5,5])
 
 #compare to conformal approach:
 #create mesh
-N = 3
-H = 1
-W= 1
-tf = 0.1
-tw = 0.1
-
 dims = [H,W,tf,tw]
 num_el = [N,N]#number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_T_section(dims,num_el,'T_section')
@@ -135,6 +139,10 @@ TXS.plot_mesh()
 TXS.get_xs_stiffness_matrix()
 
 TXS.plot_warping_fxns()
+
+# for i in range(3):
+#     for j in range(3):
+#         TXS.plot_warping_strain(component=(i,j))
 
 np.set_printoptions(precision=3)
 

@@ -4,8 +4,8 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-radius = 1.0
-wall_thickness = 0.2
+radius = .1
+wall_thickness = 0.01
 num_el = 4 #number of nodes through wall thickness
 
 domain = ALBATROSS.mesh.create_hollow_circle(radius,wall_thickness,num_el,'hollow_circle')
@@ -15,7 +15,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mech_props={'E':100,'nu':0.2},
                                            density=2700)
 
-#initialize cross-seciton object
+#initialize cross-section object
 hollowCircleXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got

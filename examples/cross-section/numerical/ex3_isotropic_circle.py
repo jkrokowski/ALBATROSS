@@ -4,7 +4,7 @@ import numpy as np
 
 #cross-section mesh definition
 radius = 1
-num_el = 40 #number of elements thro
+num_el = 7 #number of elements thro
 
 domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 

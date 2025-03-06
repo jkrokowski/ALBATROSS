@@ -20,7 +20,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            density=2700)
 
 #initialize cross-section object
-TXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
+TXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium],degree=1)
 
 #show me what you got
 TXS.plot_mesh()

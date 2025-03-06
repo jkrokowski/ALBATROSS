@@ -25,9 +25,13 @@ squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 squareXS.get_xs_stiffness_matrix()
 
 #show the warping functions
-# squareXS.plot_warping_fxns(rigid=True,coup=True)
-# squareXS.plot_warping_fxns(coup=True)
-squareXS.plot_warping_fxns(rigid=True)
+squareXS.plot_warping_fxns()
+
+#plot the warping strains (calcuated from warping functions) 
+for i in range(3):
+    for j in range(3):
+        print(f'strain component ({i},{j}')
+        squareXS.plot_warping_strain(component=(i,j))
 # squareXS.plot_warping_fxns()
 
 # np.set_printoptions(precision=3)
@@ -48,6 +52,7 @@ I = (W*H**3)/12
 print(E*I)
 print("Computed bending stiffness:")
 print(squareXS.K[4,4])
+exit()
 
 squareXS.compute_xs_stiffness_matrix_sensitivities()
 

@@ -539,6 +539,8 @@ class CrossSection:
 
             #USING PSEUDOINVERSE
             mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
+
+            print(f"condition number of basis transformation:{np.linalg.cond(mat)}")
             self.sols_decoup = self.sparse_sols.dot(mat_pinv).toarray()
             # self.sols_decoup=mat@self.sols
 
@@ -1383,27 +1385,6 @@ class CrossSection:
                 print(f"(rbms[{j}], u_star) = {fem.assemble_scalar(fem.form(inner(new_fxn, v[j])*dx))}")
 
         return new_fxn
-    # def coeff_to_field(self,fxn,coeff,vtx_to_dof):
-    #     #uses vtx_to_dof map to populate field with correct solution coefficients
-    #     fxn.vector.array = coeff.flatten()[vtx_to_dof].flatten()
-    #     fxn.vector.destroy
-
-    # def construct_warping_fxns(self,u_c,N):
-    #     #utility to populate data from decoupled modes to warping displacement functions
-    #     Uc = u_c.function_space #fxn space associated with fxn
-
-    #     #loop through subspaces and map values from nullspace to specified fxn values
-    #     vtx_to_dofs = []
-    #     for i in range(Uc.num_sub_spaces):
-    #         vtx_to_dofs.append(get_vtx_to_dofs(self.msh,Uc.sub(0)))
-    #         vtx_to_dofs_flat = vtx_to_dofs[i].flatten()
-    #         u_c.vector.array[vtx_to_dofs_flat] = N.flatten()[vtx_to_dofs_flat]
-
-    #     # ubar_c,uhat_c,utilde_c,ubreve_c = split(u_c)
-    #     # ubar_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(0))
-    #     # uhat_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(1))
-    #     # utilde_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(2))
-    #     # ubreve_c_vtx_to_dof = get_vtx_to_dofs(self.msh,Uc.sub(3))
    
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
@@ -1436,8 +1417,6 @@ class CrossSection:
             plotter.subplot(row,col)
             #plot mesh
             tdim = self.msh.topology.dim
-            # topology, cell_types, geom = plot.vtk_mesh(self.msh, tdim)
-            # grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
             
             V0,V0_to_V = self.V.sub(0).collapse()
             topology, cell_types, geom = plot.vtk_mesh(V0)
@@ -1447,11 +1426,9 @@ class CrossSection:
             c[i,:] = 1
 
             warping_sol = elastic_sols[:len(self.ubar_vtx_to_dof):,:]@c
-            # ubar = Function(V0)
-            # ubar.vector.array = warping_sol.flatten()
             solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
             grids[i][name]= solution_mode/np.max(np.linalg.norm(solution_mode,axis=1))
-            # grids[i][name]= ubar.vector.array
+            print(f"maximum magnitude for mode: {np.max(np.linalg.norm(solution_mode,axis=1))}")
             warped.append(grids[i].warp_by_vector(name,factor=.1))
 
 
@@ -1463,6 +1440,61 @@ class CrossSection:
         if not pyvista.OFF_SCREEN:
             plotter.show()
 
+
+    def plot_warping_strain(self,component=(0,0)):
+        '''
+        Plot the warping strain from the warping displacement functions
+        component: tuple of the strain entry to plot
+                    for example: (0,0) = xx, 
+                                 (1,2)=yz
+        '''
+        
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
+        plotter = pyvista.Plotter()
+
+
+               
+        mode = ['Axial','Shear 1', 'Shear 2', 'Torsion', 'Bending 1', 'Bending 2']
+        plotter = pyvista.Plotter(shape=(2,3))
+        grids = []
+        warped = []
+        for i in range(6):
+            row = int(i/3)
+            col = i%3
+            name = f'mode_{i}'
+            plotter.subplot(row,col)
+            #plot mesh
+            tdim = self.msh.topology.dim
+            
+            c_np = np.zeros((6,))
+            c_np[i] = 1
+
+            c = Constant(self.msh,PETSc.ScalarType(c_np))
+
+            ubar = dot(self.N_bar,c)
+            uhat = dot(self.N_hat,c)
+            eps_ufl = self.warping2strain(ubar,uhat)
+            #Vstrain is a scalar functionspace for only one strain component 
+            Vstrain = functionspace(self.msh,("DG",0)) 
+            # Vstrain = functionspace(self.msh,("DG",0,(self.d,self.d))) 
+            strain_component=fem.Expression(eps_ufl[component], Vstrain.element.interpolation_points())
+            # strain_to_plot = fem.Function(Vstrain.sub(0).collapse()[0])
+            strain_to_plot = fem.Function(Vstrain)
+            strain_to_plot.interpolate(strain_component)
+            
+            V0,V0_to_V = self.V.sub(0).collapse()
+            topology, cell_types, geom = plot.vtk_mesh(V0)
+            grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+
+            grids[i][name]= strain_to_plot.vector.array#/np.max(np.linalg.norm(solution_mode,axis=1))
+
+            plotter.add_mesh(grids[i],show_edges=True,opacity=.75,scalar_bar_args={'title': f'warping mode {i}'})
+            plotter.add_text(mode[i])
+            plotter.view_xy()
+            plotter.show_bounds()
+        if not pyvista.OFF_SCREEN:
+            plotter.show()
 
 
     def plot_sensitivities(self):
@@ -1528,14 +1560,14 @@ class CoupledXSProblem:
         #apply the penalty parameter
         self._construct_coupled_system_matrix()
 
-        #total system size:
-        print("overall system size:")
-        print(self.system_mat.getSize())
+        # #total system size:
+        # print("overall system size:")
+        # print(self.system_mat.getSize())
 
-        #individual system sizes:
-        print("overall system size:")
-        for XS in self.XSs:
-            print(XS.system_mat.getSize())
+        # #individual system sizes:
+        # print("overall system size:")
+        # for XS in self.XSs:
+        #     print(XS.system_mat.getSize())
 
         #use QR factorization to get null modes:
         self._get_modes()
@@ -1581,7 +1613,7 @@ class CoupledXSProblem:
                     meshptsi = self.meshes[i].geometry.x
                     meshptsj = self.meshes[j].geometry.x
 
-                    # get the bounding boxe trees for the overlap between mesh i and j
+                    # get the bounding box trees for the overlap between mesh i and j
                     bbleaves_ij = geometry.compute_collisions_points(self.bb_trees[j],meshptsi)
                     bbleaves_ji = geometry.compute_collisions_points(self.bb_trees[i],meshptsj)
 
@@ -1589,9 +1621,14 @@ class CoupledXSProblem:
                     adj_list_ij = geometry.compute_colliding_cells(self.regions[j].msh, bbleaves_ij, meshptsi)
                     adj_list_ji = geometry.compute_colliding_cells(self.regions[i].msh, bbleaves_ji, meshptsj)
 
-                    # find the points of each mesh that are contained within the bounds of the other mesh
+                    # find the points of mesh i that are contained within the bounds of mesh j
                     pts_i = [i for i in range(len(meshptsi)) if len(adj_list_ij.links(i)) > 0]
-                    pts_j = [i for i in range(len(meshptsj)) if len(adj_list_ji.links(i)) > 0]
+                    #find the points that interpolate onto mesh i
+                    cells_j = np.unique(bbleaves_ij.array)
+                    pts_candidates = []
+                    for cell in cells_j:
+                        pts_candidates.append(self.meshes[j].topology.connectivity(2,0).links(cell)) 
+                    pts_j = np.unique(pts_candidates)
 
                     #create vertex-to-cell connectivity has been created if it hasn't been done yet
                     if self.regions[i].msh.topology.connectivity(0,2) is None:
@@ -1703,8 +1740,6 @@ class CoupledXSProblem:
         Given collisions and regions, 
         set up the coupled system matrix with the penalty terms
         '''
-        #TODO: for each collision, subtract off half the assembled stiffness of the ovelapping section 
-        # (use restricted integration measure and collision information to assemble these corrections) 
 
         # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
         for idx,val in np.ndenumerate(self.adjacency):
@@ -1717,6 +1752,12 @@ class CoupledXSProblem:
                 self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
                 #prepopulate the penalty matrix term with the interpolation matrix
                 # self.collisions[idx[0]][idx[1]].pen_mat.copy(self.collisions[idx[0]][idx[1]].inter_mat.duplicate())
+                
+                # A01 = convert_petsc_to_numpy(self.collisions[idx[0]][idx[1]].inter_mat)
+                # u0 = np.zeros((A01.shape[0],1))
+                # u0 = 
+
+                # print()
 
             elif val == 0 and idx[0] != idx[1]:
                 self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system_mat.getSize()[0],
@@ -1732,45 +1773,24 @@ class CoupledXSProblem:
                     else self.collisions[i][j].pen_mat 
                         for i in range(self.num_meshes)]
                      for j in range(self.num_meshes) ]
-        
-        # #assemble uncoupled nested matrix for debugging
-        # A_uncoupled_petsc = PETSc.Mat()
-        # A_uncoupled_petsc.createNest(A_list)
-        # A_uncoupled_petsc.assemble()
-        # A_uncoupled = convert_petsc_to_numpy(A_uncoupled_petsc)
-        # print(f"uncoupled system zero body modes: {A_uncoupled.shape[0]-np.linalg.matrix_rank(A_uncoupled)}")
-        
-        #TODO: it seems that the penalty dofs and the penalty term are not matching up well
-        #       there is definitely some bug here that needs some inspection
+               
         # add the penalty to the relevant block of A_list
         for idx,val in np.ndenumerate(self.adjacency):
             # if idx[0]==idx[1]:
             if val==1:
                 pen_term = PETSc.Mat().createAIJ(A_list[idx[0]][idx[0]].getSize())
                 pen_term.assemble()
-                # diag = pen_term.getDiagonal()
-                #set diagonal values to the pre-computed penalty vector values
-                # for val in self.collisions[idx[0]][idx[1]].penalty_dofs[0]:
-                #     diag[val] = self.collisions[idx[0]][idx[1]].pen_vec[val]
-                # pen_term.setDiagonal(diag)
                 pen_term.setDiagonal(self.collisions[idx[0]][idx[1]].pen_vec)
                 pen_term.assemble()
-                # penalty_term = PETSc.Mat().createAIJ(I_mat.getSize())
-                # I_mat.multTranspose(self.collisions[idx[0]][idx[1]].pen_vec,penalty_term)
-
+                
                 #add penalty term to diagonal block
                 A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
 
                 #TODO: need to come up with a better way of populating the 
                 #   nested list than simply filling with the interpolation matrix, then overwriting it...
 
-                #add penalty term to off diagonal block
-                # TODO: There is a mismatch between the points detected as "penalty points" in the collision
-                #           detection and the points the interpolation matrix seems to use
-                #           NEED TO figure out which points should be included. 
-                #               Need to check the ordering of dofs vs pts as well             
+                #add penalty term to off diagonal block          
                 A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
-                # A_list[idx[0]][idx[1]] = self.collisions[idx[1]][idx[0]].inter_mat
                 A_list[idx[0]][idx[1]].assemble()
                 A_list[idx[0]][idx[1]].scale(-1.0)
 
@@ -1791,9 +1811,6 @@ class CoupledXSProblem:
         A.createNest(A_list)
         
         A.assemble()
-
-        # A_coupled = convert_petsc_to_numpy(A)
-        # print(f"coupled system zero body modes: {A_coupled.shape[0]-np.linalg.matrix_rank(A_coupled)}")
 
         self.system_mat = A
 
@@ -1827,9 +1844,12 @@ class CoupledXSProblem:
         for i,region in zip(self.regions,self.regions.values()):
             self.XSs[i].sols = self.sols[region.offset_start:region.offset_end,:]
             self.XSs[i]._decouple_modes(basis_matrix_only=True)
+            print(f"Condition number for sub mesh {i}: {np.linalg.cond(self.XSs[i].mat)}")
             self.basis_trans_matrix += self.XSs[i].mat
         #perform the basis transformation (use the sparse matrix to prevent numerical inaccuracies during inversion)
         # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
+        
+        print(f"Condition number for overall system: {np.linalg.cond(self.basis_trans_matrix)}")
         self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix)#,sparse_format='csc')
         
         self.basis_trans_matrix_pinv = sparseify(np.linalg.pinv(self.basis_trans_matrix_sparse.toarray()))
@@ -1867,22 +1887,40 @@ class CoupledXSProblem:
         for idx,val in np.ndenumerate(self.adjacency):
             if val == 0:
                 continue
-            else:           
-                dx_region = Measure("dx", domain=self.regions[idx[0]].msh, subdomain_data=self.collisions[idx[0]][idx[1]].celltags[1])
-                K_gamma_plus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1,2)))
-                K_gamma_minus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1)))
+            else:
+                if correction is not None:           
+                    dx_region = Measure("dx", domain=self.regions[idx[0]].msh, subdomain_data=self.collisions[idx[0]][idx[1]].celltags[1])
+                    K_gamma_plus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1,2)))
+                    K_gamma_minus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1)))
 
-                if correction == 'avg':
-                    self.K -= 0.25*(K_gamma_plus+K_gamma_minus)
+                    if correction == 'avg':
+                        self.K -= 0.25*(K_gamma_plus+K_gamma_minus)
 
-                elif correction == 'plus':
-                    self.K -= 0.5*(K_gamma_plus)
+                    elif correction == 'plus':
+                        self.K -= 0.5*(K_gamma_plus)
 
-                elif correction == 'minus':
-                    self.K -= 0.5*(K_gamma_minus)
+                    elif correction == 'minus':
+                        self.K -= 0.5*(K_gamma_minus)
 
-                else:
-                    continue
+                    else:
+                        continue
+    
+
+    def get_overlap_area(self):
+        for idx,val in np.ndenumerate(self.adjacency):
+            if val == 0:
+                continue
+            else:
+                dx_overlap = Measure("dx", domain=self.regions[idx[0]].msh, subdomain_data=self.collisions[idx[0]][idx[1]].celltags[1])
+
+                A_plus = fem.assemble_scalar(fem.form(1.0*dx_overlap((1,2))))
+                A_minus = fem.assemble_scalar(fem.form(1.0*dx_overlap((1))))
+                A_avg = 0.5*(A_plus+A_minus)
+
+                self.collisions[idx[0]][idx[1]].add_overlap_areas(A_plus,A_minus,A_avg)
+    
+    def plot_meshes(self):
+        plot_xdmf_mesh(list(self.meshes.values()),surface=True)
 
     def plot_warping_fxns(self,coup=False):
         
@@ -1928,7 +1966,8 @@ class CoupledXSProblem:
             
             for j,xs in enumerate(self.XSs):
                 # print(np.max(np.linalg.norm(solution_mode,axis=1)))
-                scaling_factor = np.max(np.vstack([solution_mode for solution_mode in solution_modes]))
+                scaling_factor = np.max(np.linalg.norm(np.vstack(solution_modes),axis=1))
+                print(scaling_factor)
                 indiv_grids[j][name]= solution_modes[j]/scaling_factor
                 
                 indiv_warped.append(indiv_grids[j].warp_by_vector(name,factor=.1))
@@ -1938,6 +1977,72 @@ class CoupledXSProblem:
             
             grids.append(indiv_grids)
             warped.append(indiv_warped)
+            
+            plotter.add_text(mode[i])
+        
+            plotter.view_xy()
+        plotter.show_bounds()
+        if not pyvista.OFF_SCREEN:
+            plotter.show()
+
+    def plot_warping_strains(self,component=(0,0)):
+        
+        pyvista.global_theme.background = [255, 255, 255, 255]
+        pyvista.global_theme.font.color = 'black'
+        plotter = pyvista.Plotter()
+                
+        mode = ['Axial','Shear 1', 'Shear 2', 'Torsion', 'Bending 1', 'Bending 2']
+        plotter = pyvista.Plotter(shape=(2,3))
+        grids = []
+        warped = []
+        for i in range(6):
+            row = int(i/3)
+            col = i%3
+            name = f'mode_{i}'
+            plotter.subplot(row,col)
+            #plot mesh
+            strains_to_plot=[]
+            indiv_grids = []
+            indiv_warped = []
+            for j,xs in enumerate(self.XSs):
+                tdim = xs.msh.topology.dim
+
+                c_np = np.zeros((6,))
+                c_np[i] = 1
+
+                c = Constant(xs.msh,PETSc.ScalarType(c_np))
+
+                ubar = dot(xs.N_bar,c)
+                uhat = dot(xs.N_hat,c)
+                eps_ufl = xs.warping2strain(ubar,uhat)
+                #Vstrain is a scalar functionspace for only one strain component 
+                Vstrain = functionspace(xs.msh,("DG",0)) 
+                # Vstrain = functionspace(self.msh,("DG",0,(self.d,self.d))) 
+                strain_component=fem.Expression(eps_ufl[component], Vstrain.element.interpolation_points())
+                # strain_to_plot = fem.Function(Vstrain.sub(0).collapse()[0])
+                strain_to_plot = fem.Function(Vstrain)
+                strain_to_plot.interpolate(strain_component)
+                
+                V0,V0_to_V = xs.V.sub(0).collapse()
+                topology, cell_types, geom = plot.vtk_mesh(V0)
+                indiv_grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
+
+                indiv_grids[j][name]= strain_to_plot.vector.array
+
+                strains_to_plot.append(strain_to_plot)
+            
+            for j,xs in enumerate(self.XSs):
+                # # print(np.max(np.linalg.norm(solution_mode,axis=1)))
+                # scaling_factor = np.max(np.linalg.norm(np.vstack(solution_modes),axis=1))
+                # indiv_grids[j][name]= solution_modes[j]/scaling_factor
+                
+                # indiv_warped.append(indiv_grids[j].warp_by_vector(name,factor=.1))
+
+                # plotter.add_mesh(indiv_warped[j],show_edges=True,opacity=.9)
+                plotter.add_mesh(indiv_grids[j],show_edges=True,opacity=.75,scalar_bar_args={'title': f'warping mode {i}'})
+            
+            grids.append(indiv_grids)
+            # warped.append(indiv_warped)
             
             plotter.add_text(mode[i])
         

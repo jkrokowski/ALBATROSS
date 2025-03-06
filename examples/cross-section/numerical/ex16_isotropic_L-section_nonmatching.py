@@ -9,10 +9,16 @@ import numpy as np
 
 # m1,n1 = 54,5
 # m2,n2 = 4,45
-m1,n1 = 40,4
-m2,n2 = 4,40
+# m1,n1 = 40,4
+# m2,n2 = 4,40
 # m1,n1 = 10,1
 # m2,n2 = 1,9
+
+N = 4 
+offset = 1
+
+m1,n1 = N*10+offset,N
+m2,n2 = N,N*10+offset
 
 H = 1
 W = 1
@@ -41,26 +47,26 @@ mesh_1.geometry.x[:, 0] -= H/2 - tw/2
 mesh_1.name = 'w'
 
 
-#PLOT meshes:
-pyvista.global_theme.background = [255, 255, 255, 255]
-pyvista.global_theme.font.color = 'black'   
-plotter = pyvista.Plotter()
-def add_mesh(msh):
-    topology, cell_types, geom = plot.vtk_mesh(msh, 2)
-    grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-    plotter.add_mesh(grid,show_edges=True,opacity=0.25)
+# #PLOT meshes:
+# pyvista.global_theme.background = [255, 255, 255, 255]
+# pyvista.global_theme.font.color = 'black'   
+# plotter = pyvista.Plotter()
+# def add_mesh(msh):
+#     topology, cell_types, geom = plot.vtk_mesh(msh, 2)
+#     grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
+#     plotter.add_mesh(grid,show_edges=True,opacity=0.25)
      
-    # Add cell labels
-    cell_centers = grid.cell_centers()
-    for i, center in enumerate(cell_centers.points):
-        plotter.add_point_labels(center, [msh.name+str(i)], font_size=10, point_color='black', text_color='black')
-add_mesh(mesh_0)
-add_mesh(mesh_1)
-# add_mesh(mesh_2)
+#     # Add cell labels
+#     cell_centers = grid.cell_centers()
+#     for i, center in enumerate(cell_centers.points):
+#         plotter.add_point_labels(center, [msh.name+str(i)], font_size=10, point_color='black', text_color='black')
+# add_mesh(mesh_0)
+# add_mesh(mesh_1)
+# # add_mesh(mesh_2)
 
-plotter.show_grid()
-plotter.view_xy()
-plotter.show()
+# plotter.show_grid()
+# plotter.view_xy()
+# plotter.show()
 
 meshes= [mesh_0,mesh_1]
 
@@ -72,9 +78,12 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-LXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e8)
+LXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e5)
+
+LXS_nm.plot_meshes()
 
 LXS_nm.get_xs_stiffness_matrix()
+
 
 LXS_nm.plot_warping_fxns()
 
@@ -110,13 +119,9 @@ print(LXS_nm.K[5,5])
 
 #compare to conformal approach:
 #create mesh
-N = 4
-H = 1
-W= 1
-tfh = 0.2
-tfw = 0.1
 
-dims = [H,W,tfh,tfw]
+
+dims = [H,W,tw,tf]
 num_el = [N,N]#number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_L_section(dims,num_el,'L_section')
 
@@ -147,24 +152,24 @@ print('Stiffness matrix:')
 print(LXS.K)
 
 print("Analytical axial stiffness (EA):")
-A = tfw*(W-tfh) + tfh*(H-tfw) + tfh*tfw
+A = tw*W + tf*(H-tw)
 E=unobtainium.E
 print(E*A)
 print("Computed Axial Stiffness:")
 print(LXS.K[0,0])
 
 print("Analytical Bending stiffness (EI):")
-I1 = ((tfh*H**3)/12 
-      + (tfw**3*(W-tfh))/12 
-      + tfw*(W-tfh)*(H/2-tfw/2)**2 )
+I1 = ((tw*H**3)/12 
+      + (tf**3*(W-tf))/12 
+      + tf*(W-tw)*(H/2-tf/2)**2 )
 print(E*I1)
 print("Computed bending stiffness 1:")
 print(LXS.K[4,4])
 
 print("Analytical Bending stiffness (EI):")
-I2 = ((tfw*W**3)/12 
-      + (tfh**3*(H-tfw))/12 
-      + tfh*(H-tfw)*(W/2-tfh/2)**2 )
+I2 = ((tf*W**3)/12 
+      + (tw**3*(H-tf))/12 
+      + tw*(H-tf)*(W/2-tf/2)**2 )
 print(E*I2)
 print("Computed bending stiffness 2:")
 print(LXS.K[5,5])

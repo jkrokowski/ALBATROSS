@@ -10,17 +10,19 @@ np.set_printoptions(precision=3)
 # m2,n2 = 4,45
 # m3,n3 = 54,5
 # m4,n4 = 6,65
+N = 4
+offset=4
 
-m1,n1 = 11,2
-m2,n2 = 2,11
-m3,n3 = 11,2
-m4,n4 = 2,11
-H = 0.1
-L = 0.1
-T1 = .01
-T2 = .01
-T3 = .01
-T4 = .01
+m1,n1 = N*10+offset,N
+m2,n2 = N,N*10+offset
+m3,n3 = N*10+offset,N
+m4,n4 = N,N*10+offset
+H = 1
+L = 1
+T1 = .1
+T2 = .1
+T3 = .1
+T4 = .1
 
 
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
@@ -77,9 +79,9 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-boxXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e10)
+boxXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e3)
 
-boxXS_nm.get_xs_stiffness_matrix()
+boxXS_nm.get_xs_stiffness_matrix(correction='minus')
 
 boxXS_nm.plot_warping_fxns()
 
@@ -103,7 +105,6 @@ print(boxXS_nm.K[4,4])
 
 #conformal approach:
 #create mesh
-N = 2
 W = 1
 H = 1
 t1 = 0.1
@@ -113,7 +114,7 @@ t4 = 0.1
 
 points = [(-W/2,H/2),(W/2,H/2),(W/2,-H/2),(-W/2,-H/2)]
 thicknesses = [t1,t2,t3,t4]
-num_el = 4*[2] #number of elements through each wall thickness
+num_el = 4*[N] #number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_hollow_box(points,thicknesses,num_el,'box_xs')
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
