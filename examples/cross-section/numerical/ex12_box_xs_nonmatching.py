@@ -10,7 +10,7 @@ np.set_printoptions(precision=3)
 # m2,n2 = 4,45
 # m3,n3 = 54,5
 # m4,n4 = 6,65
-N = 4
+N = 5
 offset=4
 
 m1,n1 = N*10+offset,N
@@ -81,7 +81,7 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 
 boxXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e3)
 
-boxXS_nm.get_xs_stiffness_matrix(correction='minus')
+boxXS_nm.get_xs_stiffness_matrix(correction=None)
 
 boxXS_nm.plot_warping_fxns()
 

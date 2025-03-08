@@ -18,8 +18,8 @@ import numpy as np
 # m1,n1 = 10,1
 # m2,n2 = 1,9
 
-N = 4 
-offset = 1
+N = 6
+offset = 3
 
 m1,n1 = N*10+offset,N
 m2,n2 = N,N*10+offset
@@ -80,9 +80,9 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e3)
+TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e4)
 
-TXS_nm.get_xs_stiffness_matrix(correction='minus')
+TXS_nm.get_xs_stiffness_matrix(correction=None)
 
 TXS_nm.plot_warping_fxns()
 

@@ -15,36 +15,42 @@ np.set_printoptions(precision=3)
 # m2,n2 = 5,50
 # m3,n3 = 50,5
 
-m1,n1 = 30,3
-m2,n2 = 3,30
-m3,n3 = 30,3
+# m1,n1 = 30,3
+# m2,n2 = 3,30
+# m3,n3 = 30,3
+
+N = 4
+offset = 4
+
+m1,n1 = N*10+offset,N
+m2,n2 = N,N*10+offset
+m3,n3 = N*10+offset,N
 
 H = 0.1
-L = 0.1
-T1 = .01
-T2 = .01
-T3 = .01
+W = 0.1
+tf = .01
+tw = .01
 
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
 # mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1)
 mesh_0.geometry.x[:, :2] -= .5
-mesh_0.geometry.x[:, 1] *= T1
-mesh_0.geometry.x[:, 0] *= L
-mesh_0.geometry.x[:, 1] += H/2 - T1/2
+mesh_0.geometry.x[:, 1] *= tf
+mesh_0.geometry.x[:, 0] *= W
+mesh_0.geometry.x[:, 1] += H/2 - tf/2
 
 mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.quadrilateral)
 # mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2)
 mesh_1.geometry.x[:, :2] -= .5
-mesh_1.geometry.x[:, 0] *= T2
+mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= H
 # mesh_1.geometry.x[:, 0] += T2/2
 
 mesh_2 = mesh.create_unit_square(MPI.COMM_WORLD, m3, n3,cell_type=mesh.CellType.quadrilateral)
 # mesh_2 = mesh.create_unit_square(MPI.COMM_WORLD, m3, n3)
 mesh_2.geometry.x[:, :2] -= .5
-mesh_2.geometry.x[:, 1] *= T1
-mesh_2.geometry.x[:, 0] *= L
-mesh_2.geometry.x[:, 1] -= H/2 - T1/2
+mesh_2.geometry.x[:, 1] *= tf
+mesh_2.geometry.x[:, 0] *= W
+mesh_2.geometry.x[:, 1] -= H/2 - tf/2
 
 #PLOT meshes:
 pyvista.global_theme.background = [255, 255, 255, 255]
@@ -72,9 +78,9 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-IXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e10)
+IXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e1)
 
-IXS_nm.get_xs_stiffness_matrix()
+IXS_nm.get_xs_stiffness_matrix(correction=None)
 
 IXS_nm.plot_warping_fxns()
 
@@ -85,14 +91,14 @@ print('coupled Stiffness matrix:')
 print(IXS_nm.K)
 
 print("Analytical axial stiffness (EA):")
-A = L*H - (L-T1)*(H-2*T2)
+A = W*H - (W-tf)*(H-2*tw)
 E=unobtainium.E
 print(E*A)
 print("Computed Axial Stiffness:")
 print(IXS_nm.K[0,0])
 
 print("Analytical Bending stiffness (EI):")
-I = (L*H**3)/12 -((L-T2)*(H-2*T1)**3)/12
+I = (W*H**3)/12 -((W-tw)*(H-2*tf)**3)/12
 print(E*I)
 print("Computed bending stiffness:")
 print(IXS_nm.K[4,4])
@@ -100,11 +106,6 @@ print(IXS_nm.K[4,4])
 
 #compare to conformal approach:
 #create mesh
-N = 3
-H = .1
-W= .1
-tf = 0.01
-tw = 0.01
 
 dims = [H,W,tf,tw]
 num_el = [N,N]#number of elements through each wall thickness

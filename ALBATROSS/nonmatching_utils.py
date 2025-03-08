@@ -12,9 +12,9 @@ class Collision:
     '''
     Collection of information about each overlapping section
     '''
-    def __init__(self,collision_bbtree,celltags,pts,penalty_dofs):
+    def __init__(self,collision_bbtree,mesh_indices,celltags,pts,penalty_dofs):
         self.collision_bbtree = collision_bbtree
-        # self.collision_points = collision_points
+        self.mesh_indices = mesh_indices
         self.celltags = celltags
         self.pts = pts
         self.penalty_dofs = penalty_dofs

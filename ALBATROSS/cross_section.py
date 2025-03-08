@@ -58,19 +58,17 @@ class CrossSection:
 
         #number of materials
         self.num_mat = len(self.materials)
-        #tuple of material names and ids
-        # self.mat_ids = list(zip(list(self.material.keys()),list(range(self.num_mat))))
-        # mat_names = [self.materials[i].name for i in range(self.num_mat)]
-          
         
-        # print("mat ids:")
-        # print(self.mat_ids)
-
         #indices
         self.i,self.j,self.k,self.l=indices(4)
-        # self.p,self.q,self.r,self.s=indices(4)
         self.a,self.B = indices(2)
         
+        #DG0 space, used for material properties, etc
+        self.Q = functionspace(self.msh,('DG',0))
+        #construct DG spaces for modulus of elasticity and poisson ratio (assuming all materials are ISOTROPIC)
+        self.E = Function(self.Q)
+        self.nu = Function(self.Q)
+
         #integration measures (subdomain data accounts for different materials)
         if self.ct is not None:
             #check that the number and values of celltags match those specified in the material objects
@@ -78,11 +76,8 @@ class CrossSection:
             mat_ct = np.unique([self.materials[_i].id for _i in range(self.num_mat)] )
             assert(np.logical_and.reduce(mesh_ct==mat_ct))
             
-            #material property functions
-            self.Q = functionspace(self.msh,('DG',0))
-            # self.C = TensorFunctionSpace(self.msh,('DG',0),shape=(3,3,3,3))
-            self.E = Function(self.Q)
-            self.nu = Function(self.Q)
+            #TODO: JJK 3/7/25, need to handle case of orthotropic materials
+
             for material in self.materials:
                 if material.type == "ISOTROPIC":
                     cells = self.ct.find(material.id)
@@ -96,16 +91,13 @@ class CrossSection:
             self.C = getMatConstitutiveIsotropic(self.msh,self.E,self.nu)
             
             #construct measure for subdomains using celltag info
-            # self.dx = Measure("dx",domain=self.msh,subdomain_data=self.ct)
             self.dx = Measure("dx",domain=self.msh,subdomain_data=self.ct)
 
         elif self.ct is None:
             self.dx = Measure("dx",domain=self.msh)
-        #     for material in self.materials:
-        #         print(self.ct.find(material.id))
-        #         material_facets=meshtags(self.msh,self.tdim,self.ct.find(material.id),material.id)
-        #         material.dx = Measure("dx",domain=self.msh,subdomain_data=material_facets)
-            self.C = getMatConstitutiveIsotropic(self.msh,self.materials[0].E,self.materials[0].nu)
+            self.E.x.array[:] = np.full_like(self.E.x.array,self.materials[0].E,dtype=default_scalar_type)
+            self.nu.x.array[:] = np.full_like(self.nu.x.array,self.materials[0].nu,dtype=default_scalar_type)
+            self.C = getMatConstitutiveIsotropic(self.msh,self.E,self.nu)
         self.ds = Measure("ds",domain=self.msh)
         
         #spatial coordinate and facet normals
@@ -123,7 +115,7 @@ class CrossSection:
         else:
             self.materials[0].A = assemble_scalar(form(1.0*self.dx))
             self.linear_density += self.materials[0].A*self.materials[0].density
-        #TODO: compute density weight areas and areas of each subdomain?
+        #TODO: compute density weighted areas and areas of each subdomain?
         
         #compute average y and z locations 
         self.yavg = assemble_scalar(form(self.x[0]*self.dx))/self.A
@@ -398,9 +390,6 @@ class CrossSection:
         self.sparse_sols = sparseify(self.sols,sparse_format='csc')
         # self.sols = self.sparse_sols.toarray()
 
-        #TODO: maybe instead of storing the sols as a numpy array, i should initialize the warping function space here and directly populate
-        #       It may be easier to get values in and out....
-
     def _decouple_modes(self,basis_matrix_only=False):
         #this is a change of basis operation from the standard R^12 basis to
         #   the basis defined by the 6 rigid body modes and the 6 elastic modes
@@ -426,14 +415,8 @@ class CrossSection:
         ubar_mode = Function(UBAR)
         uhat_mode = Function(UHAT)
 
-        # Sketch of a newer approach:
-        #We can construct the warping functions in a much more intelligent way, by using the approach of the
-        # self._orthonormalize_rbd() to return the 6 elastic warping modes directly instead of looping through
-        # the existing modes and explicitly constructing the warping functions. 
-        # The key here is set of expression that describe the warping 
-
         #INITIALIZE DECOUPLING MATRIX (12X12)
-        mat = np.zeros((6,12))
+        self.mat = np.zeros((6,12))
 
         #HERES THE NEW APPROACH:
         #what we want is the set of warping functions Nbar and Nhat
@@ -445,22 +428,12 @@ class CrossSection:
         # that only considers the elastic modes, which we can decouple with a 6x6 matrix in the same manner as below
                 
         #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
-        for mode in range(mat.shape[1]):
+        for mode in range(self.mat.shape[1]):
             #construct function from mode
             ubar_mode.vector.array = ubar_modes[:,mode]
             uhat_mode.vector.array = uhat_modes[:,mode]
-
-            #filter rigid body modes out using GS as these are just a function of ubar
-            # ubar_mode = self._orthonormalize_rbm(ubar_mode)
-            # uhat_mode = self._orthonormalize_rbm(uhat_mode)
-
-            #TODO: cannot just update the ubar values without accounting for how this affects the 
-            # properties of the sols matrix. 
-            # self.sols[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
-            # self.sols[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
-            
+          
             #get stress from warping functions
-            # sigma_avg = self.warping2stress(ubar_mode_avg,uhat_mode)
             sigma = self.warping2stress(ubar_mode,uhat_mode)
 
             #relevant components of stress tensor
@@ -477,49 +450,15 @@ class CrossSection:
             M2 = assemble_scalar(form((x[1])*(sigma11)*dx))          
             M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))  
             
-            #THIRD THREE ROWS: AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
-            mat[0,mode]=P1
-            mat[1,mode]=V2
-            mat[2,mode]=V3   
+            # AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
+            self.mat[0,mode]=P1
+            self.mat[1,mode]=V2
+            self.mat[2,mode]=V3   
 
-            #FOURTH THREE ROWS: AVERAGE MOMENTS (COMPUTED WITH UBAR AND UHAT)
-            mat[3,mode]=T1
-            mat[4,mode]=M2
-            mat[5,mode]=M3
-        
-
-        # for i in range(6):
-        #     for j in range(6):
-        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(mat[i, :], mat[j, :])}")
-
-        #normalize the orthogonal rows and transpose to get the decoupling matrix
-        self.mat = mat
-        # self.mat = (mat.T/np.linalg.norm(mat,axis=1)).T
-        # print('--------------------------')
-        # print('basis transformation matrix after normalization:')
-        # print('--------------------------')
-        # for i in range(6):
-        #     for j in range(6):
-        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
-        # print('--------------------------')
-        # print('sols before basis transformation:')
-        # print('--------------------------')
-        # print("CHECK Normalization")
-        # for i in range(6):
-        #     print(np.linalg.norm(self.sols[:,i]))
-
-        # print("Check orthogonality:")
-        # for i in range(12):
-        #     for j in range(12):
-        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols[:,i], self.sols[:,j])}")
-
-
-        # Q,_ = np.linalg.qr(mat.T,mode='complete')
-        # self.mat = Q[-6:,:]
-        # print('---------------')
-        # for i in range(6):
-        #     for j in range(6):
-        #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.mat[i, :], self.mat[j, :])}")
+            #AVERAGE MOMENTS (COMPUTED WITH UBAR AND UHAT)
+            self.mat[3,mode]=T1
+            self.mat[4,mode]=M2
+            self.mat[5,mode]=M3
 
         if basis_matrix_only is False:
             mat_sparse = sparseify(self.mat,sparse_format='csc')
@@ -540,78 +479,9 @@ class CrossSection:
             #USING PSEUDOINVERSE
             mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
 
-            print(f"condition number of basis transformation:{np.linalg.cond(mat)}")
+            print(f"condition number of basis transformation:{np.linalg.cond(self.mat)}")
             self.sols_decoup = self.sparse_sols.dot(mat_pinv).toarray()
             # self.sols_decoup=mat@self.sols
-
-            # print('--------------------------')
-            # print('sols after basis transformation:')
-            # print('--------------------------')
-            # print("CHECK Normalization")
-            # for i in range(6):
-            #     print(np.linalg.norm(self.sols_decoup[:,i]))
-
-            # print("Check orthogonality:")
-            # for i in range(6):
-            #     for j in range(6):
-            #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
-            # #TODO: think about how and why to store some portion of the sols
-            # # ubar_modes = self.sols_decoup[:len(self.ubar_vtx_to_dof),:]
-            
-            # for mode in range(6):
-            #     #construct function from mode
-            #     # ubar_mode.vector.array = self.sols_decoup[:len(self.ubar_vtx_to_dof),mode]
-            #     ubar_mode.vector.array = self.sols_decoup[self.ubar_vtx_to_dof,mode]
-            #     # uhat_mode.vector.array = uhat_modes[:,mode]
-
-            #     #filter rigid body modes out using GS as these are just a function of ubar
-            #     ubar_mode = self._orthonormalize_rbm(ubar_mode)
-            #     # uhat_mode = self._orthonormalize_rbm(uhat_mode)
-
-            #     #update decoupled solutions with the rigid body modes removed
-            #     self.sols_decoup[self.ubar_vtx_to_dof,mode] = ubar_mode.vector.array
-            #     # self.sols_decoup[self.uhat_vtx_to_dof,mode] = uhat_mode.vector.array
-            
-
-            # print('--------------------------')
-            # print('sols after RBM removal:')
-            # print('--------------------------')
-            # print("CHECK Normalization")
-            # for i in range(6):
-            #     print(np.linalg.norm(self.sols_decoup[:,i]))
-
-            # print("Check orthogonality:")
-            # for i in range(6):
-            #     for j in range(6):
-            #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
-
-            # print()
-
-            # self.sols_decoup = self.sols_decoup/np.linalg.norm(self.sols_decoup,axis=0)
-
-            # #NEED TO RENORMALIZE THE WARPING FUNCTIONS
-            # print('--------------------------')
-            # print('sols after renormalization:')
-            # print('--------------------------')
-            # print("CHECK Normalization")
-            # for i in range(6):
-            #     print(np.linalg.norm(self.sols_decoup[:,i]))
-
-            # print("Check orthogonality:")
-            # for i in range(6):
-            #     for j in range(6):
-            #         print(f"Dot product of mode {i} and mode {j}: {np.dot(self.sols_decoup[:,i], self.sols_decoup[:,j])}")
-
-            # print()
-
-
-            #USING LSQR:
-            # self.sols_decoup2 = lsqr(mat_sparse.T,sparse_sols.T).T
-            # self.sols_decoup = sparseify(np.linalg.lstsq(mat_sparse.T.toarray(),sparse_sols.T.toarray())[0].T).toarray()
-
-            # from scipy.sparse.linalg import norm
-            # diff = self.sols_decoup-self.sols_decoup2
-            # diff_norm = norm(diff)
 
 
     def _build_elastic_solution_modes(self):
@@ -625,8 +495,6 @@ class CrossSection:
         self.N_bar, self.N_hat = self.N.split() 
 
         #get map of function dofs 
-        # N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0)).flatten()
-        # N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1)).flatten()
         N_bar_vtx_to_dofs = self.N_space.sub(0).collapse()[1]
         N_hat_vtx_to_dofs = self.N_space.sub(1).collapse()[1]
         # N_tilde_vtx_to_dofs = self.N_space.sub(2).collapse()[1]
@@ -636,44 +504,9 @@ class CrossSection:
         N_bar_vals = sparseify(self.sols_decoup[self.ubar_vtx_to_dof,:]).toarray().flatten()
         N_hat_vals = sparseify(self.sols_decoup[self.uhat_vtx_to_dof,:]).toarray().flatten()
         
-
-        # N_bar_vals = self.sols_decoup[self.ubar_vtx_to_dof,:].flatten()/np.linalg.norm(self.sols_decoup[self.ubar_vtx_to_dof,:])
-        # N_hat_vals = self.sols_decoup[self.uhat_vtx_to_dof,:].flatten()/np.linalg.norm(self.sols_decoup[self.uhat_vtx_to_dof,:])
-
         #populate elastic solution modes to elastic solution mode function
         self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals
         self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals
-
-    # def _build_elastic_solution_modes(self):
-    #     #Initialize a tensor element and mixed tensor function space 
-    #     # for the elastic solution modes
-    #     Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,6))
-    #     self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
-    #     self.N = Function(self.N_space)
-        
-    #     #extract portions of elastic solution mode function related to each warping fxn
-    #     self.N_bar, self.N_hat, self.N_tilde, self.N_breve = self.N.split() 
-
-    #     #unpack elastic solution modes
-    #     elastic_sols = self.sols_decoup[:,6:]
-
-    #     #get map of function dofs 
-    #     N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0))
-    #     N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1))
-    #     N_tilde_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(2))
-    #     N_breve_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(3))
-
-    #     #get separate elastic solution mode values
-    #     N_bar_vals = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]
-    #     N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten(),:]
-    #     N_tilde_vals = elastic_sols[self.utilde_vtx_to_dof.flatten(),:]
-    #     N_breve_vals = elastic_sols[self.ubreve_vtx_to_dof.flatten(),:]
-
-    #     #populate elastic solution modes to elastic solution mode function
-    #     self.N_bar.vector.array[N_bar_vtx_to_dofs.flatten()] = N_bar_vals.flatten()
-    #     self.N_hat.vector.array[N_hat_vtx_to_dofs.flatten()] = N_hat_vals.flatten()
-    #     self.N_tilde.vector.array[N_tilde_vtx_to_dofs.flatten()] = N_tilde_vals.flatten()
-    #     self.N_breve.vector.array[N_breve_vtx_to_dofs.flatten()] = N_breve_vals.flatten()
 
     def _compute_xs_stiffness_matrix(self):             
         #unpacking values
@@ -1245,15 +1078,6 @@ class CrossSection:
 
         #derivatives of displacement
         #this is known from our displacement expression
-        # dubxdx = uhat[0]
-        # dubxdy = gradubar[0,0]
-        # dubxdz = gradubar[0,1]
-        # dubydx = uhat[1]
-        # dubydy = gradubar[1,0]
-        # dubydz = gradubar[1,1]
-        # dubzdx = uhat[2]
-        # dubzdy = gradubar[2,0]
-        # dubzdz = gradubar[2,1]
         dubxdx = uhat[0]
         dubxdy = uhat[1]
         dubxdz = uhat[2]
@@ -1296,12 +1120,7 @@ class CrossSection:
 
         stress = self.warping2stress(ubar,uhat,utilde,ubreve)
         return stress
-        # V_stress = TensorFunctionSpace(self.msh, ("DG", 0),shape=(3,3))
-        # stress_expr = Expression(stress, V_stress.element.interpolation_points())
-        # stresses = Function(V_stress)
-        # stresses.interpolate(stress_expr)
-        # return stresses
-    
+
     def get_von_mises_stress(self,stress):
         #deviatoric stress
         s = stress - 1. / 3 * tr(stress) * Identity(stress.ufl_shape[0])
@@ -1453,8 +1272,6 @@ class CrossSection:
         pyvista.global_theme.font.color = 'black'
         plotter = pyvista.Plotter()
 
-
-               
         mode = ['Axial','Shear 1', 'Shear 2', 'Torsion', 'Bending 1', 'Bending 2']
         plotter = pyvista.Plotter(shape=(2,3))
         grids = []
@@ -1538,20 +1355,21 @@ class CoupledXSProblem:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
         compute combined beam cross-sectional properties'''
     def __init__(self,XSs,pen=1e2):
-
+        
+        #assign cross-sections objects to regions 
         self.XSs = XSs
-
         self.regions = {i:Region(XS.msh,fxn_space=XS.V) for i,XS in enumerate(XSs)} 
         self.meshes = {i:XS.msh for i,XS in enumerate(XSs)}
-        # self.form_construction = form_construction
-        # self.bcs = {i:bc for i,bc in enumerate(bc_args)}
-        self.pen = pen
-
         self.num_meshes = len(self.meshes)
+        
+        #base penalty parameter
+        self.pen = pen
 
         #compute collisions between all meshes
         self._find_overlap()
 
+        # #modify each region's material properties based on the effective material rule 
+        # self._adjust_effective_material()
         
     def get_xs_stiffness_matrix(self,correction='avg'):
         #assemble each region's system matrix
@@ -1559,15 +1377,6 @@ class CoupledXSProblem:
 
         #apply the penalty parameter
         self._construct_coupled_system_matrix()
-
-        # #total system size:
-        # print("overall system size:")
-        # print(self.system_mat.getSize())
-
-        # #individual system sizes:
-        # print("overall system size:")
-        # for XS in self.XSs:
-        #     print(XS.system_mat.getSize())
 
         #use QR factorization to get null modes:
         self._get_modes()
@@ -1650,7 +1459,7 @@ class CoupledXSProblem:
 
                     #information about a collision of mesh i on mesh j
                     collision_ij = Collision(collisions_bbtree_ij,
-                                            #  collision_points_ij,
+                                             (i,j),
                                              (celltags_i,celltags_j),
                                              (pts_i,pts_j),
                                              (penalty_dofs_i,penalty_dofs_j))
@@ -1658,6 +1467,8 @@ class CoupledXSProblem:
                     pen_vec = self._build_penalty_vector(self.regions[i],collision_ij)
                     
                     collision_ij.add_pen_vec(pen_vec)
+
+                    self._adjust_material(collision_ij)
 
                     collisions_i[j]=collision_ij
 
@@ -1708,12 +1519,38 @@ class CoupledXSProblem:
             indices=np.where(np.isin(collision_ij.penalty_dofs[0],dofs))
             pen_values[indices] = self.pen * np.sum(cell_areas.array[cells])
 
+            #increase the penaly value by 1-2 orders of magnitude for the 
+            #   out of plane warping displacement
+            out_of_plane_dofs = [dof for sublist in 
+                                 [list(fem.locate_dofs_topological(region_i.fxn_space.sub(i).sub(0),0,[pt])) 
+                                  for i in range(region_i.fxn_space.num_sub_spaces)] for dof in sublist]
+            out_of_plane_indices=np.where(np.isin(collision_ij.penalty_dofs[0],out_of_plane_dofs))
+            pen_values[out_of_plane_indices] *= 1e2
+
         #populate the PETSc vector with the values at the proper indices
         for idx,val in zip(collision_ij.penalty_dofs[0],pen_values):
             pen_vec.setValue(idx,val)
         
         return pen_vec
 
+    def _adjust_material(self,collision_ij):
+        '''
+        For a collision, modify the material tensor in the overlapping 
+        region based on the effective material policy'''
+        #this can be done by using the celltags in the collision object and overwriting the material constitutive tensor:
+        XSi = self.XSs[collision_ij.mesh_indices[0]]
+        XSj = self.XSs[collision_ij.mesh_indices[1]]
+
+        celltags_i = collision_ij.celltags[0]
+        celltags_j = collision_ij.celltags[1]
+
+        for (XS,celltags) in [(XSi,celltags_i),(XSj,celltags_j)]:
+            # cells = celltags.find(1)
+            cells = np.concatenate([celltags.find(1),celltags.find(2)])
+            XS.E.x.array[cells] *= 1/np.sqrt(2)
+            # XS.nu.x.array[cells] *= 1/np.sqrt(2)
+
+            XS.C = getMatConstitutiveIsotropic(XS.msh,XS.E,XS.nu)
 
     def _assemble_system_mats(self):
         #construct the residudal and assemble the system mat for each region
@@ -1748,16 +1585,8 @@ class CoupledXSProblem:
                 self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
                                                                                      self.regions[idx[0]].fxn_space,
                                                                                      mixed=True)
-                #copy the dimensions of the interpolation matrix:
+                #copy the interpolation matrix :
                 self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
-                #prepopulate the penalty matrix term with the interpolation matrix
-                # self.collisions[idx[0]][idx[1]].pen_mat.copy(self.collisions[idx[0]][idx[1]].inter_mat.duplicate())
-                
-                # A01 = convert_petsc_to_numpy(self.collisions[idx[0]][idx[1]].inter_mat)
-                # u0 = np.zeros((A01.shape[0],1))
-                # u0 = 
-
-                # print()
 
             elif val == 0 and idx[0] != idx[1]:
                 self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system_mat.getSize()[0],
@@ -1789,13 +1618,13 @@ class CoupledXSProblem:
                 #TODO: need to come up with a better way of populating the 
                 #   nested list than simply filling with the interpolation matrix, then overwriting it...
 
-                #add penalty term to off diagonal block          
+                #add penalty term to off diagonal block (overwriting the )     
                 A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
                 A_list[idx[0]][idx[1]].assemble()
                 A_list[idx[0]][idx[1]].scale(-1.0)
 
-                #TODO: this correction modifies the warping function discovery, which
-                #       does NOT modify the discovered stiffness matrix properly
+                # # TODO: this correction modifies the warping function discovery, which
+                # #       does NOT modify the discovered stiffness matrix properly
                 # #apply the correction for the overlap
                 # dx_correction = ufl.Measure("dx", 
                 #                             domain=self.XSs[idx[0]].msh,
