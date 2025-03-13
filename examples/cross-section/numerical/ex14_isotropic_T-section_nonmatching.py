@@ -19,7 +19,7 @@ import numpy as np
 # m2,n2 = 1,9
 
 N = 6
-offset = 3
+offset = 0
 
 m1,n1 = N*10+offset,N
 m2,n2 = N,N*10+offset

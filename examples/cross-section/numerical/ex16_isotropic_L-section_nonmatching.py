@@ -14,7 +14,7 @@ import numpy as np
 # m1,n1 = 10,1
 # m2,n2 = 1,9
 
-N = 4 
+N = 6
 offset = 1
 
 m1,n1 = N*10+offset,N
@@ -78,7 +78,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-LXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e1)
+LXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e3)
 
 LXS_nm.plot_meshes()
 

@@ -19,7 +19,7 @@ np.set_printoptions(precision=3)
 # m2,n2 = 3,30
 # m3,n3 = 30,3
 
-N = 4
+N = 8
 offset = 4
 
 m1,n1 = N*10+offset,N
@@ -78,7 +78,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-IXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e1)
+IXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e3)
 
 IXS_nm.get_xs_stiffness_matrix(correction=None)
 

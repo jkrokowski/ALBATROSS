@@ -1251,11 +1251,15 @@ class CrossSection:
             warped.append(grids[i].warp_by_vector(name,factor=.1))
 
 
-            plotter.add_mesh(warped[i],show_edges=True,opacity=.9)
-            plotter.add_mesh(grids[i],show_edges=True,opacity=.5,scalar_bar_args={'title': f'warping mode {i}'})
+            plotter.add_mesh(warped[i],show_edges=True,opacity=.9,scalar_bar_args={'title': 'Norm of Disp. Magnitude'},)
+            plotter.add_mesh(grids[i],show_edges=True,opacity=0.75,color='gray',style="wireframe",show_scalar_bar=False)
             plotter.add_text(mode[i])
-            plotter.view_xy()
-            plotter.show_bounds()
+            plotter.view_isometric()
+            plotter.show_bounds(location='outer',
+                                show_zlabels=False,
+                                n_xlabels=2,
+                                n_ylabels=2,
+                                n_zlabels=2)
         if not pyvista.OFF_SCREEN:
             plotter.show()
 
@@ -1504,6 +1508,8 @@ class CoupledXSProblem:
         cell_area_form = form(v*dx_overlap((1,2)))
         cell_areas = assemble_vector(cell_area_form)
 
+        avg_cell_size = np.sum(cell_areas.array)/cell_areas.array.shape[0]
+
         #create connectivity between cells and vertices (if not already created)
         region_i.msh.topology.create_connectivity(0,2)
         pen_values = np.zeros((len(collision_ij.penalty_dofs[0]),),dtype=float)
@@ -1517,7 +1523,8 @@ class CoupledXSProblem:
             #add up area of all cells that are incident to the penalty dof
             #  adjust penalty proportionately to the supported area
             indices=np.where(np.isin(collision_ij.penalty_dofs[0],dofs))
-            pen_values[indices] = self.pen * np.sum(cell_areas.array[cells])
+            # pen_values[indices] = self.pen * np.sum(cell_areas.array[cells])
+            pen_values[indices] = self.pen * avg_cell_size*np.ones_like(indices)
 
             #increase the penaly value by 1-2 orders of magnitude for the 
             #   out of plane warping displacement
@@ -1525,7 +1532,7 @@ class CoupledXSProblem:
                                  [list(fem.locate_dofs_topological(region_i.fxn_space.sub(i).sub(0),0,[pt])) 
                                   for i in range(region_i.fxn_space.num_sub_spaces)] for dof in sublist]
             out_of_plane_indices=np.where(np.isin(collision_ij.penalty_dofs[0],out_of_plane_dofs))
-            pen_values[out_of_plane_indices] *= 1e2
+            # pen_values[out_of_plane_indices] *= self.pen#*self.pen
 
         #populate the PETSc vector with the values at the proper indices
         for idx,val in zip(collision_ij.penalty_dofs[0],pen_values):
@@ -1545,9 +1552,10 @@ class CoupledXSProblem:
         celltags_j = collision_ij.celltags[1]
 
         for (XS,celltags) in [(XSi,celltags_i),(XSj,celltags_j)]:
-            # cells = celltags.find(1)
-            cells = np.concatenate([celltags.find(1),celltags.find(2)])
+            cells = celltags.find(1)
+            # cells = np.concatenate([celltags.find(1),celltags.find(2)])
             XS.E.x.array[cells] *= 1/np.sqrt(2)
+            # XS.E.x.array[cells] *= 0.5
             # XS.nu.x.array[cells] *= 1/np.sqrt(2)
 
             XS.C = getMatConstitutiveIsotropic(XS.msh,XS.E,XS.nu)
@@ -1614,6 +1622,10 @@ class CoupledXSProblem:
                 
                 #add penalty term to diagonal block
                 A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
+                # if idx[0]<idx[1]:
+                #     A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
+                # elif idx[0]>idx[1]:
+                #     A_list[idx[0]][idx[0]].axpy(-1.0,pen_term)
 
                 #TODO: need to come up with a better way of populating the 
                 #   nested list than simply filling with the interpolation matrix, then overwriting it...
@@ -1622,6 +1634,10 @@ class CoupledXSProblem:
                 A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
                 A_list[idx[0]][idx[1]].assemble()
                 A_list[idx[0]][idx[1]].scale(-1.0)
+                # if idx[0]<idx[1]:
+                #     A_list[idx[0]][idx[1]].scale(-1.0)
+                # elif idx[0]>idx[1]:
+                #     A_list[idx[0]][idx[1]].scale(1.0)
 
                 # # TODO: this correction modifies the warping function discovery, which
                 # #       does NOT modify the discovered stiffness matrix properly
