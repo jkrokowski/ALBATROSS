@@ -52,7 +52,7 @@ I = (W*H**3)/12
 print(E*I)
 print("Computed bending stiffness:")
 print(squareXS.K[4,4])
-exit()
+# exit()
 
 squareXS.compute_xs_stiffness_matrix_sensitivities()
 

@@ -70,6 +70,9 @@ I01=ALBATROSS.nonmatching_utils.get_interpolation_matrix(TXS_nm.regions[1].fxn_s
 I10=ALBATROSS.nonmatching_utils.get_interpolation_matrix(TXS_nm.regions[0].fxn_space,
                                                         TXS_nm.regions[1].fxn_space,
                                                         mixed=True)
+#get mass matrices:
+M0 = fem.petsc.assemble_matrix(fem.form(ufl.inner(TXS_nm.XSs[0].u,TXS_nm.XSs[0].v)*TXS_nm.XSs[0].dx))
+M1 = fem.petsc.assemble_matrix(fem.form(ufl.inner(TXS_nm.XSs[1].u,TXS_nm.XSs[1].v)*TXS_nm.XSs[1].dx))
 
 #populate mesh 0 with solution:
 u0 = fem.Function(TXS_nm.XSs[0].V)
@@ -87,6 +90,7 @@ for i in range(4):
 TXS_nm._assemble_system_mats()
 TXS_nm._construct_coupled_system_matrix()
 TXS_nm.collisions[0][1].inter_mat.mult(u0.vector,u1.vector)
+
 
 
 #====== Validate the whole interpolation matrix ===== #

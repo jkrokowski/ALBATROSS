@@ -18,7 +18,7 @@ import numpy as np
 # m1,n1 = 10,1
 # m2,n2 = 1,9
 
-N = 6
+N = 4
 offset = 0
 
 m1,n1 = N*10+offset,N
@@ -49,27 +49,6 @@ mesh_1.geometry.x[:, 1] *= W
 mesh_1.name = 'w'
 
 
-#PLOT meshes:
-pyvista.global_theme.background = [255, 255, 255, 255]
-pyvista.global_theme.font.color = 'black'   
-plotter = pyvista.Plotter()
-def add_mesh(msh):
-    topology, cell_types, geom = plot.vtk_mesh(msh, 2)
-    grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
-    plotter.add_mesh(grid,show_edges=True,opacity=0.25)
-     
-    # # Add cell labels
-    # cell_centers = grid.cell_centers()
-    # for i, center in enumerate(cell_centers.points):
-    #     plotter.add_point_labels(center, [msh.name+str(i)], font_size=10, point_color='black', text_color='black')
-add_mesh(mesh_0)
-add_mesh(mesh_1)
-# add_mesh(mesh_2)
-
-plotter.show_grid()
-plotter.view_xy()
-plotter.show()
-
 meshes= [mesh_0,mesh_1]
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
@@ -80,7 +59,9 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e4)
+TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e10)
+
+TXS_nm.plot_meshes()
 
 TXS_nm.get_xs_stiffness_matrix(correction=None)
 

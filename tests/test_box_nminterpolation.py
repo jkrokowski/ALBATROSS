@@ -79,9 +79,9 @@ for (m,n),val in np.ndenumerate(boxXS_nm.adjacency):
 
         #interpolate some function into mesh 0
         for i in range(4):
-            u0.sub(i).interpolate(lambda x:((i+1)*0.1*x[0],
-                                    (i+1)*0.1*x[1],
-                                    x[0]*x[1]))
+            u0.sub(i).interpolate(lambda x:((i+1)*0.1*x[0]**2,
+                                    (i+1)*0.1*x[1]**2,
+                                    x[0]**2*x[1]**2))
 
 
         #====== Confirm that the stored interpolation matrix is accurate ====== #

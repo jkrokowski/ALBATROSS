@@ -1006,8 +1006,11 @@ class CrossSection:
         # self.dKdx =  K1K3invdK1dxT
         # self.dKdx = dK1dxK2invK1T + K1K2invdK2dxK2invK1T + K1K3invdK1dxT
         
-        self.dKdx = np.einsum('ijk,ji->ijk',
-                                self.K @ self.dK2dx,
+        # self.dKdx = np.einsum('ijk,ji->ijk',
+        #                         self.K @ self.dK2dx,
+        #                         self.K)
+        self.dKdx = -np.einsum('ijk,ji->ijk',
+                                self.K @ self.dSdx,
                                 self.K)
         # self.dKdx = self.dK2dx
         
@@ -1555,9 +1558,10 @@ class CoupledXSProblem:
             cells = celltags.find(1)
             # cells = np.concatenate([celltags.find(1),celltags.find(2)])
             XS.E.x.array[cells] *= 1/np.sqrt(2)
-            # XS.E.x.array[cells] *= 0.5
             # XS.nu.x.array[cells] *= 1/np.sqrt(2)
-
+            # XS.E.x.array[cells] *= 0.5
+            # XS.nu.x.array[cells] *= 0.5
+            
             XS.C = getMatConstitutiveIsotropic(XS.msh,XS.E,XS.nu)
 
     def _assemble_system_mats(self):
@@ -1817,16 +1821,20 @@ class CoupledXSProblem:
                 
                 indiv_warped.append(indiv_grids[j].warp_by_vector(name,factor=.1))
 
-                plotter.add_mesh(indiv_warped[j],show_edges=True,opacity=.9)
-                plotter.add_mesh(indiv_grids[j],show_edges=True,opacity=.5,scalar_bar_args={'title': f'warping mode {i}'})
+                plotter.add_mesh(indiv_warped[j],show_edges=True,opacity=.9,scalar_bar_args={'title': 'Norm of Disp. Magnitude'},)
+                plotter.add_mesh(indiv_grids[j],show_edges=True,opacity=0.75,style='wireframe',show_scalar_bar=False)
             
             grids.append(indiv_grids)
             warped.append(indiv_warped)
             
             plotter.add_text(mode[i])
         
-            plotter.view_xy()
-        plotter.show_bounds()
+            plotter.view_isometric()
+            plotter.show_bounds(location='outer',
+                                show_zlabels=False,
+                                n_xlabels=2,
+                                n_ylabels=2,
+                                n_zlabels=2)
         if not pyvista.OFF_SCREEN:
             plotter.show()
 
