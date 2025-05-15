@@ -1663,6 +1663,72 @@ class CoupledXSProblem:
 
         self.system_mat = A
 
+
+    def _construct_coupled_system_matrix_nn(self):
+        '''
+        Given collisions and regions, 
+        set up the coupled system matrix with the penalty terms
+        for a nearest neighbor, one way coupling from fine to coarse
+        '''
+
+        # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
+        for idx,val in np.ndenumerate(self.adjacency):
+            if val == 1:
+                #get the interpolation matrix
+                self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
+                                                                                     self.regions[idx[0]].fxn_space,
+                                                                                     mixed=True)
+                #copy the interpolation matrix :
+                self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
+
+            elif val == 0 and idx[0] != idx[1]:
+                self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system_mat.getSize()[0],
+                                                                self.regions[idx[0]].system_mat.getSize()[1]])
+                self.separations[idx[0]][idx[1]].mat.assemble()
+
+        #populate an array of the same size as the adjacency matrix of the petsc matrices
+        #  using a *nearly* incomprehensible list "comprehension" 
+        # this adds the unadultered system to the diagonals, the interpolation matrices where there is a collision
+        # and the assembled empty matrices where there is a "separation"
+        A_list = [ [self.regions[i].system_mat if i==j
+                    else self.separations[i][j].mat if self.adjacency[i][j] == 0 and i!=j
+                    else self.collisions[i][j].pen_mat 
+                        for i in range(self.num_meshes)]
+                     for j in range(self.num_meshes) ]
+               
+        # add the penalty to the relevant block of A_list
+        for idx,val in np.ndenumerate(self.adjacency):
+            # if idx[0]==idx[1]:
+            if val==1:
+                pen_term = PETSc.Mat().createAIJ(A_list[idx[0]][idx[0]].getSize())
+                pen_term.assemble()
+                pen_term.setDiagonal(self.collisions[idx[0]][idx[1]].pen_vec)
+                pen_term.assemble()
+                
+                #add penalty term to diagonal block
+                A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
+                # if idx[0]<idx[1]:
+                #     A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
+                # elif idx[0]>idx[1]:
+                #     A_list[idx[0]][idx[0]].axpy(-1.0,pen_term)
+
+                #TODO: need to come up with a better way of populating the 
+                #   nested list than simply filling with the interpolation matrix, then overwriting it...
+
+                #add penalty term to off diagonal block (overwriting the )     
+                A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
+                A_list[idx[0]][idx[1]].assemble()
+                A_list[idx[0]][idx[1]].scale(-1.0)
+
+
+
+        A = PETSc.Mat()
+        A.createNest(A_list)
+        
+        A.assemble()
+
+        self.system_mat = A
+
     def _get_modes(self):
         m,n1=self.system_mat.getSize()
         print('Computing QR factorization')

@@ -6,7 +6,7 @@ import basix
 from mpi4py import MPI
 import ufl
 from scipy.sparse import csr_matrix
-
+from scipy.spatial import cKDTree
 
 class Collision:
     '''
@@ -597,6 +597,18 @@ def get_interpolation_matrix(V_1,V_0,mixed=False):
         return M01_expanded
     else:
         return M01
+    
+def get_nn_interpolation_matrix(pts1,pts2):
+    '''return a nearest-neighbor interpolation matrix from pts1 to pts2'''
+    interpolation_matrix = np.zeros((pts2.shape[0],pts1.shape[0]))
+    tree = cKDTree(pts2)
+    dists, indices = tree.query(pts1)
+    row_indices = list(indices)
+    col_indices = [i for i in range(pts1.shape[0])]
+    interpolation_matrix[row_indices,col_indices] = 1
+
+    return interpolation_matrix
+
 
 
 def solve_coupled_system(A1,A2,b1,b2,uh1,uh2,M12,M21,subdofs1,subdofs2,alpha,w=1):

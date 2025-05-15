@@ -203,5 +203,5 @@ def caddee_material_to_albatross(caddee_material,type = 'ISOTROPIC'):
 
     return Material(name=caddee_material.name,
                     mat_type='ISOTROPIC',
-                    mech_props={'E':E,'nu':nu},
+                    mech_props={'E':E.value,'nu':nu.value},
                     density=2700)
