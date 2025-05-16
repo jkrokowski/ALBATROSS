@@ -60,7 +60,7 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
 
           # E = Constant(domain,1e5)
           # nu = Constant(domain,0.3)
-          E = 100.0
+          E = 1e9
           nu = 0.2
           model = "plane_stress"
 

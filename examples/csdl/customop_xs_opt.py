@@ -143,7 +143,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
                                                     self.boundary_nodes,
                                                     displacement,
-                                                    self.interior_nodes)
+                                                    self.interior_nodes,
+                                                    mode='lin_elas')
 
         output_vals['xy_interior']=xy_interior
 
@@ -198,7 +199,7 @@ inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,nam
 xy = inputs.xy
 xy_interior = inputs.xy_interior
 
-inputs.xy.set_as_design_variable(scaler=100)
+inputs.xy.set_as_design_variable(scaler=10)
 
 # displacement = inputs.xy - inputs.xy_prev
 
@@ -232,7 +233,7 @@ K = outputs.K
 A = outputs.A
 
 with csdl.namespace('Objective'):
-    f = -K[5,5] + K[0,0]
+    f = -K[5,5]
     f.add_name('axial stiffness')
     f.set_as_objective()
 

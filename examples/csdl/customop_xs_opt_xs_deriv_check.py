@@ -119,7 +119,7 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 10
+N = 4
 W = 1
 H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]

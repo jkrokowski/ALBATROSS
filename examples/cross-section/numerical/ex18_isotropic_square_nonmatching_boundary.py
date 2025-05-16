@@ -8,11 +8,13 @@ from petsc4py import PETSc
 
 # np.set_printoptions(precision=3)
 
-N = 11
-offset = 5
+N = 7
+offset = 2
 
-m1,n1 = N+offset,2*(N+offset)
-m2,n2 = N-offset,2*(N-offset)
+# m1,n1 = N+offset,2*(N+offset)
+# m2,n2 = N-offset,2*(N-offset)
+m1,n1 = N-offset,2*(N-offset)
+m2,n2 = N+offset,2*(N+offset)
 
 H = 1
 W = 1
@@ -46,7 +48,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-XS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e5)
+XS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e4)
 
 XS_nm.plot_meshes()
 
@@ -57,23 +59,88 @@ interp_mat = ALBATROSS.nonmatching_utils.get_nn_interpolation_matrix(XSs[1].msh.
 interp_mat_expanded = np.zeros((XSs[0].msh.geometry.x.shape[0],XSs[1].msh.geometry.x.shape[0]))
 interp_mat_expanded[:,list(coarse_boundary_nodes)]=interp_mat
 
+interp_mat2 = ALBATROSS.nonmatching_utils.get_nn_interpolation_matrix(XSs[0].msh.geometry.x[list(fine_boundary_nodes),:],XSs[1].msh.geometry.x)
+interp_mat2_expanded = np.zeros((XSs[1].msh.geometry.x.shape[0],XSs[0].msh.geometry.x.shape[0]))
+interp_mat2_expanded[:,list(fine_boundary_nodes)]=interp_mat2
+
 # Create PETSc matrix
 n, m = interp_mat_expanded.shape
 A_petsc = PETSc.Mat().createAIJ(size=(n, m)) 
 A_petsc.setUp()
-
 # Fill PETSc matrix
 for i in range(n):
     A_petsc.setValues(i, range(m), interp_mat_expanded[i, :])
 A_petsc.assemble()
-
 interp_mat_expanded_petsc = ALBATROSS.nonmatching_utils.permute_and_expand_matrix(XSs[0].V,XSs[1].V,A_petsc,mixed=True)
+
+# Create PETSc matrix
+n, m = interp_mat2_expanded.shape
+A_petsc2 = PETSc.Mat().createAIJ(size=(n, m)) 
+A_petsc2.setUp()
+# Fill PETSc matrix
+for i in range(n):
+    A_petsc2.setValues(i, range(m), interp_mat2_expanded[i, :])
+A_petsc2.assemble()
+interp_mat2_expanded_petsc = ALBATROSS.nonmatching_utils.permute_and_expand_matrix(XSs[1].V,XSs[0].V,A_petsc2,mixed=True)
 
 XS_nm._assemble_system_mats()
 
-XS_nm._construct_coupled_system_matrix_nn()
+XS_nm.adjacency=np.array([[1,1],[0,1]])
 
-XS_nm.get_xs_stiffness_matrix(correction=None)
+# XS_nm._construct_coupled_system_matrix_nn()
+# A01= PETSc.Mat()
+# A01.mat.createAIJ([XSs[0].system_mat.getSize()[0],XSs[1].system_mat.getSize()[0][1]])
+A01 = interp_mat_expanded_petsc.duplicate()
+A01.scale(-XS_nm.pen)
+
+pen_vec = PETSc.Vec().create()
+pen_vec.setSizes(XSs[0].system_mat.getSize()[0])
+pen_vec.setFromOptions()
+indices = ALBATROSS.nonmatching_utils.convert_petsc_to_numpy(interp_mat_expanded_petsc).nonzero()[0]
+for idx in indices:
+    pen_vec.setValue(idx,XS_nm.pen)
+pen_term = PETSc.Mat().createAIJ(XSs[0].system_mat.getSize())
+pen_term.assemble()
+pen_term.setDiagonal(pen_vec)
+pen_term.assemble()
+XSs[0].system_mat.axpy(1.0,pen_term)
+
+A10= PETSc.Mat()
+A10.createAIJ([XSs[1].system_mat.getSize()[0],XSs[0].system_mat.getSize()[1]])
+A10.assemble()
+
+# A10 = interp_mat2_expanded_petsc.duplicate()
+# A10.scale(-XS_nm.pen)
+
+# pen_vec2 = PETSc.Vec().create()
+# pen_vec2.setSizes(XSs[1].system_mat.getSize()[0])
+# pen_vec2.setFromOptions()
+# indices = ALBATROSS.nonmatching_utils.convert_petsc_to_numpy(interp_mat2_expanded_petsc).nonzero()[0]
+# for idx in indices:
+#     pen_vec2.setValue(idx,XS_nm.pen)
+# pen_term2 = PETSc.Mat().createAIJ(XSs[1].system_mat.getSize())
+# pen_term2.assemble()
+# pen_term2.setDiagonal(pen_vec2)
+# pen_term2.assemble()
+# XSs[1].system_mat.axpy(1.0,pen_term2)
+
+A_list = [[XSs[0].system_mat,A01],[A10,XSs[1].system_mat]]
+A = PETSc.Mat()
+A.createNest(A_list)
+A.assemble()
+XS_nm.system_mat = A
+
+#use QR factorization to get null modes:
+XS_nm._get_modes()
+print("null modes found!")
+
+#need to "decouple" the modes
+XS_nm._decouple_modes()
+
+#map elastic solutions to construct warping functions
+XS_nm._compute_xs_stiffness_matrix(correction=None)
+
+# XS_nm.get_xs_stiffness_matrix(correction=None)
 
 XS_nm.plot_warping_fxns()
 
