@@ -134,17 +134,19 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         return output
 
     def compute(self, input_vals, output_vals):
-        #update boundary nodes:
-        self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
         
         # displacement = input_vals['xy']-input_vals['xy_prev']
         displacement = input_vals['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
+        
+        # #update boundary nodes:
+        # self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
         
         xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
                                                     self.boundary_nodes,
                                                     displacement,
                                                     self.interior_nodes,
-                                                    mode='lin_elas')
+                                                    mode='hyper_elas',
+                                                    plot_result=True)
 
         output_vals['xy_interior']=xy_interior
 
@@ -160,8 +162,9 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
                                                         self.boundary_nodes,
                                                         displacement,
                                                         self.interior_nodes,
+                                                        plot_result=True,
                                                         get_deriv=True,
-                                                        mode='lin_elas')
+                                                        mode='hyper_elas')
 
         # derivatives['xy_interior','xy'] = np.ones_like(xy_interior)
         derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
@@ -172,17 +175,17 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 15
-# W = .1
-# H = .1
-# points = [[-W/2,-H/2],[W/2, H/2]]
+N = 20
+W = 1
+H = 1
+points = [[-W/2,-H/2],[W/2, H/2]]
 
-# domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
+domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
 
 radius = 1
 num_el = 20 #number of elements through wall thickness
 
-domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
+# domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 all_nodes= locate_entities(domain,0,lambda x: np.ones_like(x[0]))
 boundary_nodes = locate_entities_boundary(domain,0,lambda x: np.ones_like(x[0]))
 interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
@@ -199,7 +202,7 @@ inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,nam
 xy = inputs.xy
 xy_interior = inputs.xy_interior
 
-inputs.xy.set_as_design_variable(scaler=10)
+inputs.xy.set_as_design_variable(scaler=40)
 
 # displacement = inputs.xy - inputs.xy_prev
 
@@ -228,7 +231,6 @@ crosssection = CrossSection(domain=domain,
 
 #only call one time
 outputs = crosssection.evaluate(inputs)
-
 K = outputs.K
 A = outputs.A
 
@@ -240,7 +242,7 @@ with csdl.namespace('Objective'):
 with csdl.namespace('Area constraint'):
     g1 = A
     g1.add_name('g1')
-    g1.set_as_constraint(upper=3.2) # constraint
+    g1.set_as_constraint(upper=1.2,lower=0.8) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
@@ -249,8 +251,6 @@ print(K.value)
 print(A.value)
 
 sim = csdl.experimental.PySimulator(recorder)
-
-print(inputs.xy.value)
 
 print('current K:      ', sim[K])
 # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

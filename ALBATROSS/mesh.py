@@ -1,5 +1,6 @@
 import numpy as np
-from dolfinx import mesh,fem,plot,nls
+from dolfinx import mesh,fem,plot
+from dolfinx.nls.petsc import NewtonSolver
 import ufl
 import gmsh
 from dolfinx.io import gmshio,XDMFFile
@@ -47,7 +48,10 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
           
      #TODO: need to account for case where not all exterior nodes are moved
      fem.petsc.set_bc(uh.vector, bcs)
-     u = ufl.TrialFunction(V)
+     if mode == 'hyper_elas':
+          u = fem.Function(V)
+     else:
+          u = ufl.TrialFunction(V)
      v = ufl.TestFunction(V)
      if mode == 'poisson':
           a = ufl.inner(ufl.grad(u), ufl.grad(v))*ufl.dx    
@@ -60,8 +64,8 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
 
           # E = Constant(domain,1e5)
           # nu = Constant(domain,0.3)
-          E = 1e9
-          nu = 0.2
+          E = 1e5
+          nu = 0.4
           model = "plane_stress"
 
           mu = E/2/(1+nu)
@@ -76,7 +80,7 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
           problem = fem.petsc.LinearProblem(a, L, bcs, uh)
           problem.solve()
      elif mode == 'hyper_elas':
-          # fictitious yperelastic problem:
+          # fictitious hyperelastic problem:
           def _F(u):
                return ufl.grad(u)+ufl.Identity(2)
           def _sigma(u):
@@ -100,7 +104,7 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
 
           problem = fem.petsc.NonlinearProblem(F, uh,bcs)
           
-          solver= nls.NewtonSolver(msh.comm, problem)
+          solver= NewtonSolver(msh.comm, problem)
           
           solver.solve(uh)
 
@@ -125,123 +129,131 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
           #                     for idx1 in range(2)] for idx2 in range(2)])
           
           #assemble the unmodified stiffness matrix (prior to boundary condition application where rows/columns are zeroed out)
-          A = fem.petsc.assemble_matrix(fem.form(a))
-          A.assemble()
+          if mode == 'hyper_elas':
+               du = ufl.TrialFunction(V)
+               J_form = ufl.derivative(F, uh, du)
+               J_mat = fem.petsc.assemble_matrix(fem.form(J_form))
+               J_mat.assemble()
+               J = J_mat.getValues(range(J_mat.getSize()[0]),range(J_mat.getSize()[1]))
+          else:
+               A = fem.petsc.assemble_matrix(fem.form(a))
+               A.assemble()
 
-          Anp = A.getValues(range(A.getSize()[0]),range(A.getSize()[1]))
+               Anp = A.getValues(range(A.getSize()[0]),range(A.getSize()[1]))
 
-          J = np.linalg.inv(Anp)@Anp
+               J = np.linalg.inv(Anp)@Anp
+          
           duhdx = J[dofs_to_move,:][:,moved_dofs]
           
-          dofs_to_move_is = PETSc.IS().createGeneral(dofs_to_move, comm=MPI.COMM_WORLD)
-          moved_dofs_is = PETSc.IS().createGeneral(moved_dofs, comm=MPI.COMM_WORLD)
+          # dofs_to_move_is = PETSc.IS().createGeneral(dofs_to_move, comm=MPI.COMM_WORLD)
+          # moved_dofs_is = PETSc.IS().createGeneral(moved_dofs, comm=MPI.COMM_WORLD)
 
-          # Create submatrices
-          A_II = A.createSubMatrix(dofs_to_move_is, dofs_to_move_is)
-          A_IB = A.createSubMatrix(dofs_to_move_is, moved_dofs_is)
+          # # Create submatrices
+          # A_II = A.createSubMatrix(dofs_to_move_is, dofs_to_move_is)
+          # A_IB = A.createSubMatrix(dofs_to_move_is, moved_dofs_is)
                     
-          # Create the inverse matrix as a dense matrix
-          A_II_inv = PETSc.Mat().createDense(A_II.getSize())
-          A_II_inv.setUp()
-          A_II_inv.assemble()
-
-          # Create vectors for solving
-          b = PETSc.Vec().createSeq(A_II.size[0])  # RHS vector
-          x = PETSc.Vec().createSeq(A_II.size[0])  # Solution vector
-
-          # Create a KSP solver
-          ksp = PETSc.KSP().create()
-          ksp.setOperators(A_II)
-          ksp.setType('preonly')  # Direct solve
-          ksp.getPC().setType('lu')  # LU decomposition
-
-          # Compute each column of the inverse
-          for i in range(A_II.size[0]):
-               b.set(0.0)  # Reset RHS
-               b[i] = 1.0  # Set the i-th standard basis vector
-               b.assemble()
-               
-               # Solve for the i-th column of the inverse
-               ksp.solve(b, x)
-               x.assemble()
-
-               # Insert the solution as the i-th column of A_inv
-               A_II_inv.setValues(range(A_II.size[0]), [i], x)  # Directly set the entire column
-               
-          A_II_inv.assemble()
-          # A_II_inv.view()
-          # print("these are some words....")
-          
-          # A_IB.view()
-          # print("these are also words....")
-          # A.view()
-
-          # for i in range(A_II.size[0]):
-          #      e = PETSc.Vec().createSeq(A_II.size[0])
-          #      e.setValue(i, 1.0)
-          #      e.assemble()
-          #      identity.setColumn(i, e)
-
-          # A_II_inv = PETSc.Mat().createDense([A_II.size[0], A_II.size[0]])
+          # # Create the inverse matrix as a dense matrix
+          # A_II_inv = PETSc.Mat().createDense(A_II.getSize())
           # A_II_inv.setUp()
-          # ksp = PETSc.KSP().create(MPI.COMM_WORLD)
-          # for i in range(A_II.size[0]):
-          #      rhs = identity.getColumnVector(i)
-          #      solution = A_II.createVecRight()
-          #      ksp.solve(rhs, solution)
-          #      A_II_inv.setColumn(i, solution)
-
           # A_II_inv.assemble()
 
-          # Compute Jacobian: -A_II^-1 * A_IB
-          J = A_II_inv.matMult(A_IB)
-          J.scale(-1.0)
-          # print("These are nearly the same words...")
-          # J.view()
-          # duhdx = J.getDenseArray()
+          # # Create vectors for solving
+          # b = PETSc.Vec().createSeq(A_II.size[0])  # RHS vector
+          # x = PETSc.Vec().createSeq(A_II.size[0])  # Solution vector
 
-          # I = ufl.Identity(2)
-          # F = I+ufl.grad(uh)
-          # J = ufl.det(F) #this is the jacobian determinant, not the jacobian
+          # # Create a KSP solver
+          # ksp = PETSc.KSP().create()
+          # ksp.setOperators(A_II)
+          # ksp.setType('preonly')  # Direct solve
+          # ksp.getPC().setType('lu')  # LU decomposition
 
-          # F[0,0]
+          # # Compute each column of the inverse
+          # for i in range(A_II.size[0]):
+          #      b.set(0.0)  # Reset RHS
+          #      b[i] = 1.0  # Set the i-th standard basis vector
+          #      b.assemble()
+               
+          #      # Solve for the i-th column of the inverse
+          #      ksp.solve(b, x)
+          #      x.assemble()
 
-          # print("Jacobian ufl shape:",J.ufl_shape)
-          #NODAL SENSITIVIES:
-          #these are computed by interpolating a ufl expression for the derivative
-          #  of the displacements wrt to the nodal locations into the appropriate
-          #  function space. This is procedurally (software-wise) different from
-          #  the Gateaux derivatives used for the spatial derivatives.
-
-          #derivative of displacement w.r.t. mesh nodes
-          # grad_uh_ufl = ufl.grad(uh)
-
-          # grad_uh_ufl = ufl.derivative(uh[0]*ufl.dx,uh)
-
-          # grad_uh_form = fem.petsc.assemble_vector(fem.form(grad_uh_ufl))
+          #      # Insert the solution as the i-th column of A_inv
+          #      A_II_inv.setValues(range(A_II.size[0]), [i], x)  # Directly set the entire column
+               
+          # A_II_inv.assemble()
+          # # A_II_inv.view()
+          # # print("these are some words....")
           
-          # #Construct expression to evalute
-          # Vd = fem.functionspace(msh,('CG',1,(2,2)))
-          # grad_uh = fem.Function(Vd)
-          # grad_uh.interpolate(fem.Expression(
-          #                     grad_uh_ufl,
-          #                     Vd.element.interpolation_points()
-          #                     ) )
+          # # A_IB.view()
+          # # print("these are also words....")
+          # # A.view()
+
+          # # for i in range(A_II.size[0]):
+          # #      e = PETSc.Vec().createSeq(A_II.size[0])
+          # #      e.setValue(i, 1.0)
+          # #      e.assemble()
+          # #      identity.setColumn(i, e)
+
+          # # A_II_inv = PETSc.Mat().createDense([A_II.size[0], A_II.size[0]])
+          # # A_II_inv.setUp()
+          # # ksp = PETSc.KSP().create(MPI.COMM_WORLD)
+          # # for i in range(A_II.size[0]):
+          # #      rhs = identity.getColumnVector(i)
+          # #      solution = A_II.createVecRight()
+          # #      ksp.solve(rhs, solution)
+          # #      A_II_inv.setColumn(i, solution)
+
+          # # A_II_inv.assemble()
+
+          # # Compute Jacobian: -A_II^-1 * A_IB
+          # J = A_II_inv.matMult(A_IB)
+          # J.scale(-1.0)
+          # # print("These are nearly the same words...")
+          # # J.view()
+          # # duhdx = J.getDenseArray()
+
+          # # I = ufl.Identity(2)
+          # # F = I+ufl.grad(uh)
+          # # J = ufl.det(F) #this is the jacobian determinant, not the jacobian
+
+          # # F[0,0]
+
+          # # print("Jacobian ufl shape:",J.ufl_shape)
+          # #NODAL SENSITIVIES:
+          # #these are computed by interpolating a ufl expression for the derivative
+          # #  of the displacements wrt to the nodal locations into the appropriate
+          # #  function space. This is procedurally (software-wise) different from
+          # #  the Gateaux derivatives used for the spatial derivatives.
+
+          # #derivative of displacement w.r.t. mesh nodes
+          # # grad_uh_ufl = ufl.grad(uh)
+
+          # # grad_uh_ufl = ufl.derivative(uh[0]*ufl.dx,uh)
+
+          # # grad_uh_form = fem.petsc.assemble_vector(fem.form(grad_uh_ufl))
           
-          # points_on_proc,cells=get_pts_and_cells(msh,msh.geometry.x)
-          # duhdx = grad_uh.eval(points_on_proc,cells)
+          # # #Construct expression to evalute
+          # # Vd = fem.functionspace(msh,('CG',1,(2,2)))
+          # # grad_uh = fem.Function(Vd)
+          # # grad_uh.interpolate(fem.Expression(
+          # #                     grad_uh_ufl,
+          # #                     Vd.element.interpolation_points()
+          # #                     ) )
+          
+          # # points_on_proc,cells=get_pts_and_cells(msh,msh.geometry.x)
+          # # duhdx = grad_uh.eval(points_on_proc,cells)
           
           
 
-          # all_dofs= 
-          # dofs_to_move = all_dofs[~np.isin(alldofs,moved_dofs)]
+          # # all_dofs= 
+          # # dofs_to_move = all_dofs[~np.isin(alldofs,moved_dofs)]
 
-          # duhdx = duhdx[:,:,dofs_to_move]
+          # # duhdx = duhdx[:,:,dofs_to_move]
 
           return new_mesh_coords,duhdx
 
      if plot_result is True:
-          msh.geometry.x[:,0:2] += deformation_array
+          msh.geometry.x[nodes_to_move,0:2] += deformation_array[nodes_to_move,:]
 
           #plot mesh
           pyvista.global_theme.background = [255, 255, 255, 255]
