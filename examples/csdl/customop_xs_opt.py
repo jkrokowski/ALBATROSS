@@ -136,9 +136,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
 
 
     def evaluate(self, inputs: csdl.VariableGroup):
-        
+        #boundary node position inputs:
         self.declare_input('xy',inputs.xy)
-        # self.declare_input('xy_prev',inputs.xy)
 
         # construct output of the model
         output = csdl.VariableGroup()
@@ -156,9 +155,6 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         
         # displacement = input_vals['xy']-input_vals['xy_prev']
         displacement = input_vals['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
-        
-        # #update boundary nodes:
-        # self.domain.geometry.x[self.boundary_nodes,0:2]=input_vals['xy']
         
         xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
                                                     self.boundary_nodes,
@@ -201,8 +197,8 @@ points = [[-W/2,-H/2],[W/2, H/2]]
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
 
-radius = 1
-num_el = 20 #number of elements through wall thickness
+# radius = 1
+# num_el = 40 #number of elements through wall thickness
 
 # domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 all_nodes= locate_entities(domain,0,lambda x: np.ones_like(x[0]))
@@ -212,7 +208,7 @@ interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
 #order the boundary using a nearest neighbor search:
 ordering = order_boundary_nodes(domain.geometry.x[boundary_nodes,0:2])
 ordered_vertices = boundary_nodes[ordering]
-ordering_inverse_mapping = np.argsort(ordering)
+inverse_ordering = np.argsort(ordering)
 
 xy=domain.geometry.x[boundary_nodes,0:2]
 xy_interior = domain.geometry.x[interior_nodes,0:2]
@@ -225,22 +221,28 @@ inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,nam
 
 xy = inputs.xy
 xy_interior = inputs.xy_interior
-ordered_boundary = xy[list(ordering)]
-ordered_boundary.name = 'ordered boundary'
+# ordered_boundary = xy[list(ordering)]
+# ordered_boundary.name = 'ordered boundary'
 # inputs.xy.set_as_design_variable(scaler=40)
 # displacement = inputs.xy - inputs.xy_prev
 
 #CONSTRUCT A BOUNDARY B-SPLINE
-num_parametric = 30
+num_parametric = 20
 boundary_spline_space = lfs.BSplineSpace(1,(3,),(num_parametric,))
-inputs.parametric_coords = csdl.Variable(value=np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0])]),shape=(boundary_nodes.shape[0],1),name='parametric_coords')
-parametric_coords = inputs.parametric_coords
+# inputs.parametric_coords = csdl.Variable(value=np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0])]),shape=(boundary_nodes.shape[0],1),name='parametric_coords')
+# parametric_coords = inputs.parametric_coords
+parametric_coords = np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0])])
 # right_boundary=np.sort(xy.value[np.where(xy.value[:,0]==0.5)],axis=0)
 # right_boundary=xy.value[np.where(xy.value[:,0]==0.5)]
 # boundary_spline_coeffs = boundary_spline_space.fit(values = right_boundary,parametric_coordinates= np.linspace(0,1,right_boundary.shape[0]))
-boundary_spline_coeffs = boundary_spline_space.fit(values = ordered_boundary,parametric_coordinates= parametric_coords.value)
-boundary_spline_coeffs.name = 'boundary spline coeffs'
-boundary_spline = lfs.Function(boundary_spline_space,boundary_spline_coeffs,name='boundary_spline')
+# boundary_spline_coeffs = boundary_spline_space.fit(values = ordered_boundary,parametric_coordinates= parametric_coords)
+boundary_spline_coeffs = boundary_spline_space.fit(values = xy[list(ordering)],parametric_coordinates= parametric_coords)
+coeffs = boundary_spline_coeffs.value
+# boundary_spline_coeffs.name = 'boundary spline coeffs'
+inputs.coeffs = csdl.Variable(value=coeffs)
+inputs.coeffs.name = 'boundary spline coeffs'
+inputs.coeffs.set_as_design_variable(scaler=10)
+boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
 # evaluated_points = boundary_spline.evaluate(parametric_coords,plot=True)
 
 #TODO: increase knot multiplicity or use a composite spline for the boundary
@@ -252,13 +254,20 @@ boundary_spline = lfs.Function(boundary_spline_space,boundary_spline_coeffs,name
 # evaluated_points2 = boundary_spline2.evaluate(np.array([(i,) for i in np.linspace(0,1,xy.shape[0])]),plot=True)
 
 #set b-spline coefficients (ctrl points) as the design variables
-inputs.coeffs = boundary_spline.coefficients
-coeffs = inputs.coeffs
-inputs.coeffs.set_as_design_variable(scaler=1)
+# inputs.coeffs = boundary_spline.coefficients
+# coeffs = inputs.coeffs
+
 # inputs.parametric_coords = csdl.Variable(value=parametric_coords,shape=parametric_coords.shape,name='parametric_coords')
 
 #use the boundary spline to update the mesh coordinates:
-xy = boundary_spline.evaluate(parametric_coords.value)[list(ordering_inverse_mapping)]
+# inputs.ordered_boundary = boundary_spline.evaluate(parametric_coords)
+# inputs.xy = inputs.ordered_boundary[list(inverse_ordering)]
+# boundary_spline.coefficients = boundary_spline_coeffs
+inputs.xy = boundary_spline.evaluate(parametric_coords)[list(inverse_ordering)]
+
+# boundaryUpdate = UpdateBoundary(boundary_spline,ordering,inverse_ordering,domain,boundary_nodes)
+# outputs_bu = boundaryUpdate.evaluate(inputs)
+# inputs.xy = outputs_bu.xy
 
 meshSmoothing = EllipticSmoothing(domain,boundary_nodes,interior_nodes)
 
@@ -284,7 +293,7 @@ A = outputs.A
 A.name = 'area'
 
 with csdl.namespace('Objective'):
-    f = -K[5,5]+0.1*K[0,0]
+    f = -K[5,5]+.1*K[0,0]
     f.add_name('max_bend,min_area')
     f.set_as_objective()
 
@@ -306,11 +315,11 @@ print('current K:      ', sim[K])
 # dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=0.002)[K,xy]
 dKdx = sim.compute_totals(K,xy)[K,xy]
 print('Derivatives w.r.t. b-spline ctrl pts')
-dKdcoeffs = sim.compute_totals(K,coeffs)
+dKdcoeffs = sim.compute_totals(K,inputs.coeffs)
 # diff=dKdx-dKdx_FD
 
 # print('dKdx(FD):  ', dKdx_FD, '\n')
-print('dKdx:  ', dKdx, '\n')
+# print('dKdx:  ', dKdx, '\n')
 # print('diff:', diff)
 
 # print('norms:')
