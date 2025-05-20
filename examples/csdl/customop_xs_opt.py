@@ -1,7 +1,24 @@
 import csdl_alpha as csdl
 import ALBATROSS
 import numpy as np
-from dolfinx.mesh import locate_entities_boundary,locate_entities
+from dolfinx.mesh import locate_entities_boundary,locate_entities,exterior_facet_indices
+import lsdo_function_spaces as lfs
+from scipy.spatial import cKDTree
+
+def order_boundary_nodes(coords):
+    N = len(coords)
+    ordered = [0]  # start with first node
+    used = set(ordered)
+
+    tree = cKDTree(coords)
+    for _ in range(1, N):
+        last = coords[ordered[-1]]
+        dists, idxs = tree.query(last, k=N)
+        next_idx = next(i for i in idxs if i not in used)
+        ordered.append(next_idx)
+        used.add(next_idx)
+
+    return np.array(ordered)
 
 # custom cross-sectional model
 class CrossSection(csdl.CustomExplicitOperation):
@@ -119,6 +136,7 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
 
 
     def evaluate(self, inputs: csdl.VariableGroup):
+        
         self.declare_input('xy',inputs.xy)
         # self.declare_input('xy_prev',inputs.xy)
 
@@ -130,6 +148,7 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         
         #save output
         output.xy_interior = xy_interior
+        output.xy_interior.name = 'xy_interior, output'
 
         return output
 
@@ -145,7 +164,7 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
                                                     self.boundary_nodes,
                                                     displacement,
                                                     self.interior_nodes,
-                                                    mode='hyper_elas',
+                                                    mode='lin_elas',
                                                     plot_result=True)
 
         output_vals['xy_interior']=xy_interior
@@ -164,7 +183,7 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
                                                         self.interior_nodes,
                                                         plot_result=True,
                                                         get_deriv=True,
-                                                        mode='hyper_elas')
+                                                        mode='lin_elas')
 
         # derivatives['xy_interior','xy'] = np.ones_like(xy_interior)
         derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
@@ -175,7 +194,7 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 20
+N = 40
 W = 1
 H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -190,6 +209,11 @@ all_nodes= locate_entities(domain,0,lambda x: np.ones_like(x[0]))
 boundary_nodes = locate_entities_boundary(domain,0,lambda x: np.ones_like(x[0]))
 interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
 
+#order the boundary using a nearest neighbor search:
+ordering = order_boundary_nodes(domain.geometry.x[boundary_nodes,0:2])
+ordered_vertices = boundary_nodes[ordering]
+ordering_inverse_mapping = np.argsort(ordering)
+
 xy=domain.geometry.x[boundary_nodes,0:2]
 xy_interior = domain.geometry.x[interior_nodes,0:2]
 
@@ -201,17 +225,40 @@ inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,nam
 
 xy = inputs.xy
 xy_interior = inputs.xy_interior
-
-inputs.xy.set_as_design_variable(scaler=40)
-
+ordered_boundary = xy[list(ordering)]
+ordered_boundary.name = 'ordered boundary'
+# inputs.xy.set_as_design_variable(scaler=40)
 # displacement = inputs.xy - inputs.xy_prev
 
-#update interior node locations based on boundary motion 
-# (uses elliptic smoothing based on Poisson problem)
-# domain.geometry.x[interior_nodes,0:2] = ALBATROSS.mesh.smooth_mesh(domain,
-#                                                         boundary_nodes,
-#                                                         displacement,
-#                                                         interior_nodes)
+#CONSTRUCT A BOUNDARY B-SPLINE
+num_parametric = 30
+boundary_spline_space = lfs.BSplineSpace(1,(3,),(num_parametric,))
+inputs.parametric_coords = csdl.Variable(value=np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0])]),shape=(boundary_nodes.shape[0],1),name='parametric_coords')
+parametric_coords = inputs.parametric_coords
+# right_boundary=np.sort(xy.value[np.where(xy.value[:,0]==0.5)],axis=0)
+# right_boundary=xy.value[np.where(xy.value[:,0]==0.5)]
+# boundary_spline_coeffs = boundary_spline_space.fit(values = right_boundary,parametric_coordinates= np.linspace(0,1,right_boundary.shape[0]))
+boundary_spline_coeffs = boundary_spline_space.fit(values = ordered_boundary,parametric_coordinates= parametric_coords.value)
+boundary_spline_coeffs.name = 'boundary spline coeffs'
+boundary_spline = lfs.Function(boundary_spline_space,boundary_spline_coeffs,name='boundary_spline')
+# evaluated_points = boundary_spline.evaluate(parametric_coords,plot=True)
+
+#TODO: increase knot multiplicity or use a composite spline for the boundary
+#TODO: fit a closed curve (e.g. duplicated end point)
+# knots2 = boundary_spline_space.knots
+# boundary_spline_space2 = lfs.BSplineSpace(1,(3,),(num_parametric+6,),knots=np.insert(knots2,[10,10,10,20,20,20],[knots2[10],knots2[10],knots2[10],knots2[20],knots2[20],knots2[20]]))
+# boundary_spline_coeffs2 = boundary_spline_space2.fit(values = ordered_coords,parametric_coordinates= np.linspace(0,1,boundary_nodes.shape[0]))
+# boundary_spline2 = lfs.Function(boundary_spline_space2,boundary_spline_coeffs2)
+# evaluated_points2 = boundary_spline2.evaluate(np.array([(i,) for i in np.linspace(0,1,xy.shape[0])]),plot=True)
+
+#set b-spline coefficients (ctrl points) as the design variables
+inputs.coeffs = boundary_spline.coefficients
+coeffs = inputs.coeffs
+inputs.coeffs.set_as_design_variable(scaler=1)
+# inputs.parametric_coords = csdl.Variable(value=parametric_coords,shape=parametric_coords.shape,name='parametric_coords')
+
+#use the boundary spline to update the mesh coordinates:
+xy = boundary_spline.evaluate(parametric_coords.value)[list(ordering_inverse_mapping)]
 
 meshSmoothing = EllipticSmoothing(domain,boundary_nodes,interior_nodes)
 
@@ -232,11 +279,13 @@ crosssection = CrossSection(domain=domain,
 #only call one time
 outputs = crosssection.evaluate(inputs)
 K = outputs.K
+K.name = 'stiffness_mat'
 A = outputs.A
+A.name = 'area'
 
 with csdl.namespace('Objective'):
-    f = -K[5,5]
-    f.add_name('axial stiffness')
+    f = -K[5,5]+0.1*K[0,0]
+    f.add_name('max_bend,min_area')
     f.set_as_objective()
 
 with csdl.namespace('Area constraint'):
@@ -256,6 +305,8 @@ print('current K:      ', sim[K])
 # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
 # dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=0.002)[K,xy]
 dKdx = sim.compute_totals(K,xy)[K,xy]
+print('Derivatives w.r.t. b-spline ctrl pts')
+dKdcoeffs = sim.compute_totals(K,coeffs)
 # diff=dKdx-dKdx_FD
 
 # print('dKdx(FD):  ', dKdx_FD, '\n')
