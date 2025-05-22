@@ -10,7 +10,7 @@ from ALBATROSS.utils import gmsh_to_xdmf,get_pts_and_cells
 import pyvista
 from petsc4py import PETSc
 
-def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False,mode='poisson'):
+def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False,mode='poisson',step=0):
      '''Function to apply elliptic smoothing to a mesh
      given a prescribed boundary motion
      
@@ -41,9 +41,6 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
 
      u_bc.vector.array[moved_dofs] += displacement.T.flatten()
      bc = fem.dirichletbc(u_bc,moved_nodes)
-     
-     # msh.geometry.x[moved_nodes,0:2] += displacement
-
      bcs = [bc]
           
      #TODO: need to account for case where not all exterior nodes are moved
@@ -64,7 +61,7 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
 
           # E = Constant(domain,1e5)
           # nu = Constant(domain,0.3)
-          E = 1e5
+          E = 1
           nu = 0.4
           model = "plane_stress"
 
@@ -113,6 +110,14 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
      deformation_array = uh.x.array.reshape((-1, msh.geometry.dim))
      new_mesh_coords = msh.geometry.x[nodes_to_move, 0:2] + deformation_array[nodes_to_move,0:2]
      
+     # msh.geometry.x[nodes_to_move,0:2] = new_mesh_coords
+     # msh.geometry.x[moved_nodes,0:2] += displacement
+     
+     if get_deriv is not True:
+          with XDMFFile(MPI.COMM_WORLD, "output/square_mesh_opt.xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
+               # xdmf.write_mesh(msh)
+               xdmf.write_function(uh,step)
+
      if get_deriv is True:
           #TODO: compute only on boundary nodes (currenly computed, then restricted)
           #TODO: compute entries other than 0,0
@@ -249,7 +254,7 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
           # # dofs_to_move = all_dofs[~np.isin(alldofs,moved_dofs)]
 
           # # duhdx = duhdx[:,:,dofs_to_move]
-
+          
           return new_mesh_coords,duhdx
 
      if plot_result is True:

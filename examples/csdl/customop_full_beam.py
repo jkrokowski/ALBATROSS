@@ -43,7 +43,7 @@ xy = inputs.xy
 xy_interior = inputs.xy_interior
 
 #CONSTRUCT A BOUNDARY B-SPLINE (with a closed, uniform knot vector)
-num_parametric = 16
+num_parametric = 20
 bspline_degree=3
 boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
 parametric_coords = np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0]+1)])
@@ -65,7 +65,7 @@ coeffs = boundary_spline_coeffs.value
 # boundary_spline_coeffs.name = 'boundary spline coeffs'
 inputs.coeffs = csdl.Variable(value=coeffs)
 inputs.coeffs.name = 'boundary spline coeffs'
-inputs.coeffs.set_as_design_variable(lower=-1,upper=1)
+inputs.coeffs.set_as_design_variable(scaler=100)
 boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
 # evaluated_points = boundary_spline.evaluate(parametric_coords,plot=True)
 
@@ -94,36 +94,37 @@ A = outputs.A
 A.name = 'area'
 
 with csdl.namespace('Objective'):
-    f = -K[5,5]
-    f.add_name('max_bending_stiffness')
+    f = -K[5,5]+.1*K[0,0]
+    f.add_name('max_bend,min_area')
     f.set_as_objective()
 
 with csdl.namespace('Area constraint'):
-    g1 = K[0,0]
+    g1 = A
     g1.add_name('g1')
-    g1.set_as_constraint(upper=125,lower=75) # constraint
+    g1.set_as_constraint(upper=1.2,lower=0.8) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
 
+print(K.value)
+print(A.value)
+
 sim = csdl.experimental.PySimulator(recorder)
 
-# print('current K:      ', sim[K])
-# # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
-# # dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=0.002)[K,xy]
-# dKdx = sim.compute_totals(K,xy)[K,xy]
-# print('Derivatives w.r.t. b-spline ctrl pts')
-# dKdcoeffs = sim.compute_totals(K,inputs.coeffs)
+print('current K:      ', sim[K])
+# print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
+# dKdx_FD = sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=0.002)[K,xy]
+dKdx = sim.compute_totals(K,xy)[K,xy]
+print('Derivatives w.r.t. b-spline ctrl pts')
+dKdcoeffs = sim.compute_totals(K,inputs.coeffs)
 
 from modopt import CSDLAlphaProblem
-# from modopt import SLSQP
-from modopt import PySLSQP
+from modopt import SLSQP
 
 # Instantiate your problem using the csdl Simulator object and name your problem
 prob = CSDLAlphaProblem(problem_name='bending_stiffness_max',simulator=sim)
 
-# optimizer = SLSQP(prob,recording=True,solver_options={'ftol':1e-8, 'maxiter':20})
-optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':20,'acc':1e-6,'iprint':2})
+optimizer = SLSQP(prob,recording=True,solver_options={'ftol':1e-8, 'maxiter':20})
 
 # Check first derivatives at the initial guess, if needed
 # optimizer.check_first_derivatives(prob.x0,step=0.01)

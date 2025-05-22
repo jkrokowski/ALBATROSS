@@ -479,7 +479,7 @@ class CrossSection:
             #USING PSEUDOINVERSE
             mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
 
-            print(f"condition number of basis transformation:{np.linalg.cond(self.mat)}")
+            # print(f"condition number of basis transformation:{np.linalg.cond(self.mat)}")
             self.sols_decoup = self.sparse_sols.dot(mat_pinv).toarray()
             # self.sols_decoup=mat@self.sols
 
@@ -1118,10 +1118,10 @@ class CrossSection:
         c_const=Constant(self.msh,PETSc.ScalarType(c))
         ubar = dot(self.N_bar,c_const)
         uhat = dot(self.N_hat,c_const)
-        utilde = dot(self.N_tilde,c_const)
-        ubreve = dot(self.N_breve,c_const)
+        # utilde = dot(self.N_tilde,c_const)
+        # ubreve = dot(self.N_breve,c_const)
 
-        stress = self.warping2stress(ubar,uhat,utilde,ubreve)
+        stress = self.warping2stress(ubar,uhat)
         return stress
 
     def get_von_mises_stress(self,stress):
