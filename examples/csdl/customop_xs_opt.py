@@ -11,7 +11,7 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 40
+N = 30
 W = 1
 H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -63,9 +63,9 @@ coeffs = boundary_spline_coeffs.value
 # periodic_boundary_spline_coeffs = periodic_bspline_space.fit(values = xy[list(ordering)],parametric_coordinates= parametric_coords2)
 
 # boundary_spline_coeffs.name = 'boundary spline coeffs'
-inputs.coeffs = csdl.Variable(value=coeffs)
+inputs.coeffs = csdl.Variable(value=coeffs*2)
 inputs.coeffs.name = 'boundary spline coeffs'
-inputs.coeffs.set_as_design_variable(lower=-1,upper=1)
+inputs.coeffs.set_as_design_variable(lower=-2,upper=2,scaler=2)
 boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
 # evaluated_points = boundary_spline.evaluate(parametric_coords,plot=True)
 
@@ -126,7 +126,7 @@ prob = CSDLAlphaProblem(problem_name='bending_stiffness_max',simulator=sim)
 optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':20,'acc':1e-6,'iprint':2})
 
 # Check first derivatives at the initial guess, if needed
-# optimizer.check_first_derivatives(prob.x0,step=0.01)
+optimizer.check_first_derivatives(prob.x0,step=0.0001)
 
 # Solve your optimization problem
 optimizer.solve()

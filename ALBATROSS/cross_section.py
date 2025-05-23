@@ -226,7 +226,7 @@ class CrossSection:
         Ry = as_matrix([[cos(beta), 0,sin(beta)],
                         [0,         1,        0],
                         [-sin(beta),0,cos(beta)]])
-        #rotation about Z-axis
+        #rotation about Z-axisself.d
         Rz = as_matrix([[cos(gamma),-sin(gamma),0],
                         [sin(gamma),cos(gamma), 0],
                         [0,         0,          1]])
@@ -1097,8 +1097,8 @@ class CrossSection:
                         [dubzdx,dubzdy,dubzdz]])
         
         #ensure that strains are symmetric
-        eps = 0.5 * (gradu + gradu.T)
-        # eps = gradu
+        # eps = 0.5 * (gradu + gradu.T)
+        eps = gradu
 
         return eps 
 
