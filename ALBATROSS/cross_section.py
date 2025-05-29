@@ -11,7 +11,7 @@ from petsc4py import PETSc
 from dolfinx.mesh import locate_entities_boundary
 from dolfinx import geometry # import compute_collisions_trees
 from scipy.sparse.linalg import inv,lsqr,spsolve
-import sparseqr
+# import sparseqr
 from scipy.sparse import csr_matrix
 import ufl 
 import pyvista
@@ -507,6 +507,8 @@ class CrossSection:
         #populate elastic solution modes to elastic solution mode function
         self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals
         self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals
+
+    # def 
 
     def _compute_xs_stiffness_matrix(self):             
         #unpacking values
@@ -1248,6 +1250,7 @@ class CrossSection:
             c[i,:] = 1
 
             warping_sol = elastic_sols[:len(self.ubar_vtx_to_dof):,:]@c
+
             solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
             grids[i][name]= solution_mode/np.max(np.linalg.norm(solution_mode,axis=1))
             print(f"maximum magnitude for mode: {np.max(np.linalg.norm(solution_mode,axis=1))}")

@@ -8,7 +8,7 @@ stress solution field to be obtained
 
 '''
 
-from dolfinx.fem import Function,functionspace,create_nonmatching_meshes_interpolation_data
+from dolfinx.fem import Function,functionspace,create_interpolation_data
 from ufl import sin,cos
 from ALBATROSS.cross_section import CrossSectionAnalytical
 from ALBATROSS.axial import Axial
@@ -129,7 +129,8 @@ class Beam(Axial):
         #TODO: need to update based on this syntax change: 
         # https://fenicsproject.discourse.group/t/segv-fault-when-interpolating-function-onto-different-mesh/13593
         # https://github.com/FEniCS/dolfinx/blob/v0.7.3/python/test/unit/fem/test_interpolation.py#L720-L765 
-        self.o.interpolate(self.o2,nmm_interpolation_data=create_nonmatching_meshes_interpolation_data(
+        #TODO: nm_interpolation needs to be fixed here
+        self.o.interpolate(self.o2,nmm_interpolation_data=create_interpolation_data(
             self.o.function_space.mesh,
             self.o.function_space.element,
             self.o2.function_space.mesh, padding=1e-14))
@@ -189,14 +190,16 @@ class Beam(Axial):
 
         #interpolate beam constitutive matrix
         self.k = Function(self.T_66)
-        self.k.interpolate(k2,nmm_interpolation_data=create_nonmatching_meshes_interpolation_data(
+        #TODO: nm_interpolation needs to be fixed here
+        self.k.interpolate(k2,nmm_interpolation_data=create_interpolation_data(
             self.k.function_space.mesh,
             self.k.function_space.element,
             k2.function_space.mesh, padding=1e-14))
 
         #interpolate linear density area
         self.linear_density = Function(self.S)
-        self.linear_density.interpolate(linear_density2,nmm_interpolation_data=create_nonmatching_meshes_interpolation_data(
+        #TODO: nm_interpolation needs to be fixed here
+        self.linear_density.interpolate(linear_density2,nmm_interpolation_data=create_interpolation_data(
             self.k.function_space.mesh,
             self.k.function_space.element,
             linear_density2.function_space.mesh, padding=1e-14))

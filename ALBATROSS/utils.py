@@ -223,3 +223,7 @@ def gmsh_to_xdmf(mesh, cell_type, prune_z=False):
      points = mesh.points[:,:2] if prune_z else mesh.points
      out_mesh = meshio.Mesh(points=points, cells={cell_type: cells}, cell_data={"name_to_read":[cell_data]})
      return out_mesh
+
+def xy2D_to_yz3D(mesh):
+     #TODO: implement this guy
+     return
