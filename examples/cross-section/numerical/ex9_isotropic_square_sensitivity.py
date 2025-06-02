@@ -3,7 +3,7 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 20 #number of quad elements per side
+N = 10 #number of quad elements per side
 W = 1 #square height  
 H = 1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
@@ -19,7 +19,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
-# squareXS.plot_mesh()
+squareXS.plot_mesh()
 
 #compute the stiffness matrix
 squareXS.get_xs_stiffness_matrix()

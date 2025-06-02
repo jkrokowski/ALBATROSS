@@ -11,7 +11,7 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 30
+N = 10
 W = 1
 H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -126,7 +126,7 @@ prob = CSDLAlphaProblem(problem_name='bending_stiffness_max',simulator=sim)
 optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':20,'acc':1e-6,'iprint':2})
 
 # Check first derivatives at the initial guess, if needed
-optimizer.check_first_derivatives(prob.x0,step=0.0001)
+optimizer.check_first_derivatives(prob.x0,step=0.001)
 
 # Solve your optimization problem
 optimizer.solve()

@@ -3,9 +3,9 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 20 #number of quad elements per side
+N = 10 #number of quad elements per side
 W = 1 #square height  
-H = 1 #square depth
+H = 2 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
@@ -24,6 +24,14 @@ squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 #compute the stiffness matrix
 squareXS.get_xs_stiffness_matrix()
 
+for i in range(6):
+    print(f"WARPING FUNCTION {i}")
+    print(f"ubar: {squareXS.sols_decoup[squareXS.ubar_vtx_to_dof,i]}")
+    print(f"ubar norm: {np.linalg.norm(squareXS.sols_decoup[squareXS.ubar_vtx_to_dof,i])}")
+    print(f"uhat: {squareXS.sols_decoup[squareXS.uhat_vtx_to_dof,i]}")
+    print(f"uhat norm: {np.linalg.norm(squareXS.sols_decoup[squareXS.uhat_vtx_to_dof,i])}")
+    print('====================')
+    
 #show the warping functions
 squareXS.plot_warping_fxns()
 

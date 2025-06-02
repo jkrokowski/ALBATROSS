@@ -11,7 +11,7 @@ from petsc4py import PETSc
 from dolfinx.mesh import locate_entities_boundary
 from dolfinx import geometry # import compute_collisions_trees
 from scipy.sparse.linalg import inv,lsqr,spsolve
-# import sparseqr
+import sparseqr
 from scipy.sparse import csr_matrix
 import ufl 
 import pyvista
@@ -883,139 +883,15 @@ class CrossSection:
         #boundary dofs ([:,:,self.boundary_dofs])
         self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         
-        # #TODO: need to confirm that these einsums are computing what we want them to
-        # #ARCHIVAL:
-        # self.dK1invT = -np.einsum('ijk,jl->ilk',
-        #                      self.K1inv.T @ self.dK1dx.transpose(1,0,2),
-        #                        self.K1inv.T @ self.K2 @ self.K1inv ) 
-        # #second term of dSdx
-        # self.dK2 = np.einsum('ijk,jl->ilk',
-        #                 self.K1inv.T@self.dK2dx,
-        #                 self.K1inv)
-        
-        # #third term of dSdx
-        # self.dK1inv = -np.einsum('ijk,jl->ilk',
-        #                     self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
-        #                       self.K1inv)
-        # #END ARCHIVAL
+        #TODO: can simplify this
+        #compact einsums:
+        term1 = np.einsum("ijm,ik,kl->jlm", self.dK1dx, self.K2inv, self.K1)
+        term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.dK2dx,self.K2inv,self.K1)
+        term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.dK1dx)
 
-        #use chain rule for derivative of flexibility matrix dSdx:
-        #first term of dSdx
-
-        dK1invT_dK1dx= np.einsum('ij,kjl->ikl',
-                                 self.K1inv.T,
-                                   self.dK1dx)
-        self.dK1invT = -np.einsum('ijk,jl->ilk',
-                             dK1invT_dK1dx,
-                               self.S ) 
-        #second term of dSdx
-        K1invT_dK2dx = np.einsum('ij,jkl->ikl',
-                        self.K1inv.T,
-                        self.dK2dx)
-        self.dK2 = np.einsum('ijk,jl->ilk',
-                        K1invT_dK2dx,
-                        self.K1inv)
-        
-        #third term of dSdx
-        S_dK1dx = np.einsum('ij,jkl->ikl',
-                            self.S,
-                            self.dK1dx)
-        self.dK1inv = -np.einsum('ijk,jl->ilk',
-                            S_dK1dx,
-                              self.K1inv)
-    
-        #add terms to get dSdx
-        self.dSdx = self.dK1invT + self.dK2 + self.dK1inv.transpose(1,0,2)
-        # self.dSdx = self.dK1inv.transpose(1,0,2) + self.dK2 + self.dK1inv
-        # self.dSdx = self.dK2 + 2*self.dK1inv
-        # self.dSdx = -self.dK2 
-        # self.dSdx = self.dK2 
-        # self.dSdx = self.dK1inv
-        # self.dSdx = self.dK1invT
-        # self.dSdx = self.dK1dx
-        # self.dSdx = self.dK2dx
-        # self.dSdx = -self.dK1inv-self.dK1invT.transpose(1,0,2)
-        # self.dSdx = 2*self.dK1invT
-
-        # #APPROACH TO LIMIT MATRIX MULTIPLICATIONS:
-        # #use chain rule for derivative of flexibility matrix dSdx:
-        # #first term of dSdx
-        # # self.dK1invT = -np.einsum('ijk,ij->ijk',
-        # #                       self.dK1dx.transpose(1,0,2),
-        # #                        self.K1inv.T @ self.K2 ) 
-        # # self.dK1invT = -np.einsum('ijk,ij->ijk',
-        # #                       self.dK1dx.transpose(1,0,2),
-        # #                        self.K1inv.T )
-        # # #second term of dSdx
-        # # self.dK2 = np.einsum('ijk,ij->ijk',
-        # #                 self.K1inv.T@self.dK2dx,
-        # #                 self.K1inv)
-        
-        # #third term of dSdx
-        # # self.dK1inv =  self.K2 @ self.K1inv @ self.dK1dx
-
-        # self.dK1_term = self.K1inv @ self.dK1dx
-
-        # self.K2dK1 = self.K2 @self.dK1_term
-        # self.dK1TK2 = np.einsum('ijk,ij->ijk',
-        #                       self.dK1_term.transpose(1,0,2),
-        #                        self.K2 )
-
-        # #add terms to get dSdx
-        # # self.dSdx = np.einsum('ijk,ij->ijk',
-        # #                       self.K1inv.T @ (- self.dK1invT + self.dK2dx - self.dK1inv ),
-        # #                         self.K1inv)
-        # # self.dSdx = np.einsum('ijk,ij->ijk',
-        # #                       self.K1inv.T @ (- self.dK1inv.transpose(1,0,2) + self.dK2dx - self.dK1inv ),
-        # #                         self.K1inv)
-        # self.dSdx = np.einsum('ijk,ij->ijk',
-        #                       self.K1inv.T @ (- self.dK1TK2 + self.dK2dx - self.K2dK1 ),
-        #                         self.K1inv)
-
-        #compute derivative of stiffness matrix (dKdx) from derivative of flexibility matrix (dSdx)
-        # self.dKdx = - np.einsum('ijk,ij->ijk',
-        #                         self.K @ self.dSdx,
-        #                         self.K)
-        K_dSdx = np.einsum('ij,jkl->ikl',
-                           self.K,
-                           self.dSdx)
-        # self.dKdx = - np.einsum('ijk,jl->ilk',
-        #                         K_dSdx,
-        #                         self.K)
-
-        #first term of dKdx
-        dK1dxK2invK1T = np.einsum('ijl,jk->ikl',
-                           self.dK1dx,
-                           self.K2inv@self.K1.T)
-
-        #second term of dKdx
-        K1K2invdK2dx = np.einsum('ij,jkl->ikl',
-                        self.K1@self.K2inv,
-                        self.dK2dx)
-        K1K2invdK2dxK2invK1T = np.einsum('ijk,jl->ilk',
-                        K1K2invdK2dx,
-                        self.K2inv@self.K1.T)
-        
-        #third term of dKdx
-        K1K3invdK1dxT = np.einsum('ij,kjl->ikl',
-                            self.K1@self.K2inv,
-                            self.dK1dx)
-        
-        #add terms to get dSdx
-        # self.dKdx = K1K2invdK2dxK2invK1T 
-        # self.dKdx = dK1dxK2invK1T + K1K3invdK1dxT
-        # self.dKdx = dK1dxK2invK1T + K1K2invdK2dxK2invK1T + K1K3invdK1dxT
-        # self.dKdx =  K1K3invdK1dxT
-        # self.dKdx = dK1dxK2invK1T + K1K2invdK2dxK2invK1T + K1K3invdK1dxT
-        
-        # self.dKdx = np.einsum('ijk,ji->ijk',
-        #                         self.K @ self.dK2dx,
-        #                         self.K)
-        self.dKdx = -np.einsum('ijk,ji->ijk',
-                                self.K @ self.dSdx,
-                                self.K)
-        # self.dKdx = self.dK2dx
-        
+        #full sensitivities
+        self.dKdx = term1 + term2 + term3 
+               
         #get map from vtx to dofs to restrict to boundary (this only works for CG1)
         self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
         indices_to=[]
@@ -1249,7 +1125,8 @@ class CrossSection:
             c = np.zeros((6,1))
             c[i,:] = 1
 
-            warping_sol = elastic_sols[:len(self.ubar_vtx_to_dof):,:]@c
+            # warping_sol = elastic_sols[:len(self.ubar_vtx_to_dof):,:]@c
+            warping_sol = elastic_sols[len(self.ubar_vtx_to_dof):,:]@c
 
             solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
             grids[i][name]= solution_mode/np.max(np.linalg.norm(solution_mode,axis=1))
