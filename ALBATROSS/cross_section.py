@@ -135,7 +135,7 @@ class CrossSection:
         #assemble matrix
         if self.verbose:
             print('Constructing Cross-Section System...')
-        self._construct_residual()
+        self._construct_residual(self.u)
 
         if self.verbose:
             print('Assembling System Matrix....')   
@@ -245,7 +245,7 @@ class CrossSection:
 
         self.theta.interpolate(orientation)
 
-    def _construct_residual(self,dx=None,return_residual=False):
+    def _construct_residual(self,u,dx=None,return_residual=False):
 
         #geometric dimension
         d = self.d
@@ -253,10 +253,15 @@ class CrossSection:
         i,j,k,l=self.i,self.j,self.k,self.l
         a,B = self.a,self.B
         #trial and test functions
-        ubar,uhat,utilde,ubreve=self.ubar,self.uhat,self.utilde,self.ubreve
+        ubar,uhat,utilde,ubreve=split(u)
         vbar,vhat,vtilde,vbreve=self.vbar,self.vhat,self.vtilde,self.vbreve
         #partial derivatives of trial and test functions
-        ubar_B,uhat_B,utilde_B,ubreve_B=self.ubar_B,self.uhat_B,self.utilde_B,self.ubreve_B
+        # ubar_B,uhat_B,utilde_B,ubreve_B=self.ubar_B,self.uhat_B,self.utilde_B,self.ubreve_B
+        #partial derivatives of displacement:
+        ubar_B = grad(ubar)
+        uhat_B = grad(uhat)
+        utilde_B = grad(utilde)
+        ubreve_B = grad(ubreve)
         vbar_a,vhat_a,vtilde_a,vbreve_a=self.vbar_a,self.vhat_a,self.vtilde_a,self.vbreve_a
 
         C = self.C
@@ -828,14 +833,14 @@ class CrossSection:
         #TODO: combine EB and TS sensitivities...
         args = self.K1_form[0][0].arguments()
         n = max(a.number() for a in args) if args else -1
-        du1 = Argument(self.VX,n+1)
-        n = max(a.number() for a in args) if args else -1
-        du2 = Argument(self.VX,n+1)
+        dX = Argument(self.VX,n+1)
+        # n = max(a.number() for a in args) if args else -1
+        # du2 = Argument(self.VX,n+1)
         # du = Argument(self.VX,0) #there are no arguments in any of these forms?
-        self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du1)
+        self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,dX)
                             for idx2 in range(6)] 
                                 for idx1 in range(6)]
-        self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du2)
+        self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,dX)
                             for idx2 in range(6)] 
                                 for idx1 in range(6)]
         # self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
