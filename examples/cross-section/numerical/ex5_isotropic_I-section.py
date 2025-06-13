@@ -4,11 +4,11 @@ import ALBATROSS
 import numpy as np
 
 #create mesh
-N = 5
-H = .15
-W= .1
-tf = 0.01
-tw = 0.01
+N = 3
+H = 1.25
+W= 1.0
+tf = 0.1
+tw = 0.1
 
 dims = [H,W,tf,tw]
 num_el = [N,N]#number of elements through each wall thickness

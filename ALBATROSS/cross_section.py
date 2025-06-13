@@ -411,6 +411,8 @@ class CrossSection:
         # get collapsed subspace and maps from subspaces to parent space 
         UBAR,self.ubar_vtx_to_dof = self.V.sub(0).collapse()
         UHAT,self.uhat_vtx_to_dof = self.V.sub(1).collapse()
+        _,self.utilde_vtx_to_dof = self.V.sub(2).collapse()
+        _,self.ubreve_vtx_to_dof = self.V.sub(3).collapse()
 
         #GET UBAR AND UHAT RELATED MODES
         ubar_modes = self.sols[self.ubar_vtx_to_dof,:]
@@ -487,6 +489,7 @@ class CrossSection:
             # print(f"condition number of basis transformation:{np.linalg.cond(self.mat)}")
             self.sols_decoup = self.sparse_sols.dot(mat_pinv).toarray()
             # self.sols_decoup=mat@self.sols
+            print()
 
 
     def _build_elastic_solution_modes(self):
