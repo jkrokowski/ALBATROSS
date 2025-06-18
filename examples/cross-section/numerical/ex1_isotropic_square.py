@@ -23,17 +23,9 @@ squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #compute the stiffness matrix
 squareXS.get_xs_stiffness_matrix()
-
-for i in range(6):
-    print(f"WARPING FUNCTION {i}")
-    print(f"ubar: {squareXS.sols_decoup[squareXS.ubar_vtx_to_dof,i]}")
-    print(f"ubar norm: {np.linalg.norm(squareXS.sols_decoup[squareXS.ubar_vtx_to_dof,i])}")
-    print(f"uhat: {squareXS.sols_decoup[squareXS.uhat_vtx_to_dof,i]}")
-    print(f"uhat norm: {np.linalg.norm(squareXS.sols_decoup[squareXS.uhat_vtx_to_dof,i])}")
-    print('====================')
     
 #show the warping functions
-squareXS.plot_warping_fxns()
+# squareXS.plot_warping_fxns()
 
 #plot the warping strains (calcuated from warping functions) 
 # for i in range(3):

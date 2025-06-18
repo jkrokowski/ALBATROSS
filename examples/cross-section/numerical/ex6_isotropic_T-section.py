@@ -28,7 +28,7 @@ TXS.plot_mesh()
 #compute the stiffness matrix
 TXS.get_xs_stiffness_matrix()
 
-TXS.plot_warping_fxns()
+# TXS.plot_warping_fxns()
 
 np.set_printoptions(precision=3)
 

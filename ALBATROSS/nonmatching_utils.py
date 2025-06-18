@@ -463,7 +463,7 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
 
     ct      = cpp.mesh.to_string(msh_0.topology.cell_type)
     element = basix.create_element(basix.finite_element.string_to_family(
-        "Lagrange", ct), basix.cell.string_to_type(ct), V_0.ufl_element().degree, basix.LagrangeVariant.equispaced)
+        "Lagrange", ct), basix.CellType[ct], V_0.ufl_element().degree, basix.LagrangeVariant.equispaced)
 
     x_ref = np.zeros((len(cells_), 2))
 

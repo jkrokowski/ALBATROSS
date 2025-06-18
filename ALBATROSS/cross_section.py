@@ -1,6 +1,6 @@
 from ufl import (Argument,derivative,dot,cross,Identity,sqrt,inner,tr,variable,
                  diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,
-                 Measure,as_tensor,indices,
+                 Measure,as_tensor,indices,as_vector,sym,
                  TrialFunction,TestFunction,split)
 from basix.ufl import element,mixed_element
 from dolfinx.fem import (Constant,Expression,assemble_scalar,form,Function,
@@ -11,11 +11,13 @@ from petsc4py import PETSc
 from dolfinx.mesh import locate_entities_boundary
 from dolfinx import geometry # import compute_collisions_trees
 from scipy.sparse.linalg import inv,lsqr,spsolve
-import sparseqr
+# import sparseqr
 from scipy.sparse import csr_matrix
 import ufl 
 import pyvista
 from dolfinx import plot
+from scifem import create_real_functionspace
+from dolfinx.cpp.la.petsc import get_local_vectors
 
 from ALBATROSS.material import getMatConstitutiveIsotropic
 from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,sparseify
@@ -31,7 +33,6 @@ default_scalar_type = PETSc.ScalarType
 #TODO: allow user to specify a point to find xs props about
 #TODO: provide a method to translate between different xs values?
 #TODO: update sensitivities plotting for higher order basis functions
-#TODO: sparse multiply for QR decomposition
 
 class CrossSection:
     def __init__(self, msh, materials ,celltags=None,verbose=False,degree=1):
@@ -135,56 +136,26 @@ class CrossSection:
         #assemble matrix
         if self.verbose:
             print('Constructing Cross-Section System...')
-        self._construct_residual(self.u)
+        self._construct_xs_form()
 
+        #construct the LHS blocks with the Lagrange Multipliers,
+        #   assemble LHS
+        #   set up RHS forms
         if self.verbose:
-            print('Assembling System Matrix....')   
-        self._assemble_system_matrix()
-
+            print('Constructing Constraints....')   
+        self._construct_KKT_forms()
+        
+        #set up KSP solver
         if self.verbose:
-            print('Computing non-trivial solutions....')
-        self._get_modes()
-
-        if self.verbose:
-            print('Orthogonalizing w.r.t. elastic modes...')
-        self._decouple_modes()
-        self._build_elastic_solution_modes()
+            print('Computing warping functions....')
+        self._set_up_solver()
+        self._solve_system()
         
         if self.verbose:
             print('Computing Beam Constitutive Matrix....')
         self._compute_xs_stiffness_matrix()
 
         print("DONE computing Beam Constitutive Matrix") 
-
-
-    def get_xs_stiffness_matrix_EB(self):
-        
-        #construct material constitutive tensor field
-        # self.constructConstitutiveField()
-
-        if self.verbose:
-            print('Constructing Cross-Section System...')
-        self._construct_residual()
-
-        if self.verbose:
-            print('Assembling System Matrix....')   
-        self._assemble_system_matrix()
-
-        if self.verbose:
-            print('Computing non-trivial solutions....')
-        self._get_modes()
-
-        if self.verbose:
-            print('Orthogonalizing w.r.t. elastic modes...')
-        self._decouple_modes()
-        self._build_elastic_solution_modes_EB()
-        
-        if self.verbose:
-            print('Computing Beam Constitutive Matrix....')
-        self._compute_xs_stiffness_matrix_EB()
-
-        print("DONE computing Beam Constitutive Matrix")  
-    
 
     def _set_up_fxnspace_and_fxns(self):
         # Construct Displacement Coefficient mixed function space
@@ -213,6 +184,17 @@ class CrossSection:
         self.vtilde_a = grad(self.vtilde)
         self.vbreve_a = grad(self.vbreve)
 
+        #construct lagrange multpliers
+        self.num_constraints=30
+        self.LM = create_real_functionspace(self.msh, value_shape=(self.num_constraints,))
+
+        #lagrange multipliers
+        self.lmbda = TrialFunction(self.LM)
+        self.dlmbda = TestFunction(self.LM)
+
+        #get maps from block vectors ---> warping function & lagrange multiplier vectors
+        self.maps = [(self.V.dofmap.index_map, self.V.dofmap.index_map_bs), (self.LM.dofmap.index_map, self.LM.dofmap.index_map_bs)]
+        
 
     def _apply_rotation(self,C,alpha,beta,gamma):
         #indices
@@ -245,8 +227,9 @@ class CrossSection:
 
         self.theta.interpolate(orientation)
 
-    def _construct_residual(self,u,dx=None,return_residual=False):
-
+    def _construct_xs_form(self,u=None,dx=None,return_form=False):
+        if u is None:
+            u=self.u
         #geometric dimension
         d = self.d
         #indices
@@ -333,190 +316,143 @@ class CrossSection:
         #     Tbreve += CiakB[i,a,k,B]*ubreve_B[k,B]*n[a]*ds 
 
         # equation 1,2,3
-        L1= 2*Ci1k1[i,k]*utilde[k]*vbar[i]*dx\
+        eq1= 2*Ci1k1[i,k]*utilde[k]*vbar[i]*dx\
             + Ci1kB[i,k,B]*uhat_B[k,B]*vbar[i]*dx \
             - Ciak1[i,a,k]*uhat[k]*vbar_a[i,a]*dx \
             - CiakB[i,a,k,B]*ubar_B[k,B]*vbar_a[i,a]*dx \
             # + Tbar
         
         # # equation 4,5,6
-        L2 = 6*Ci1k1[i,k]*ubreve[k]*vhat[i]*dx\
+        eq2 = 6*Ci1k1[i,k]*ubreve[k]*vhat[i]*dx\
             + 2*Ci1kB[i,k,B]*utilde_B[k,B]*vhat[i]*dx \
             - 2*Ciak1[i,a,k]*utilde[k]*vhat_a[i,a]*dx \
             - CiakB[i,a,k,B]*uhat_B[k,B]*vhat_a[i,a]*dx \
             # + That
 
         # equation 7,8,9
-        L3 = 3*Ci1kB[i,k,B]*ubreve_B[k,B]*vtilde[i]*dx \
+        eq3 = 3*Ci1kB[i,k,B]*ubreve_B[k,B]*vtilde[i]*dx \
             - 3*Ciak1[i,a,k]*ubreve[k]*vtilde_a[i,a]*dx \
             - CiakB[i,a,k,B]*utilde_B[k,B]*vtilde_a[i,a]*dx\
             # + Ttilde
 
         #equation 10,11,12
-        L4= -CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*dx\
+        eq4= -CiakB[i,a,k,B]*ubreve_B[k,B]*vbreve_a[i,a]*dx\
             # + Tbreve
         
         #construct residual
-        residual = L1+L2+L3+L4
+        a00 = eq1+eq2+eq3+eq4
 
-        if return_residual is False:
-            self.Residual = residual
+        if return_form is False:
+            self.a00 = a00
         else:
-            return residual
+            return a00
 
-    def _assemble_system_matrix(self,residual = None):
-        if residual is None:
-            self.system_mat = petsc.assemble_matrix(form(self.Residual))
-            self.system_mat.assemble()
-        else:
-            system_mat = petsc.assemble_matrix(form(residual))
-            system_mat.assemble()
-            return system_mat
-
-    def _get_modes(self):
+    def _construct_constraint_form(self,lmbda,u):
         
-        m,n1=self.system_mat.getSize()
-        if self.verbose:
-            print('Computing QR factorization')
-        Acsr = csr_matrix(self.system_mat.getValuesCSR()[::-1], shape=self.system_mat.size)
+        form = inner(lmbda, self.constraints(u)) * self.dx
         
-        #perform QR factorization and store as struct in householder form
-        QR= sparseqr.qr_factorize( Acsr.transpose() )
-
-        #build matrix of unit vectors for selecting last 12 columns
-        X = np.zeros((m,12))
-        for i in range(12):
-            X[m-1-i,11-i]=1
-
-        #perform matrix multiplication implicitly to construct orthogonal nullspace basis
-        self.sols = sparseqr.qmult(QR,X)
-        # Q,_ = np.linalg.qr(Acsr.transpose().toarray())
-        # self.sols  = Q[:,-12:]
-        self.sparse_sols = sparseify(self.sols,sparse_format='csc')
-        # self.sols = self.sparse_sols.toarray()
-
-    def _decouple_modes(self,basis_matrix_only=False):
-        #this is a change of basis operation from the standard R^12 basis to
-        #   the basis defined by the 6 rigid body modes and the 6 elastic modes
-        #
-        #the change of basis matrix can be easily computed by simply evaluating
-        #   the functions defining the rigid+elastic basis at all the dofs
-        x = self.x
-        dx = self.dx
-        C = self.C
-        #indices
-        i,j,k,l=self.i,self.j,self.k,self.l
-        a,B = self.a,self.B
-
-        # get collapsed subspace and maps from subspaces to parent space 
-        UBAR,self.ubar_vtx_to_dof = self.V.sub(0).collapse()
-        UHAT,self.uhat_vtx_to_dof = self.V.sub(1).collapse()
-        _,self.utilde_vtx_to_dof = self.V.sub(2).collapse()
-        _,self.ubreve_vtx_to_dof = self.V.sub(3).collapse()
-
-        #GET UBAR AND UHAT RELATED MODES
-        ubar_modes = self.sols[self.ubar_vtx_to_dof,:]
-        uhat_modes = self.sols[self.uhat_vtx_to_dof,:]
-
-        #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
-        ubar_mode = Function(UBAR)
-        uhat_mode = Function(UHAT)
-
-        #INITIALIZE DECOUPLING MATRIX (12X12)
-        self.mat = np.zeros((6,12))
-
-        #HERES THE NEW APPROACH:
-        #what we want is the set of warping functions Nbar and Nhat
-        # the other warping functions have no effect on the beam stiffness matrix or sensitivities
-        # so we'll first extract ubar and uhat
-        # then we'll use the gram-schmidt process to factor out the rigid body modes from ubar
-        # rigid body translation and displacement only affect ubar, no other warping function
-        # so... we can orthogonalize ubar and explicitly construct a reduced basis transformation matrix M_e
-        # that only considers the elastic modes, which we can decouple with a 6x6 matrix in the same manner as below
-                
-        #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
-        for mode in range(self.mat.shape[1]):
-            #construct function from mode
-            ubar_mode.vector.array = ubar_modes[:,mode]
-            uhat_mode.vector.array = uhat_modes[:,mode]
-          
-            #get stress from warping functions
-            sigma = self.warping2stress(ubar_mode,uhat_mode)
-
-            #relevant components of stress tensor
-            sigma11 = sigma[0,0]
-            sigma12 = sigma[1,0]
-            sigma13 = sigma[2,0]
-
-            #integrate stresses over cross-section at "root" of beam and construct xs load vector
-            P1 = assemble_scalar(form(sigma11*dx))
-            V2 = assemble_scalar(form(sigma12*dx))
-            V3 = assemble_scalar(form(sigma13*dx))
-            
-            T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
-            M2 = assemble_scalar(form((x[1])*(sigma11)*dx))          
-            M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))  
-            
-            # AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
-            self.mat[0,mode]=P1
-            self.mat[1,mode]=V2
-            self.mat[2,mode]=V3   
-
-            #AVERAGE MOMENTS (COMPUTED WITH UBAR AND UHAT)
-            self.mat[3,mode]=T1
-            self.mat[4,mode]=M2
-            self.mat[5,mode]=M3
-
-        if basis_matrix_only is False:
-            mat_sparse = sparseify(self.mat,sparse_format='csc')
-
-            # self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
-            # self.sols_decoup = self.sols@np.linalg.inv(mat)
-            # self.sols_decoup = self.sols@self.mat.T
-            # ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
-            # sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
-            # # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
-            # self.sols_decoup = sparse_sols.dot(mat_sparse.T).toarray()
-
-            ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
-            # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
-            # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())[ubar_uhat_dofs,:]
-            # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())
-
-            #USING PSEUDOINVERSE
-            mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
-
-            # print(f"condition number of basis transformation:{np.linalg.cond(self.mat)}")
-            self.sols_decoup = self.sparse_sols.dot(mat_pinv).toarray()
-            # self.sols_decoup=mat@self.sols
-            print()
-
-
-    def _build_elastic_solution_modes(self):
-        #Initialize a tensor element and mixed tensor function space 
-        # for the elastic solution modes
-        Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,6))
-        self.N_space = functionspace(self.msh,mixed_element(2*[Ne]))
-        self.N = Function(self.N_space)
+        return form
+    
+    def _construct_KKT_forms(self,u=None,lmbda=None):
+        if u is None:
+            u = self.u
+        if lmbda is None:
+            lmbda = self.lmbda
+        #main system block
+        a00 = self.a00
         
-        #extract portions of elastic solution mode function related to each warping fxn
-        self.N_bar, self.N_hat = self.N.split() 
+        #construct constraint forms
+        a01 = self._construct_constraint_form(lmbda,self.v)
+        a10 = self._construct_constraint_form(self.dlmbda,u)
 
-        #get map of function dofs 
-        N_bar_vtx_to_dofs = self.N_space.sub(0).collapse()[1]
-        N_hat_vtx_to_dofs = self.N_space.sub(1).collapse()[1]
-        # N_tilde_vtx_to_dofs = self.N_space.sub(2).collapse()[1]
-        # N_breve_vtx_to_dofs = self.N_space.sub().collapse()[1]
+        a = [[a00, a01], [a10, None]]
 
-        #get separate elastic solution mode values
-        N_bar_vals = sparseify(self.sols_decoup[self.ubar_vtx_to_dof,:]).toarray().flatten()
-        N_hat_vals = sparseify(self.sols_decoup[self.uhat_vtx_to_dof,:]).toarray().flatten()
+        #construct RHS form vector with no body force (e.g. unchanged for each mode)
+        f0 = fem.Constant(self.msh, default_scalar_type([0.0]*12)) 
+        L0 = inner(self.v, f0) * self.dx
+
+        #assemble the RHS for mode i:
+        f1_list = []
+        for i in range(6):
+            f1_np = np.zeros((self.num_constraints,))
+            f1_np[i]= 1.0
+            f1_list.append(f1_np)
+        L1_list = [inner(fem.Constant(self.msh, default_scalar_type(f1)), self.dlmbda) * self.dx for f1 in f1_list]
+
+        #since we have different RHS's, return the list of L1's i
+        L = [L0,L1_list]
+
+        self.a_form = a
+        self.L_form = L
+
+        # return a,L
+    
+    def _set_up_solver(self):
+
+        #assemble matrix and vector
+        # pRk/puk is the system stiffness matrix 
+        self.pRkpuk_form = fem.form(self.a_form)
+        self.pRkpuk = fem.petsc.assemble_matrix_block(self.pRkpuk_form)
+        self.pRkpuk.assemble()
+
+        # set up the solver with the LHS
+        ksp = PETSc.KSP().create(self.msh.comm)
+        ksp.setOperators(self.pRkpuk)
+        ksp.setType("preonly")
+        pc = ksp.getPC()
+        pc.setType("lu")
+        pc.setFactorSolverType("mumps")
         
-        #populate elastic solution modes to elastic solution mode function
-        self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals
-        self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals
+        self.solver = ksp
 
-    # def 
+    def _solve_system(self):
+        self.solution_vectors= []
+        self.warping_functions = []
+        self.lmbdas = []
+        self.residuals = []
+        for idx_k,L1 in enumerate(self.L_form[1]):
+            #construct RHS form blocks
+            L0 = self.L_form[0]
+            L = [L0, L1]
+            L_compiled = fem.form(L)
+
+            bcs = []
+            b = fem.petsc.assemble_vector_block(L_compiled, self.pRkpuk_form, bcs=bcs)
+            xh = fem.petsc.create_vector_block(L_compiled)
+
+            #solve the linear systesm
+            self.solver.solve(b, xh)
+            xh.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+
+            #populate the warping function and the lagrange multiplier vectors
+            uh = fem.Function(self.V, name="u"+str(idx_k))
+            lmbdah = fem.Function(self.LM,name="lmbda"+str(idx_k))
+
+            x_local = get_local_vectors(xh, self.maps)
+            uh.x.array[: len(x_local[0])] = x_local[0]
+            lmbdah.x.array[: len(x_local[1])] = x_local[1]
+
+            uh.x.scatter_forward()
+            lmbdah.x.scatter_forward()
+
+            self.solution_vectors.append(xh.copy())
+            self.warping_functions.append(uh.copy())
+            self.lmbdas.append(lmbdah.copy())
+
+            # TODO TODO TODO: need to clean up the residual assembly to allow for proper sensitivity computation
+            # #TODO: currently, need to do this because we are using a ufl.TestFunction() in the residual construction
+            # #       This can be re-written so that uh is used to construct the form, so that we don't have to repeatedly
+            # #       re-assemble a00,a10 or a01, just L0 and L1
+            # a00_form = self._construct_xs_form(uh,return_form=True)
+            # a01_form = inner(lmbdah,self._construct_constraint_form(self.v))*self.dx
+            # a10_form = inner(self.dlmbda, self._construct_constraint_form(uh)) * self.dx
+
+            # #main system residual
+            # residual00 = a00_form + a01_form - L0 
+            # #lagrange multiplier system residual
+            # residual10 = a10_form - L1
+
+            # self.residuals.append((residual00,residual10))
 
     def _compute_xs_stiffness_matrix(self):             
         #unpacking values
@@ -525,12 +461,6 @@ class CrossSection:
         #indices
         i,j,k,l=self.i,self.j,self.k,self.l
         a,B = self.a,self.B
-   
-        #elastic solution mode function related to each warping fxn
-        N_bar = self.N_bar
-        N_hat = self.N_hat
-        # N_tilde = self.N_tilde
-        # N_breve = self.N_breve 
 
         #construct fenicsx variables pertaining to elastic solution modes
         c7 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
@@ -543,46 +473,26 @@ class CrossSection:
 
         #construct general warping displacement functions in terms of the 
         #   elastic solution modes and elastic solution mode coefficients
-        ubar_c = dot(N_bar,c)
-        uhat_c = dot(N_hat,c)
-        # utilde_c = dot(N_tilde,c)
-        # ubreve_c = dot(N_breve,c)
+        u_c = dot(c,as_tensor(self.warping_functions))
 
         #these elastic solution modes are related by the general expression 
         # for the displacement as:
         # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
         # where x1 is the beam axis direction
                 
-        # expressions for the stress and strain in terms of the polynomial 
-        # from expansion above:
-        eps_c = self.warping2strain(ubar_c,uhat_c)
-        sigma_c = self.warping2stress(ubar_c,uhat_c)
+        # expressions for the stress and strain at x1=0 (beam root)
+        eps_c = self.warping2strain(u_c,0) 
+        sigma_c = self.warping2stress(u_c,0)
 
-        #only stresses with a 1x component are of concern:
-        sigma11_c = sigma_c[0,0]
-        sigma12_c = sigma_c[0,1]
-        sigma13_c = sigma_c[0,2]
-
-        #construct expression for the load applied to a cross-section in 
-        # terms of stress and strain expressions defined based on  the 
-        # polynomial expansion:
-        P1 = sigma11_c*dx
-        V2 = sigma12_c*dx
-        V3 = sigma13_c*dx
-        T1 = ((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
-        M2 = (x[1])*sigma11_c*dx
-        M3 = -(x[0])*sigma11_c*dx
-
-        #store loads in a list instead of a ufl vector as we cannot take 
-        # variable derivatives of non-scalar forms
-        P = [P1,V2,V3,T1,M2,M3]
+        # get loads over cross-section
+        P = self.stress2loads(sigma_c)
+        P_form = [Pi*dx for Pi in P]
         
-        # construct expression for the internal energy of the beam based on
-        # the polynomial expansion:
+        # internal energy
         Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
 
         # differentiation of the constructed form 
-        self.K1_form = [[diff(P[idx1],c[idx2]) for idx2 in range(6)] 
+        self.K1_form = [[diff(P_form[idx1],c[idx2]) for idx2 in range(6)] 
                         for idx1 in range(6)]
         self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx2 in range(6)]
                         for idx1 in range(6)]
@@ -595,30 +505,263 @@ class CrossSection:
                      for idx2 in range(6)] 
                         for idx1 in range(6)])
         
-        self.K1 = sparseify(self.K1).toarray()
-        self.K2 = sparseify(self.K2).toarray()
-        
         #store K1^-1 for recovery and sensitivity computation
         self.K1inv = np.linalg.inv(self.K1)
-        self.K1inv = sparseify(self.K1inv).toarray()
 
         #stor K2^-1 for sensitivity computation
         self.K2inv = np.linalg.inv(self.K2)
-        self.K2inv = sparseify(self.K2inv).toarray()
         
         #compute Flexibility matrix
         self.S = self.K1inv.T@self.K2@self.K1inv
-        # self.S = sparseify(self.S).toarray()
-        # self.S = self.K2
-        
-        #invert Flexibility matrix to find beam constitutive matrix
-        # self.K = np.linalg.inv(self.S)
-        # self.K = sparseify(self.K).toarray()
 
-        #an alternative approach to avoid multiple inversion of products of inversions
-        self.K = self.K1@sparseify(self.K2inv).toarray()@self.K1.T
-        # self.K = sparseify(self.K).toarray()
-        # self.K = self.K2inv
+        #compute Beam Stiffness Matrix
+        self.K =  self.K1.T@self.K2inv@self.K1
+
+    
+    def rigid_constraints(self,u):
+        '''constraints on averages generalized stresses (forces + moments)'''
+        ubar,_,_,_ = split(u)
+        x1,x2 = self.x[0],self.x[1]
+
+        ubar_r = cross(as_vector([0,x1,x2]),ubar)
+
+        U = [ ubar[0],      # translation x
+            ubar[1],        # translation y
+            ubar[2],        # translation z
+            ubar_r[0],      # rotation about x
+            ubar_r[1],      # rotation about y
+            ubar_r[2],      # rotation about z
+            ]
+        
+        return U
+
+    def stress_constraints(self,u,order):
+        '''Constraints for average forces/moments'''
+        sigma = self.warping2stress(u,order)
+        P = self.stress2loads(sigma)
+
+        return P
+
+    def constraints(self,u):
+        '''return cross-sectional constraints'''
+        P = self.stress_constraints(u,0)
+        Px1= self.stress_constraints(u,1)
+        Px1_2= self.stress_constraints(u,2)
+        Px1_3= self.stress_constraints(u,3)
+        U = self.rigid_constraints(u)
+
+        return as_vector(P+Px1+Px1_2+Px1_3+U)
+
+    @staticmethod
+    def warping2strain(u,order):
+        '''construct strain from the warping functions of a certain polynomial order '''
+        try:
+            u_list = split(u)
+        except:
+            u_list = []
+            for idx in range(4):
+                u_list.append(as_tensor([u[3*idx],u[3*idx+1],u[3*idx+2]]))
+        
+        gradu = grad(u_list[order])
+
+        #
+        if order < 3:
+            eps = sym(as_tensor([
+                    [(order+1)*u_list[order+1][0], gradu[0,0], gradu[0,1]],
+                    [(order+1)*u_list[order+1][1], gradu[1,0], gradu[1,1]],
+                    [(order+1)*u_list[order+1][2], gradu[2,0], gradu[2,1]],
+                ]))
+            
+        else:
+            eps = sym(as_tensor([
+                    [0, gradu[0,0], gradu[0,1]],
+                    [0, gradu[1,0], gradu[1,1]],
+                    [0, gradu[2,0], gradu[2,1]],
+                ]))
+
+        return eps
+
+
+    def warping2stress(self,u,order):
+        i,j,k,l=self.i,self.j,self.k,self.l
+
+        eps = self.warping2strain(u,order)
+        sigma = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
+
+        return sigma
+
+
+    def stress2loads(self,sigma):
+        x1,x2 = self.x[0],self.x[1]
+        sigma11 = sigma[0,0]
+        sigma12 = sigma[1,0]
+        sigma13 = sigma[2,0]
+
+        m = cross(as_vector([0,x1,x2]),
+                    as_vector([sigma11,sigma12,sigma13]))
+        
+        P = [   sigma11,    # extension
+                sigma12,    # shear 1
+                sigma13,    # shear 2
+                m[0],       # torsion
+                m[1],       # bending 1
+                m[2]        # bending 2
+                    ]
+        
+        return P
+
+    # def _assemble_system_matrix(self,residual = None):
+        # if residual is None:
+        #     self.system_mat = petsc.assemble_matrix(form(self.Residual))
+        #     self.system_mat.assemble()
+        # else:
+        #     system_mat = petsc.assemble_matrix(form(residual))
+        #     system_mat.assemble()
+        #     return system_mat
+
+
+    # def _get_modes(self):
+        
+    #     m,n1=self.system_mat.getSize()
+    #     if self.verbose:
+    #         print('Computing QR factorization')
+    #     Acsr = csr_matrix(self.system_mat.getValuesCSR()[::-1], shape=self.system_mat.size)
+        
+    #     #perform QR factorization and store as struct in householder form
+    #     QR= sparseqr.qr_factorize( Acsr.transpose() )
+
+    #     #build matrix of unit vectors for selecting last 12 columns
+    #     X = np.zeros((m,12))
+    #     for i in range(12):
+    #         X[m-1-i,11-i]=1
+
+    #     #perform matrix multiplication implicitly to construct orthogonal nullspace basis
+    #     self.sols = sparseqr.qmult(QR,X)
+    #     # Q,_ = np.linalg.qr(Acsr.transpose().toarray())
+    #     # self.sols  = Q[:,-12:]
+    #     self.sparse_sols = sparseify(self.sols,sparse_format='csc')
+    #     # self.sols = self.sparse_sols.toarray()
+
+    # def _decouple_modes(self,basis_matrix_only=False):
+    #     #this is a change of basis operation from the standard R^12 basis to
+    #     #   the basis defined by the 6 rigid body modes and the 6 elastic modes
+    #     #
+    #     #the change of basis matrix can be easily computed by simply evaluating
+    #     #   the functions defining the rigid+elastic basis at all the dofs
+    #     x = self.x
+    #     dx = self.dx
+    #     C = self.C
+    #     #indices
+    #     i,j,k,l=self.i,self.j,self.k,self.l
+    #     a,B = self.a,self.B
+
+    #     # get collapsed subspace and maps from subspaces to parent space 
+    #     UBAR,self.ubar_vtx_to_dof = self.V.sub(0).collapse()
+    #     UHAT,self.uhat_vtx_to_dof = self.V.sub(1).collapse()
+    #     _,self.utilde_vtx_to_dof = self.V.sub(2).collapse()
+    #     _,self.ubreve_vtx_to_dof = self.V.sub(3).collapse()
+
+    #     #GET UBAR AND UHAT RELATED MODES
+    #     ubar_modes = self.sols[self.ubar_vtx_to_dof,:]
+    #     uhat_modes = self.sols[self.uhat_vtx_to_dof,:]
+
+    #     #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
+    #     ubar_mode = Function(UBAR)
+    #     uhat_mode = Function(UHAT)
+
+    #     #INITIALIZE DECOUPLING MATRIX (12X12)
+    #     self.mat = np.zeros((6,12))
+
+    #     #HERES THE NEW APPROACH:
+    #     #what we want is the set of warping functions Nbar and Nhat
+    #     # the other warping functions have no effect on the beam stiffness matrix or sensitivities
+    #     # so we'll first extract ubar and uhat
+    #     # then we'll use the gram-schmidt process to factor out the rigid body modes from ubar
+    #     # rigid body translation and displacement only affect ubar, no other warping function
+    #     # so... we can orthogonalize ubar and explicitly construct a reduced basis transformation matrix M_e
+    #     # that only considers the elastic modes, which we can decouple with a 6x6 matrix in the same manner as below
+                
+    #     #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
+    #     for mode in range(self.mat.shape[1]):
+    #         #construct function from mode
+    #         ubar_mode.vector.array = ubar_modes[:,mode]
+    #         uhat_mode.vector.array = uhat_modes[:,mode]
+          
+    #         #get stress from warping functions
+    #         sigma = self.warping2stress(ubar_mode,uhat_mode)
+
+    #         #relevant components of stress tensor
+    #         sigma11 = sigma[0,0]
+    #         sigma12 = sigma[1,0]
+    #         sigma13 = sigma[2,0]
+
+    #         #integrate stresses over cross-section at "root" of beam and construct xs load vector
+    #         P1 = assemble_scalar(form(sigma11*dx))
+    #         V2 = assemble_scalar(form(sigma12*dx))
+    #         V3 = assemble_scalar(form(sigma13*dx))
+            
+    #         T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
+    #         M2 = assemble_scalar(form((x[1])*(sigma11)*dx))          
+    #         M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))  
+            
+    #         # AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
+    #         self.mat[0,mode]=P1
+    #         self.mat[1,mode]=V2
+    #         self.mat[2,mode]=V3   
+
+    #         #AVERAGE MOMENTS (COMPUTED WITH UBAR AND UHAT)
+    #         self.mat[3,mode]=T1
+    #         self.mat[4,mode]=M2
+    #         self.mat[5,mode]=M3
+
+    #     if basis_matrix_only is False:
+    #         mat_sparse = sparseify(self.mat,sparse_format='csc')
+
+    #         # self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
+    #         # self.sols_decoup = self.sols@np.linalg.inv(mat)
+    #         # self.sols_decoup = self.sols@self.mat.T
+    #         # ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
+    #         # sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
+    #         # # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
+    #         # self.sols_decoup = sparse_sols.dot(mat_sparse.T).toarray()
+
+    #         ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
+    #         # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
+    #         # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())[ubar_uhat_dofs,:]
+    #         # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())
+
+    #         #USING PSEUDOINVERSE
+    #         mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
+
+    #         # print(f"condition number of basis transformation:{np.linalg.cond(self.mat)}")
+    #         self.sols_decoup = self.sparse_sols.dot(mat_pinv).toarray()
+    #         # self.sols_decoup=mat@self.sols
+    #         print()
+
+
+    # def _build_elastic_solution_modes(self):
+    #     #Initialize a tensor element and mixed tensor function space 
+    #     # for the elastic solution modes
+    #     Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,6))
+    #     self.N_space = functionspace(self.msh,mixed_element(2*[Ne]))
+    #     self.N = Function(self.N_space)
+        
+    #     #extract portions of elastic solution mode function related to each warping fxn
+    #     self.N_bar, self.N_hat = self.N.split() 
+
+    #     #get map of function dofs 
+    #     N_bar_vtx_to_dofs = self.N_space.sub(0).collapse()[1]
+    #     N_hat_vtx_to_dofs = self.N_space.sub(1).collapse()[1]
+    #     # N_tilde_vtx_to_dofs = self.N_space.sub(2).collapse()[1]
+    #     # N_breve_vtx_to_dofs = self.N_space.sub().collapse()[1]
+
+    #     #get separate elastic solution mode values
+    #     N_bar_vals = sparseify(self.sols_decoup[self.ubar_vtx_to_dof,:]).toarray().flatten()
+    #     N_hat_vals = sparseify(self.sols_decoup[self.uhat_vtx_to_dof,:]).toarray().flatten()
+        
+    #     #populate elastic solution modes to elastic solution mode function
+    #     self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals
+    #     self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals
 
     def _get_stiffness_contribution(self,dx=None):             
         #unpacking values
@@ -715,123 +858,7 @@ class CrossSection:
 
         return K
 
-    def _build_elastic_solution_modes_EB(self):
-        #Initialize a tensor element and mixed tensor function space 
-        # for the elastic solution modes
-        Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,4))
-        self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
-        self.N = Function(self.N_space)
-        
-        #extract portions of elastic solution mode function related to each warping fxn
-        self.N_bar, self.N_hat, self.N_tilde, self.N_breve = self.N.split() 
-
-        #unpack elastic solution modes
-        elastic_sols = np.concatenate([self.sols_decoup[:,6:7],self.sols_decoup[:,9:]],axis=1)
-
-        #get map of function dofs 
-        N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0))
-        N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1))
-        N_tilde_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(2))
-        N_breve_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(3))
-
-        #get separate elastic solution mode values
-        N_bar_vals = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]
-        N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten(),:]
-        N_tilde_vals = elastic_sols[self.utilde_vtx_to_dof.flatten(),:]
-        N_breve_vals = elastic_sols[self.ubreve_vtx_to_dof.flatten(),:]
-
-        #populate elastic solution modes to elastic solution mode function
-        self.N_bar.vector.array[N_bar_vtx_to_dofs.flatten()] = N_bar_vals.flatten()
-        self.N_hat.vector.array[N_hat_vtx_to_dofs.flatten()] = N_hat_vals.flatten()
-        self.N_tilde.vector.array[N_tilde_vtx_to_dofs.flatten()] = N_tilde_vals.flatten()
-        self.N_breve.vector.array[N_breve_vtx_to_dofs.flatten()] = N_breve_vals.flatten()
-
-    def _compute_xs_stiffness_matrix_EB(self):             
-        #unpacking values
-        x = self.x
-        dx = self.dx
-        #indices
-        i,j,k,l=self.i,self.j,self.k,self.l
-        a,B = self.a,self.B
-   
-        #elastic solution mode function related to each warping fxn
-        N_bar = self.N_bar
-        N_hat = self.N_hat
-        N_tilde = self.N_tilde
-        N_breve = self.N_breve 
-
-        #construct fenicsx variables pertaining to elastic solution modes
-        c7 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        # c8 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        # c9 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c10 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c11 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c12 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-        c = as_tensor([c7,c10,c11,c12])
-
-        #construct general warping displacement functions in terms of the 
-        #   elastic solution modes and elastic solution mode coefficients
-        ubar_c = dot(N_bar,c)
-        uhat_c = dot(N_hat,c)
-        utilde_c = dot(N_tilde,c)
-        ubreve_c = dot(N_breve,c)
-
-        #these elastic solution modes are related by the general expression 
-        # for the displacement as:
-        # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
-        # wereh x1 is the beam axis direction
-                
-        # expressions for the stress and strain in terms of the polynomial 
-        # from expansion above:
-        eps_c = self.warping2strain(ubar_c,uhat_c,utilde_c,ubreve_c)
-        sigma_c = self.warping2stress(ubar_c,uhat_c,utilde_c,ubreve_c)
-
-        #only stresses with a 1x component are of concern:
-        sigma11_c = sigma_c[0,0]
-        sigma12_c = sigma_c[0,1]
-        sigma13_c = sigma_c[0,2]
-
-        #construct expression for the load applied to a cross-section in 
-        # terms of stress and strain expressions defined based on  the 
-        # polynomial expansion:
-        P1 = sigma11_c*dx
-        # V2 = sigma12_c*dx
-        # V3 = sigma13_c*dx
-        T1 = -((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
-        M2 = -(x[1])*sigma11_c*dx
-        M3 = (x[0])*sigma11_c*dx
-
-        #store loads in a list instead of a ufl vector as we cannot take 
-        # variable derivatives of non-scalar forms
-        P = [P1,T1,M2,M3]
-        
-        # construct expression for the internal energy of the beam based on
-        # the polynomial expansion:
-        Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
-
-        #now we begin the differentiation, form construction, and form assembly
-        # to get K1 & K2 as well as dK1dx & dK2dx (used for shape optimization)
-        self.K1_form = [[diff(P[idx1],c[idx2]) for idx1 in range(4)] 
-                        for idx2 in range(4)]
-        self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx1 in range(4)]
-                        for idx2 in range(4)]
-        
-        self.K1 = np.array([[assemble_scalar(form(self.K1_form[idx1][idx2]))
-                     for idx1 in range(4)] 
-                        for idx2 in range(4)])
-        self.K2 = np.array([[assemble_scalar(form(self.K2_form[idx1][idx2]))
-                     for idx1 in range(4)] 
-                        for idx2 in range(4)])
-        
-        #store K1^-1 for recovery and sensitivity computation
-        self.K1inv = np.linalg.inv(self.K1)
-        
-        #compute Flexibility matrix
-        self.S = self.K1inv.T@self.K2@self.K1inv
-        
-        #invert Flexibility matrix to find beam constitutive matrix
-        self.K = np.linalg.inv(self.S)
-    
+    #TODO: NEED TO UPDATE WITH ADJOINT SENSITIVITY CODE (REQUIRES FIXES TO RESIDUAL ASSEMBLY)
     def compute_xs_stiffness_matrix_sensitivities(self):
         #TODO: combine EB and TS sensitivities...
         args = self.K1_form[0][0].arguments()
@@ -916,85 +943,40 @@ class CrossSection:
         
         self.dKdx_boundary = self.dKdx[:,:,boundary_indices]
 
-    def compute_xs_stiffness_matrix_sensitivities_EB(self):
-        args = self.K1_form[0][0].arguments()
-        n = max(a.number() for a in args) if args else -1
-        du = Argument(self.VX,n+1)
-        # du = Argument(self.VX,0) #there are no arguments in any of these forms?
+         
+    # def warping2strain(self,ubar,uhat):
+    #     gradubar=grad(ubar)
 
-        m = 4
-        self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du)
-                            for idx1 in range(m)] 
-                                for idx2 in range(m)]
-        self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
-                            for idx1 in range(m)] 
-                                for idx2 in range(m)]
-        self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
-                        for idx1 in range(m)] 
-                            for idx2 in range(m)])     
-        self.dK2dx = np.array([[petsc.assemble_vector(form(self.dK2dx_form[idx1][idx2]))
-                for idx1 in range(m)] 
-                    for idx2 in range(m)])
+    #     #derivatives of displacement
+    #     #this is known from our displacement expression
+    #     dubxdx = uhat[0]
+    #     dubxdy = uhat[1]
+    #     dubxdz = uhat[2]
+    #     dubydx = gradubar[0,0]
+    #     dubydy = gradubar[1,0]
+    #     dubydz = gradubar[2,0]
+    #     dubzdx = gradubar[0,1]
+    #     dubzdy = gradubar[1,1]
+    #     dubzdz = gradubar[2,1]
+
+    #     #form ufl displacement for grad(u_i)
+    #     gradu = as_tensor([[dubxdx,dubxdy,dubxdz],
+    #                     [dubydx,dubydy,dubydz],
+    #                     [dubzdx,dubzdy,dubzdz]])
         
-        #boundary dofs ([:,:,self.boundary_dofs])
-        self.boundary_dofs = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+    #     #ensure that strains are symmetric
+    #     # eps = 0.5 * (gradu + gradu.T)
+    #     eps = gradu
+
+    #     return eps 
+
+    # def warping2stress(self,ubar,uhat):
+    #     i,j,k,l=self.i,self.j,self.k,self.l
+    #     eps = self.warping2strain(ubar,uhat)
+
+    #     stress = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
         
-        #use chain rule for derivative of flexibility matrix dSdx:
-        #first term of dSdx
-        self.dK1invT = -np.einsum('ijk,ij->ijk',
-                             self.K1inv.T @ self.dK1dx.transpose(1,0,2),
-                               self.K1inv.T @ self.K2 @ self.K1inv ) 
-        #second term of dSdx
-        self.dK2 = np.einsum('ijk,ij->ijk',
-                        self.K1inv.T@self.dK2dx,
-                        self.K1inv)
-        
-        #third term of dSdx
-        self.dK1inv = -np.einsum('ijk,ij->ijk',
-                            self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
-                              self.K1inv)
-
-        #add terms to get dSdx
-        self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
-
-        #compute derivative of stiffness matrix (dKdx) from derivative of flexibility matrix (dSdx)
-        self.dKdx = - np.einsum('ijk,ij->ijk',
-                                self.K @ self.dSdx,
-                                self.K)
-        
-    def warping2strain(self,ubar,uhat):
-        gradubar=grad(ubar)
-
-        #derivatives of displacement
-        #this is known from our displacement expression
-        dubxdx = uhat[0]
-        dubxdy = uhat[1]
-        dubxdz = uhat[2]
-        dubydx = gradubar[0,0]
-        dubydy = gradubar[1,0]
-        dubydz = gradubar[2,0]
-        dubzdx = gradubar[0,1]
-        dubzdy = gradubar[1,1]
-        dubzdz = gradubar[2,1]
-
-        #form ufl displacement for grad(u_i)
-        gradu = as_tensor([[dubxdx,dubxdy,dubxdz],
-                        [dubydx,dubydy,dubydz],
-                        [dubzdx,dubzdy,dubzdz]])
-        
-        #ensure that strains are symmetric
-        # eps = 0.5 * (gradu + gradu.T)
-        eps = gradu
-
-        return eps 
-
-    def warping2stress(self,ubar,uhat):
-        i,j,k,l=self.i,self.j,self.k,self.l
-        eps = self.warping2strain(ubar,uhat)
-
-        stress = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
-        
-        return stress 
+    #     return stress 
     
     # def warping2loads(self,ubar,uhat):
 
@@ -1024,79 +1006,11 @@ class CrossSection:
     def getXSMassMatrix(self):
         #compute xs mass properties:
         self.M = np.zeros((6,6))
-
-    def _orthonormalize_rbm(self,fxn,verbose=False):
-        V = fxn.function_space
-        x = self.x
-        dx  = self.dx
-
-        #Rigid Body Modes expression (3D)
-        rbms = [
-            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((1.0,0.0,0.0))),V.element.interpolation_points()),
-            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,1.0,0.0))),V.element.interpolation_points()),
-            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,0.0,1.0))),V.element.interpolation_points()),
-            fem.Expression(ufl.as_vector([0,-x[1],x[0]]),V.element.interpolation_points())#,
-            # fem.Expression(ufl.as_vector([x[1],0,0]),V.element.interpolation_points()),
-            # fem.Expression(ufl.as_vector([-x[0],0,0]),V.element.interpolation_points())
-        ]
-
-        # List of functions to orthogonalise
-        vx = fem.Function(V)
-        vy = fem.Function(V)
-        vz = fem.Function(V)
-        vrx = fem.Function(V)
-        # vry = fem.Function(V)
-        # vrz = fem.Function(V)
-        vx.interpolate(rbms[0])
-        vy.interpolate(rbms[1])
-        vz.interpolate(rbms[2])
-        vrx.interpolate(rbms[3])
-        # vry.interpolate(rbms[4])
-        # vrz.interpolate(rbms[5])
-
-        # v = list((vx,vy,vz,vrx,vry,vrz))
-        v = list((vx,vy,vz,vrx))
-
-        # GS Projection
-        def proj(u, v):
-            res = fem.assemble_scalar(fem.form(inner(u, v)*dx))/fem.assemble_scalar(fem.form(inner(u, u)*dx)) * u.vector.array
-            return res
-
-        # GS orthogonalisation
-        def ortho(v):
-            xi = [None]*len(v)
-            xi[0] = v[0]
-            for j in range(1, len(xi)):
-                xi[j] = fem.Function(V)
-                xi[j].vector.array = v[j].vector.array - sum(proj(xi[i], v[j]) for i in range(j))
-            return xi
-        
-        xi = ortho(v)
-
-        # Orthonormalised vector basis
-        e = [fem.Function(V) for i in range(len(v))]
-        for i,xi_ in enumerate(xi):
-            e[i].vector.array = xi_.vector.array/fem.assemble_scalar(fem.form(inner(xi_, xi_)*dx))**0.5
-        
-        new_fxn = Function(V)
-        new_fxn.vector.array  = fxn.vector.array - sum(proj(e_, fxn) for e_ in e)
-
-        if verbose is True:
-            print("orthonormalisation test:")
-            for i in range(len(xi)):
-                for j in range(i+1):
-                    print(f"inner(e[{i}], e[{j}])*dx {fem.assemble_scalar(fem.form(inner(e[i], e[j])*dx))}")
-
-            print(f"u norm {fxn.vector.norm(2)}, u_star norm {new_fxn.vector.norm(2)}")
-            print(f"orthogonalisation of u_star with rigid body modes test:")
-            for j in range(len(v)):
-                print(f"(rbms[{j}], u_star) = {fem.assemble_scalar(fem.form(inner(new_fxn, v[j])*dx))}")
-
-        return new_fxn
-   
+  
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
 
+    #TODO: fix this function based on update
     def plot_warping_fxns(self,rigid=True,coup=False):
         pyvista.global_theme.background = [255, 255, 255, 255]
         pyvista.global_theme.font.color = 'black'
@@ -1243,6 +1157,267 @@ class CrossSection:
         plotter.show_bounds()
         if not pyvista.OFF_SCREEN:
             plotter.show()
+    
+    #========== EB ARCHIVE =========#
+    # def get_xs_stiffness_matrix_EB(self):
+        
+    #     #construct material constitutive tensor field
+    #     # self.constructConstitutiveField()
+
+    #     if self.verbose:
+    #         print('Constructing Cross-Section System...')
+    #     self._construct_residual()
+
+    #     if self.verbose:
+    #         print('Assembling System Matrix....')   
+    #     self._assemble_system_matrix()
+
+    #     if self.verbose:
+    #         print('Computing non-trivial solutions....')
+    #     self._get_modes()
+
+    #     if self.verbose:
+    #         print('Orthogonalizing w.r.t. elastic modes...')
+    #     self._decouple_modes()
+    #     self._build_elastic_solution_modes_EB()
+        
+    #     if self.verbose:
+    #         print('Computing Beam Constitutive Matrix....')
+    #     self._compute_xs_stiffness_matrix_EB()
+
+    #     print("DONE computing Beam Constitutive Matrix")  
+    
+    # def _build_elastic_solution_modes_EB(self):
+    #     #Initialize a tensor element and mixed tensor function space 
+    #     # for the elastic solution modes
+    #     Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,4))
+    #     self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
+    #     self.N = Function(self.N_space)
+        
+    #     #extract portions of elastic solution mode function related to each warping fxn
+    #     self.N_bar, self.N_hat, self.N_tilde, self.N_breve = self.N.split() 
+
+    #     #unpack elastic solution modes
+    #     elastic_sols = np.concatenate([self.sols_decoup[:,6:7],self.sols_decoup[:,9:]],axis=1)
+
+    #     #get map of function dofs 
+    #     N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0))
+    #     N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1))
+    #     N_tilde_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(2))
+    #     N_breve_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(3))
+
+    #     #get separate elastic solution mode values
+    #     N_bar_vals = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]
+    #     N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten(),:]
+    #     N_tilde_vals = elastic_sols[self.utilde_vtx_to_dof.flatten(),:]
+    #     N_breve_vals = elastic_sols[self.ubreve_vtx_to_dof.flatten(),:]
+
+    #     #populate elastic solution modes to elastic solution mode function
+    #     self.N_bar.vector.array[N_bar_vtx_to_dofs.flatten()] = N_bar_vals.flatten()
+    #     self.N_hat.vector.array[N_hat_vtx_to_dofs.flatten()] = N_hat_vals.flatten()
+    #     self.N_tilde.vector.array[N_tilde_vtx_to_dofs.flatten()] = N_tilde_vals.flatten()
+    #     self.N_breve.vector.array[N_breve_vtx_to_dofs.flatten()] = N_breve_vals.flatten()
+
+    # def _compute_xs_stiffness_matrix_EB(self):             
+    #     #unpacking values
+    #     x = self.x
+    #     dx = self.dx
+    #     #indices
+    #     i,j,k,l=self.i,self.j,self.k,self.l
+    #     a,B = self.a,self.B
+   
+    #     #elastic solution mode function related to each warping fxn
+    #     N_bar = self.N_bar
+    #     N_hat = self.N_hat
+    #     N_tilde = self.N_tilde
+    #     N_breve = self.N_breve 
+
+    #     #construct fenicsx variables pertaining to elastic solution modes
+    #     c7 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+    #     # c8 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+    #     # c9 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+    #     c10 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+    #     c11 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+    #     c12 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
+    #     c = as_tensor([c7,c10,c11,c12])
+
+    #     #construct general warping displacement functions in terms of the 
+    #     #   elastic solution modes and elastic solution mode coefficients
+    #     ubar_c = dot(N_bar,c)
+    #     uhat_c = dot(N_hat,c)
+    #     utilde_c = dot(N_tilde,c)
+    #     ubreve_c = dot(N_breve,c)
+
+    #     #these elastic solution modes are related by the general expression 
+    #     # for the displacement as:
+    #     # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
+    #     # wereh x1 is the beam axis direction
+                
+    #     # expressions for the stress and strain in terms of the polynomial 
+    #     # from expansion above:
+    #     eps_c = self.warping2strain(ubar_c,uhat_c,utilde_c,ubreve_c)
+    #     sigma_c = self.warping2stress(ubar_c,uhat_c,utilde_c,ubreve_c)
+
+    #     #only stresses with a 1x component are of concern:
+    #     sigma11_c = sigma_c[0,0]
+    #     sigma12_c = sigma_c[0,1]
+    #     sigma13_c = sigma_c[0,2]
+
+    #     #construct expression for the load applied to a cross-section in 
+    #     # terms of stress and strain expressions defined based on  the 
+    #     # polynomial expansion:
+    #     P1 = sigma11_c*dx
+    #     # V2 = sigma12_c*dx
+    #     # V3 = sigma13_c*dx
+    #     T1 = -((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
+    #     M2 = -(x[1])*sigma11_c*dx
+    #     M3 = (x[0])*sigma11_c*dx
+
+    #     #store loads in a list instead of a ufl vector as we cannot take 
+    #     # variable derivatives of non-scalar forms
+    #     P = [P1,T1,M2,M3]
+        
+    #     # construct expression for the internal energy of the beam based on
+    #     # the polynomial expansion:
+    #     Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
+
+    #     #now we begin the differentiation, form construction, and form assembly
+    #     # to get K1 & K2 as well as dK1dx & dK2dx (used for shape optimization)
+    #     self.K1_form = [[diff(P[idx1],c[idx2]) for idx1 in range(4)] 
+    #                     for idx2 in range(4)]
+    #     self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx1 in range(4)]
+    #                     for idx2 in range(4)]
+        
+    #     self.K1 = np.array([[assemble_scalar(form(self.K1_form[idx1][idx2]))
+    #                  for idx1 in range(4)] 
+    #                     for idx2 in range(4)])
+    #     self.K2 = np.array([[assemble_scalar(form(self.K2_form[idx1][idx2]))
+    #                  for idx1 in range(4)] 
+    #                     for idx2 in range(4)])
+        
+    #     #store K1^-1 for recovery and sensitivity computation
+    #     self.K1inv = np.linalg.inv(self.K1)
+        
+    #     #compute Flexibility matrix
+    #     self.S = self.K1inv.T@self.K2@self.K1inv
+        
+    #     #invert Flexibility matrix to find beam constitutive matrix
+    #     self.K = np.linalg.inv(self.S)
+    
+    # def compute_xs_stiffness_matrix_sensitivities_EB(self):
+    #     args = self.K1_form[0][0].arguments()
+    #     n = max(a.number() for a in args) if args else -1
+    #     du = Argument(self.VX,n+1)
+    #     # du = Argument(self.VX,0) #there are no arguments in any of these forms?
+
+    #     m = 4
+    #     self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du)
+    #                         for idx1 in range(m)] 
+    #                             for idx2 in range(m)]
+    #     self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
+    #                         for idx1 in range(m)] 
+    #                             for idx2 in range(m)]
+    #     self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
+    #                     for idx1 in range(m)] 
+    #                         for idx2 in range(m)])     
+    #     self.dK2dx = np.array([[petsc.assemble_vector(form(self.dK2dx_form[idx1][idx2]))
+    #             for idx1 in range(m)] 
+    #                 for idx2 in range(m)])
+        
+    #     #boundary dofs ([:,:,self.boundary_dofs])
+    #     self.boundary_dofs = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        
+    #     #use chain rule for derivative of flexibility matrix dSdx:
+    #     #first term of dSdx
+    #     self.dK1invT = -np.einsum('ijk,ij->ijk',
+    #                          self.K1inv.T @ self.dK1dx.transpose(1,0,2),
+    #                            self.K1inv.T @ self.K2 @ self.K1inv ) 
+    #     #second term of dSdx
+    #     self.dK2 = np.einsum('ijk,ij->ijk',
+    #                     self.K1inv.T@self.dK2dx,
+    #                     self.K1inv)
+        
+    #     #third term of dSdx
+    #     self.dK1inv = -np.einsum('ijk,ij->ijk',
+    #                         self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
+    #                           self.K1inv)
+
+    #     #add terms to get dSdx
+    #     self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
+
+    #     #compute derivative of stiffness matrix (dKdx) from derivative of flexibility matrix (dSdx)
+    #     self.dKdx = - np.einsum('ijk,ij->ijk',
+    #                             self.K @ self.dSdx,
+    #                             self.K)
+    
+    def _orthonormalize_rbm(self,fxn,verbose=False):
+        V = fxn.function_space
+        x = self.x
+        dx  = self.dx
+
+        #Rigid Body Modes expression (3D)
+        rbms = [
+            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((1.0,0.0,0.0))),V.element.interpolation_points()),
+            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,1.0,0.0))),V.element.interpolation_points()),
+            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,0.0,1.0))),V.element.interpolation_points()),
+            fem.Expression(ufl.as_vector([0,-x[1],x[0]]),V.element.interpolation_points())#,
+            # fem.Expression(ufl.as_vector([x[1],0,0]),V.element.interpolation_points()),
+            # fem.Expression(ufl.as_vector([-x[0],0,0]),V.element.interpolation_points())
+        ]
+
+        # List of functions to orthogonalise
+        vx = fem.Function(V)
+        vy = fem.Function(V)
+        vz = fem.Function(V)
+        vrx = fem.Function(V)
+        # vry = fem.Function(V)
+        # vrz = fem.Function(V)
+        vx.interpolate(rbms[0])
+        vy.interpolate(rbms[1])
+        vz.interpolate(rbms[2])
+        vrx.interpolate(rbms[3])
+        # vry.interpolate(rbms[4])
+        # vrz.interpolate(rbms[5])
+
+        # v = list((vx,vy,vz,vrx,vry,vrz))
+        v = list((vx,vy,vz,vrx))
+
+        # GS Projection
+        def proj(u, v):
+            res = fem.assemble_scalar(fem.form(inner(u, v)*dx))/fem.assemble_scalar(fem.form(inner(u, u)*dx)) * u.vector.array
+            return res
+
+        # GS orthogonalisation
+        def ortho(v):
+            xi = [None]*len(v)
+            xi[0] = v[0]
+            for j in range(1, len(xi)):
+                xi[j] = fem.Function(V)
+                xi[j].vector.array = v[j].vector.array - sum(proj(xi[i], v[j]) for i in range(j))
+            return xi
+        
+        xi = ortho(v)
+
+        # Orthonormalised vector basis
+        e = [fem.Function(V) for i in range(len(v))]
+        for i,xi_ in enumerate(xi):
+            e[i].vector.array = xi_.vector.array/fem.assemble_scalar(fem.form(inner(xi_, xi_)*dx))**0.5
+        
+        new_fxn = Function(V)
+        new_fxn.vector.array  = fxn.vector.array - sum(proj(e_, fxn) for e_ in e)
+
+        if verbose is True:
+            print("orthonormalisation test:")
+            for i in range(len(xi)):
+                for j in range(i+1):
+                    print(f"inner(e[{i}], e[{j}])*dx {fem.assemble_scalar(fem.form(inner(e[i], e[j])*dx))}")
+
+            print(f"u norm {fxn.vector.norm(2)}, u_star norm {new_fxn.vector.norm(2)}")
+            print(f"orthogonalisation of u_star with rigid body modes test:")
+            for j in range(len(v)):
+                print(f"(rbms[{j}], u_star) = {fem.assemble_scalar(fem.form(inner(new_fxn, v[j])*dx))}")
+
+        return new_fxn
 
 
 
@@ -1267,21 +1442,14 @@ class CoupledXSProblem:
         # self._adjust_effective_material()
         
     def get_xs_stiffness_matrix(self,correction='avg'):
-        #assemble each region's system matrix
-        self._assemble_system_mats()
+        #assemble each region's system
+        self._assemble_system_forms()
 
-        #apply the penalty parameter
+        #apply the penalty terms
         self._construct_coupled_system_matrix()
-
-        #use QR factorization to get null modes:
-        self._get_modes()
-        print("null modes found!")
         
-        #need to "decouple" the modes
-        self._decouple_modes()
-        
-        #map elastic solutions to construct warping functions
-        self._compute_xs_stiffness_matrix(correction=correction)
+        # #map elastic solutions to construct warping functions
+        # self._compute_xs_stiffness_matrix(correction=correction)
         
 
     def _find_overlap(self):
@@ -1335,10 +1503,10 @@ class CoupledXSProblem:
                     pts_j = np.unique(pts_candidates)
 
                     #create vertex-to-cell connectivity has been created if it hasn't been done yet
-                    if self.regions[i].msh.topology.connectivity(0,2) is None:
-                        self.regions[i].msh.topology.create_connectivity(0,2)
-                    if self.regions[j].msh.topology.connectivity(0,2) is None:
-                        self.regions[j].msh.topology.create_connectivity(0,2)
+                    # if self.regions[i].msh.topology.connectivity(0,2) is None:
+                    self.regions[i].msh.topology.create_connectivity(0,2)
+                    # if self.regions[j].msh.topology.connectivity(0,2) is None:
+                    self.regions[j].msh.topology.create_connectivity(0,2)
                     
                     #get the penalty dofs:
                     penalty_dofs_i=fem.locate_dofs_topological(self.regions[i].fxn_space,0,pts_i)
@@ -1452,24 +1620,26 @@ class CoupledXSProblem:
             
             XS.C = getMatConstitutiveIsotropic(XS.msh,XS.E,XS.nu)
 
-    def _assemble_system_mats(self):
+    def _assemble_system_forms(self):
         #construct the residudal and assemble the system mat for each region
         for XS in self.XSs:
-            XS._construct_residual()
-            XS._assemble_system_matrix()
+            XS._construct_xs_form()
+            XS._construct_KKT_forms()
 
-        #compile system matrices for each individual region into a list 
-        #   accessible by the coupled problem class
-        # system_mats = []
-        offset = 0
-        for i,region in zip(self.regions,self.regions.values()):
-            region.system_mat = self.XSs[i].system_mat
-            #store offset values for the computed 
-            region.offset_start = offset
-            offset += region.system_mat.getSize()[0]
-            region.offset_end = offset
-        #     system_mats.append(region.system_mat)
-        # self.system_mats = system_mats
+        #TODO: I believe we can use the block matrix interface here and this will significantly simplify the assembly of this system
+
+        # #compile system matrices for each individual region into a list 
+        # #   accessible by the coupled problem class
+        # # system_mats = []
+        # offset = 0
+        # for i,region in zip(self.regions,self.regions.values()):
+        #     region.system_mat = self.XSs[i].system_mat
+        #     #store offset values for the computed 
+        #     region.offset_start = offset
+        #     offset += region.system_mat.getSize()[0]
+        #     region.offset_end = offset
+        # #     system_mats.append(region.system_mat)
+        # # self.system_mats = system_mats
 
 
     def _construct_coupled_system_matrix(self):
@@ -1552,118 +1722,53 @@ class CoupledXSProblem:
         self.system_mat = A
 
 
-    def _construct_coupled_system_matrix_nn(self):
-        '''
-        Given collisions and regions, 
-        set up the coupled system matrix with the penalty terms
-        for a nearest neighbor, one way coupling from fine to coarse
-        '''
-
-        # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
-        for idx,val in np.ndenumerate(self.adjacency):
-            if val == 1:
-                #get the interpolation matrix
-                self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
-                                                                                     self.regions[idx[0]].fxn_space,
-                                                                                     mixed=True)
-                #copy the interpolation matrix :
-                self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
-
-            elif val == 0 and idx[0] != idx[1]:
-                self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system_mat.getSize()[0],
-                                                                self.regions[idx[0]].system_mat.getSize()[1]])
-                self.separations[idx[0]][idx[1]].mat.assemble()
-
-        #populate an array of the same size as the adjacency matrix of the petsc matrices
-        #  using a *nearly* incomprehensible list "comprehension" 
-        # this adds the unadultered system to the diagonals, the interpolation matrices where there is a collision
-        # and the assembled empty matrices where there is a "separation"
-        A_list = [ [self.regions[i].system_mat if i==j
-                    else self.separations[i][j].mat if self.adjacency[i][j] == 0 and i!=j
-                    else self.collisions[i][j].pen_mat 
-                        for i in range(self.num_meshes)]
-                     for j in range(self.num_meshes) ]
-               
-        # add the penalty to the relevant block of A_list
-        for idx,val in np.ndenumerate(self.adjacency):
-            # if idx[0]==idx[1]:
-            if val==1:
-                pen_term = PETSc.Mat().createAIJ(A_list[idx[0]][idx[0]].getSize())
-                pen_term.assemble()
-                pen_term.setDiagonal(self.collisions[idx[0]][idx[1]].pen_vec)
-                pen_term.assemble()
-                
-                #add penalty term to diagonal block
-                A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
-                # if idx[0]<idx[1]:
-                #     A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
-                # elif idx[0]>idx[1]:
-                #     A_list[idx[0]][idx[0]].axpy(-1.0,pen_term)
-
-                #TODO: need to come up with a better way of populating the 
-                #   nested list than simply filling with the interpolation matrix, then overwriting it...
-
-                #add penalty term to off diagonal block (overwriting the )     
-                A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
-                A_list[idx[0]][idx[1]].assemble()
-                A_list[idx[0]][idx[1]].scale(-1.0)
-
-
-
-        A = PETSc.Mat()
-        A.createNest(A_list)
+    # def _get_modes(self):
+    #     m,n1=self.system_mat.getSize()
+    #     print('Computing QR factorization')
+    #     A_aij = self.system_mat.convert('aij')
+    #     Acsr = csr_matrix(A_aij.getValuesCSR()[::-1], shape=self.system_mat.size)
         
-        A.assemble()
+    #     #perform QR factorization and store as struct in householder form
+    #     QR= sparseqr.qr_factorize( Acsr.transpose() )
 
-        self.system_mat = A
+    #     #build matrix of unit vectors for selecting last 12 columns
+    #     X = np.zeros((m,12))
+    #     for i in range(12):
+    #         X[m-1-i,11-i]=1
 
-    def _get_modes(self):
-        m,n1=self.system_mat.getSize()
-        print('Computing QR factorization')
-        A_aij = self.system_mat.convert('aij')
-        Acsr = csr_matrix(A_aij.getValuesCSR()[::-1], shape=self.system_mat.size)
+    #     #perform matrix multiplication implicitly to construct orthogonal nullspace basis
+    #     self.sols = sparseqr.qmult(QR,X)
+    #     self.sparse_sols = sparseify(self.sols,sparse_format='csc')
+
+
+    # def _decouple_modes(self):
+    #     ''' 
+    #     for each region, decouple the modes corresponding to that region
+    #     '''
+    #     #intialize empty basis transformation matrix
+    #     self.basis_trans_matrix = np.zeros((6,12))
+
+    #     #compute contribution to basis transformation matrix for each region
+    #     for i,region in zip(self.regions,self.regions.values()):
+    #         self.XSs[i].sols = self.sols[region.offset_start:region.offset_end,:]
+    #         self.XSs[i]._decouple_modes(basis_matrix_only=True)
+    #         print(f"Condition number for sub mesh {i}: {np.linalg.cond(self.XSs[i].mat)}")
+    #         self.basis_trans_matrix += self.XSs[i].mat
+    #     #perform the basis transformation (use the sparse matrix to prevent numerical inaccuracies during inversion)
+    #     # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
         
-        #perform QR factorization and store as struct in householder form
-        QR= sparseqr.qr_factorize( Acsr.transpose() )
-
-        #build matrix of unit vectors for selecting last 12 columns
-        X = np.zeros((m,12))
-        for i in range(12):
-            X[m-1-i,11-i]=1
-
-        #perform matrix multiplication implicitly to construct orthogonal nullspace basis
-        self.sols = sparseqr.qmult(QR,X)
-        self.sparse_sols = sparseify(self.sols,sparse_format='csc')
-
-
-    def _decouple_modes(self):
-        ''' 
-        for each region, decouple the modes corresponding to that region
-        '''
-        #intialize empty basis transformation matrix
-        self.basis_trans_matrix = np.zeros((6,12))
-
-        #compute contribution to basis transformation matrix for each region
-        for i,region in zip(self.regions,self.regions.values()):
-            self.XSs[i].sols = self.sols[region.offset_start:region.offset_end,:]
-            self.XSs[i]._decouple_modes(basis_matrix_only=True)
-            print(f"Condition number for sub mesh {i}: {np.linalg.cond(self.XSs[i].mat)}")
-            self.basis_trans_matrix += self.XSs[i].mat
-        #perform the basis transformation (use the sparse matrix to prevent numerical inaccuracies during inversion)
-        # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
+    #     print(f"Condition number for overall system: {np.linalg.cond(self.basis_trans_matrix)}")
+    #     self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix)#,sparse_format='csc')
         
-        print(f"Condition number for overall system: {np.linalg.cond(self.basis_trans_matrix)}")
-        self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix)#,sparse_format='csc')
-        
-        self.basis_trans_matrix_pinv = sparseify(np.linalg.pinv(self.basis_trans_matrix_sparse.toarray()))
+    #     self.basis_trans_matrix_pinv = sparseify(np.linalg.pinv(self.basis_trans_matrix_sparse.toarray()))
 
-        self.sols_decoup = (self.sparse_sols.dot(self.basis_trans_matrix_pinv)).toarray()
+    #     self.sols_decoup = (self.sparse_sols.dot(self.basis_trans_matrix_pinv)).toarray()
 
-        #get the decoupled basis
-        for i,region in zip(self.regions,self.regions.values()):
-            # ubar_uhat_dofs = np.concatenate([self.XSs[i].ubar_vtx_to_dof,self.XSs[i].uhat_vtx_to_dof])
-            # self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:][ubar_uhat_dofs,:]
-            self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
+    #     #get the decoupled basis
+    #     for i,region in zip(self.regions,self.regions.values()):
+    #         # ubar_uhat_dofs = np.concatenate([self.XSs[i].ubar_vtx_to_dof,self.XSs[i].uhat_vtx_to_dof])
+    #         # self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:][ubar_uhat_dofs,:]
+    #         self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
 
 
     def _compute_xs_stiffness_matrix(self,correction='avg'):
