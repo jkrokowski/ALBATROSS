@@ -28,7 +28,7 @@ TXS.plot_mesh()
 #compute the stiffness matrix
 TXS.get_xs_stiffness_matrix()
 
-# TXS.plot_warping_fxns()
+TXS.plot_warping_fxns()
 
 np.set_printoptions(precision=3)
 
@@ -60,6 +60,8 @@ I2 = ((tf*W**3)/12) + ((H-tf)*tw**3)/12
 print(E*I2)
 print("Computed bending stiffness 2:")
 print(TXS.K[5,5])
+
+np.save(f"T_section_K_n_{N}.npy", TXS.K)
 
 TXS.compute_xs_stiffness_matrix_sensitivities()
 

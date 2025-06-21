@@ -454,6 +454,9 @@ class CrossSection:
 
             # self.residuals.append((residual00,residual10))
 
+            print(f'lagrange multipliers for mode{idx_k}:{x_local[1]}')
+
+
     def _compute_xs_stiffness_matrix(self):             
         #unpacking values
         x = self.x
@@ -520,19 +523,36 @@ class CrossSection:
     
     def rigid_constraints(self,u):
         '''constraints on averages generalized stresses (forces + moments)'''
-        ubar,_,_,_ = split(u)
+        ubar,uhat,_,_ = split(u)
         x1,x2 = self.x[0],self.x[1]
 
         ubar_r = cross(as_vector([0,x1,x2]),ubar)
+        gradubar = grad(ubar)
 
+
+        # disp_grad =  as_tensor([[uhat[0], gradubar[0,0], gradubar[0,1]],
+        #                     [uhat[1], gradubar[1,0], gradubar[1,1]],
+        #                     [uhat[2], gradubar[2,0], gradubar[2,1]],
+        #                 ])
+        disp_grad =  as_tensor([[0, gradubar[0,0], gradubar[0,1]],
+                            [0, gradubar[1,0], gradubar[1,1]],
+                            [0, gradubar[2,0], gradubar[2,1]],
+                        ])
+        w = disp_grad + disp_grad.T
+        
         U = [ ubar[0],      # translation x
             ubar[1],        # translation y
             ubar[2],        # translation z
             ubar_r[0],      # rotation about x
-            ubar_r[1],      # rotation about y
-            ubar_r[2],      # rotation about z
+            ubar_r[1],      # rotation about y #NOTE: THIS IS a RIGID rotation, 
+            ubar_r[2]      # rotation about z
+            # gradubar[0,0],      # rotation about y (infinitesimal)
+            # gradubar[0,1],      # rotation about z  (infinitesimal)
+            # w[0,1],
+            # w[0,2],
+            # w[1,2]
             ]
-        
+
         return U
 
     def stress_constraints(self,u,order):
@@ -564,7 +584,6 @@ class CrossSection:
         
         gradu = grad(u_list[order])
 
-        #
         if order < 3:
             eps = sym(as_tensor([
                     [(order+1)*u_list[order+1][0], gradu[0,0], gradu[0,1]],
@@ -1010,24 +1029,14 @@ class CrossSection:
     def plot_mesh(self):
         plot_xdmf_mesh(self.msh)
 
-    #TODO: fix this function based on update
-    def plot_warping_fxns(self,rigid=True,coup=False):
+    def plot_warping_fxns(self,fxn_order=0):
+        elastic_sols = np.zeros((self.warping_functions[0].sub(0).collapse().x.array.shape[0],6))
+        for i in range(6):
+            elastic_sols[:,i]=self.warping_functions[i].sub(fxn_order).collapse().x.array
+
         pyvista.global_theme.background = [255, 255, 255, 255]
         pyvista.global_theme.font.color = 'black'
         plotter = pyvista.Plotter()
-        
-        if rigid is True:
-            if coup is True:
-                elastic_sols = self.sols[:,:6]
-            else:
-                ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
-                elastic_sols = self.sols_decoup[ubar_uhat_dofs,:6]
-        else:
-            if coup is True:
-                elastic_sols = self.sols[:,6:]
-            else:
-                elastic_sols = self.sols_decoup[:,6:]
-        
         mode = ['Axial','Shear 1', 'Shear 2', 'Torsion', 'Bending 1', 'Bending 2']
         plotter = pyvista.Plotter(shape=(2,3))
         grids = []
@@ -1044,12 +1053,11 @@ class CrossSection:
             topology, cell_types, geom = plot.vtk_mesh(V0)
             grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
             
-            c = np.zeros((6,1))
-            c[i,:] = 1
+            cnp = np.zeros((6,1))
+            cnp[i,:] = 1
 
-            # warping_sol = elastic_sols[:len(self.ubar_vtx_to_dof):,:]@c
-            warping_sol = elastic_sols[len(self.ubar_vtx_to_dof):,:]@c
-
+            warping_sol = elastic_sols@cnp
+            
             solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
             grids[i][name]= solution_mode/np.max(np.linalg.norm(solution_mode,axis=1))
             print(f"maximum magnitude for mode: {np.max(np.linalg.norm(solution_mode,axis=1))}")
@@ -1067,7 +1075,6 @@ class CrossSection:
                                 n_zlabels=2)
         if not pyvista.OFF_SCREEN:
             plotter.show()
-
 
     def plot_warping_strain(self,component=(0,0)):
         '''
@@ -1771,7 +1778,7 @@ class CoupledXSProblem:
     #         self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
 
 
-    def _compute_xs_stiffness_matrix(self,correction='avg'):
+    def _compute_xs_stiffness_matrix(self,correction=None):
         '''
         for each region, get the elastic solution modes and compute the stiffness
         store the accumulated matrices for recovery, etc
@@ -1783,7 +1790,6 @@ class CoupledXSProblem:
 
         #TODO: subtract off the 1/2 of the contribution of the stiffness from each mesh in the collision 
         for i,region in zip(self.regions,self.regions.values()):
-            self.XSs[i]._build_elastic_solution_modes()
             self.XSs[i]._compute_xs_stiffness_matrix()
         #   self.S += self.XSs[i].S
         #   self.K1 += self.XSs[i].K1
@@ -1830,7 +1836,7 @@ class CoupledXSProblem:
     def plot_meshes(self):
         plot_xdmf_mesh(list(self.meshes.values()),surface=True)
 
-    def plot_warping_fxns(self,coup=False):
+    def plot_warping_fxns(self,fxn_order=0):
         
         pyvista.global_theme.background = [255, 255, 255, 255]
         pyvista.global_theme.font.color = 'black'
@@ -1852,13 +1858,10 @@ class CoupledXSProblem:
             for j,xs in enumerate(self.XSs):
                 tdim = xs.msh.topology.dim
 
-                if coup is True:
-                    elastic_sols = xs.sols[:,6:]
-                else:
-                    # elastic_sols = xs.sols_decoup
-                    ubar_uhat_dofs = np.concatenate([xs.ubar_vtx_to_dof,xs.uhat_vtx_to_dof])
-                    elastic_sols = xs.sols_decoup[ubar_uhat_dofs,:6]
-                
+                elastic_sols = np.zeros((xs.warping_functions[0].sub(0).collapse().x.array.shape[0],6))
+                for idx in range(6):
+                    elastic_sols[:,idx]=xs.warping_functions[idx].sub(fxn_order).collapse().x.array
+
                 V0,V0_to_V = xs.V.sub(0).collapse()
                 topology, cell_types, geom = plot.vtk_mesh(V0)
                 indiv_grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
@@ -1866,8 +1869,7 @@ class CoupledXSProblem:
                 c = np.zeros((6,1))
                 c[i,:] = 1
 
-                warping_sol = elastic_sols[:len(xs.ubar_vtx_to_dof):,:]@c
-                # warping_sol = elastic_sols@c
+                warping_sol = elastic_sols@c
 
                 solution_mode = warping_sol.reshape((geom.shape[0], 3))[:,[1,2,0]]
                 solution_modes.append(solution_mode)
