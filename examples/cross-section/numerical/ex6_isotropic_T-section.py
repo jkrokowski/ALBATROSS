@@ -4,7 +4,7 @@ import ALBATROSS
 import numpy as np
 
 #create mesh
-N = 3
+N = 20
 H = 1
 W= 1
 tf = 0.1
@@ -13,6 +13,7 @@ tw = 0.1
 dims = [H,W,tf,tw]
 num_el = [N,N]#number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_T_section(dims,num_el,'T_section')
+domain.name = 'conformal_t-section'
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -62,6 +63,11 @@ print("Computed bending stiffness 2:")
 print(TXS.K[5,5])
 
 np.save(f"T_section_K_n_{N}.npy", TXS.K)
+
+from dolfinx import io
+from mpi4py import MPI
+with io.XDMFFile(MPI.COMM_WORLD, f"output/{domain.name}.xdmf", "w") as xdmf:
+        xdmf.write_mesh(domain)
 
 TXS.compute_xs_stiffness_matrix_sensitivities()
 

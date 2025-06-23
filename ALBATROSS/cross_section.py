@@ -527,18 +527,18 @@ class CrossSection:
         x1,x2 = self.x[0],self.x[1]
 
         ubar_r = cross(as_vector([0,x1,x2]),ubar)
-        gradubar = grad(ubar)
+        # gradubar = grad(ubar)
 
 
         # disp_grad =  as_tensor([[uhat[0], gradubar[0,0], gradubar[0,1]],
         #                     [uhat[1], gradubar[1,0], gradubar[1,1]],
         #                     [uhat[2], gradubar[2,0], gradubar[2,1]],
         #                 ])
-        disp_grad =  as_tensor([[0, gradubar[0,0], gradubar[0,1]],
-                            [0, gradubar[1,0], gradubar[1,1]],
-                            [0, gradubar[2,0], gradubar[2,1]],
-                        ])
-        w = disp_grad + disp_grad.T
+        # disp_grad =  as_tensor([[0, gradubar[0,0], gradubar[0,1]],
+        #                     [0, gradubar[1,0], gradubar[1,1]],
+        #                     [0, gradubar[2,0], gradubar[2,1]],
+        #                 ])
+        # w = disp_grad + disp_grad.T
         
         U = [ ubar[0],      # translation x
             ubar[1],        # translation y
