@@ -1428,7 +1428,7 @@ class CrossSection:
 
 
 
-class CoupledXSProblem:
+class CoupledCrossSection:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
         compute combined beam cross-sectional properties'''
     def __init__(self,XSs,pen=1e2):
@@ -1449,15 +1449,16 @@ class CoupledXSProblem:
         # self._adjust_effective_material()
         
     def get_xs_stiffness_matrix(self,correction='avg'):
-        #assemble each region's system
-        self._assemble_system_forms()
+        # #assemble each region's system
+        # self._assemble_system_forms()
 
-        #apply the penalty terms
-        self._construct_coupled_system_matrix()
+        # #apply the penalty terms
+        # self._construct_coupled_system_matrix()
         
         # #map elastic solutions to construct warping functions
         # self._compute_xs_stiffness_matrix(correction=correction)
         
+        return
 
     def _find_overlap(self):
         '''
@@ -1633,150 +1634,6 @@ class CoupledXSProblem:
             XS._construct_xs_form()
             XS._construct_KKT_forms()
 
-        #TODO: I believe we can use the block matrix interface here and this will significantly simplify the assembly of this system
-
-        # #compile system matrices for each individual region into a list 
-        # #   accessible by the coupled problem class
-        # # system_mats = []
-        # offset = 0
-        # for i,region in zip(self.regions,self.regions.values()):
-        #     region.system_mat = self.XSs[i].system_mat
-        #     #store offset values for the computed 
-        #     region.offset_start = offset
-        #     offset += region.system_mat.getSize()[0]
-        #     region.offset_end = offset
-        # #     system_mats.append(region.system_mat)
-        # # self.system_mats = system_mats
-
-
-    def _construct_coupled_system_matrix(self):
-        '''
-        Given collisions and regions, 
-        set up the coupled system matrix with the penalty terms
-        '''
-
-        # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
-        for idx,val in np.ndenumerate(self.adjacency):
-            if val == 1:
-                #get the interpolation matrix
-                self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
-                                                                                     self.regions[idx[0]].fxn_space,
-                                                                                     mixed=True)
-                #copy the interpolation matrix :
-                self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
-
-            elif val == 0 and idx[0] != idx[1]:
-                self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system_mat.getSize()[0],
-                                                                self.regions[idx[0]].system_mat.getSize()[1]])
-                self.separations[idx[0]][idx[1]].mat.assemble()
-
-        #populate an array of the same size as the adjacency matrix of the petsc matrices
-        #  using a *nearly* incomprehensible list "comprehension" 
-        # this adds the unadultered system to the diagonals, the interpolation matrices where there is a collision
-        # and the assembled empty matrices where there is a "separation"
-        A_list = [ [self.regions[i].system_mat if i==j
-                    else self.separations[i][j].mat if self.adjacency[i][j] == 0 and i!=j
-                    else self.collisions[i][j].pen_mat 
-                        for i in range(self.num_meshes)]
-                     for j in range(self.num_meshes) ]
-               
-        # add the penalty to the relevant block of A_list
-        for idx,val in np.ndenumerate(self.adjacency):
-            # if idx[0]==idx[1]:
-            if val==1:
-                pen_term = PETSc.Mat().createAIJ(A_list[idx[0]][idx[0]].getSize())
-                pen_term.assemble()
-                pen_term.setDiagonal(self.collisions[idx[0]][idx[1]].pen_vec)
-                pen_term.assemble()
-                
-                #add penalty term to diagonal block
-                A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
-                # if idx[0]<idx[1]:
-                #     A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
-                # elif idx[0]>idx[1]:
-                #     A_list[idx[0]][idx[0]].axpy(-1.0,pen_term)
-
-                #TODO: need to come up with a better way of populating the 
-                #   nested list than simply filling with the interpolation matrix, then overwriting it...
-
-                #add penalty term to off diagonal block (overwriting the )     
-                A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
-                A_list[idx[0]][idx[1]].assemble()
-                A_list[idx[0]][idx[1]].scale(-1.0)
-                # if idx[0]<idx[1]:
-                #     A_list[idx[0]][idx[1]].scale(-1.0)
-                # elif idx[0]>idx[1]:
-                #     A_list[idx[0]][idx[1]].scale(1.0)
-
-                # # TODO: this correction modifies the warping function discovery, which
-                # #       does NOT modify the discovered stiffness matrix properly
-                # #apply the correction for the overlap
-                # dx_correction = ufl.Measure("dx", 
-                #                             domain=self.XSs[idx[0]].msh,
-                #                             subdomain_data= self.collisions[idx[0]][idx[1]].celltags[0])
-                # res = self.XSs[idx[0]]._construct_residual(dx=dx_correction,
-                #                                            return_residual=True)
-                # correction = self.XSs[idx[0]]._assemble_system_matrix(residual=res)
-                # # correction.view()
-                # A_list[idx[0]][idx[0]].axpy(-0.5,correction)
-
-
-        A = PETSc.Mat()
-        A.createNest(A_list)
-        
-        A.assemble()
-
-        self.system_mat = A
-
-
-    # def _get_modes(self):
-    #     m,n1=self.system_mat.getSize()
-    #     print('Computing QR factorization')
-    #     A_aij = self.system_mat.convert('aij')
-    #     Acsr = csr_matrix(A_aij.getValuesCSR()[::-1], shape=self.system_mat.size)
-        
-    #     #perform QR factorization and store as struct in householder form
-    #     QR= sparseqr.qr_factorize( Acsr.transpose() )
-
-    #     #build matrix of unit vectors for selecting last 12 columns
-    #     X = np.zeros((m,12))
-    #     for i in range(12):
-    #         X[m-1-i,11-i]=1
-
-    #     #perform matrix multiplication implicitly to construct orthogonal nullspace basis
-    #     self.sols = sparseqr.qmult(QR,X)
-    #     self.sparse_sols = sparseify(self.sols,sparse_format='csc')
-
-
-    # def _decouple_modes(self):
-    #     ''' 
-    #     for each region, decouple the modes corresponding to that region
-    #     '''
-    #     #intialize empty basis transformation matrix
-    #     self.basis_trans_matrix = np.zeros((6,12))
-
-    #     #compute contribution to basis transformation matrix for each region
-    #     for i,region in zip(self.regions,self.regions.values()):
-    #         self.XSs[i].sols = self.sols[region.offset_start:region.offset_end,:]
-    #         self.XSs[i]._decouple_modes(basis_matrix_only=True)
-    #         print(f"Condition number for sub mesh {i}: {np.linalg.cond(self.XSs[i].mat)}")
-    #         self.basis_trans_matrix += self.XSs[i].mat
-    #     #perform the basis transformation (use the sparse matrix to prevent numerical inaccuracies during inversion)
-    #     # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
-        
-    #     print(f"Condition number for overall system: {np.linalg.cond(self.basis_trans_matrix)}")
-    #     self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix)#,sparse_format='csc')
-        
-    #     self.basis_trans_matrix_pinv = sparseify(np.linalg.pinv(self.basis_trans_matrix_sparse.toarray()))
-
-    #     self.sols_decoup = (self.sparse_sols.dot(self.basis_trans_matrix_pinv)).toarray()
-
-    #     #get the decoupled basis
-    #     for i,region in zip(self.regions,self.regions.values()):
-    #         # ubar_uhat_dofs = np.concatenate([self.XSs[i].ubar_vtx_to_dof,self.XSs[i].uhat_vtx_to_dof])
-    #         # self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:][ubar_uhat_dofs,:]
-    #         self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
-
 
     def _compute_xs_stiffness_matrix(self,correction=None):
         '''
@@ -1784,41 +1641,20 @@ class CoupledXSProblem:
         store the accumulated matrices for recovery, etc
         '''
         self.K = np.zeros((6,6))
-        # self.K1 = np.zeros((6,6))
-        # self.K2 = np.zeros((6,6))
+        self.K1 = np.zeros((6,6))
+        self.K2 = np.zeros((6,6))
         # self.S = np.zeros((6,6))
 
-        #TODO: subtract off the 1/2 of the contribution of the stiffness from each mesh in the collision 
         for i,region in zip(self.regions,self.regions.values()):
             self.XSs[i]._compute_xs_stiffness_matrix()
-        #   self.S += self.XSs[i].S
-        #   self.K1 += self.XSs[i].K1
-        #   self.K2 += self.XSs[i].K2
+            self.K1 += self.XSs[i].K1
+            self.K2 += self.XSs[i].K2
 
-            self.K += self.XSs[i].K
-
-        #TODO:for each collision, subtract off the stiffness contribution for each collision from that mesh
-        for idx,val in np.ndenumerate(self.adjacency):
-            if val == 0:
-                continue
-            else:
-                if correction is not None:           
-                    dx_region = Measure("dx", domain=self.regions[idx[0]].msh, subdomain_data=self.collisions[idx[0]][idx[1]].celltags[1])
-                    K_gamma_plus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1,2)))
-                    K_gamma_minus = self.XSs[idx[0]]._get_stiffness_contribution(dx_region((1)))
-
-                    if correction == 'avg':
-                        self.K -= 0.25*(K_gamma_plus+K_gamma_minus)
-
-                    elif correction == 'plus':
-                        self.K -= 0.5*(K_gamma_plus)
-
-                    elif correction == 'minus':
-                        self.K -= 0.5*(K_gamma_minus)
-
-                    else:
-                        continue
-    
+            # self.S += self.XSs[i].S
+            # self.K += self.XSs[i].K
+        
+        self.K = self.K1.T @ np.linalg.inv(self.K2) @ self.K1
+           
 
     def get_overlap_area(self):
         for idx,val in np.ndenumerate(self.adjacency):
@@ -1964,6 +1800,150 @@ class CoupledXSProblem:
         plotter.show_bounds()
         if not pyvista.OFF_SCREEN:
             plotter.show()
+
+        #TODO: I believe we can use the block matrix interface here and this will significantly simplify the assembly of this system
+
+        # #compile system matrices for each individual region into a list 
+        # #   accessible by the coupled problem class
+        # # system_mats = []
+        # offset = 0
+        # for i,region in zip(self.regions,self.regions.values()):
+        #     region.system_mat = self.XSs[i].system_mat
+        #     #store offset values for the computed 
+        #     region.offset_start = offset
+        #     offset += region.system_mat.getSize()[0]
+        #     region.offset_end = offset
+        # #     system_mats.append(region.system_mat)
+        # # self.system_mats = system_mats
+
+
+    # def _construct_coupled_system_matrix(self):
+    #     '''
+    #     Given collisions and regions, 
+    #     set up the coupled system matrix with the penalty terms
+    #     '''
+
+    #     # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
+    #     for idx,val in np.ndenumerate(self.adjacency):
+    #         if val == 1:
+    #             #get the interpolation matrix
+    #             self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
+    #                                                                                  self.regions[idx[0]].fxn_space,
+    #                                                                                  mixed=True)
+    #             #copy the interpolation matrix :
+    #             self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
+
+    #         elif val == 0 and idx[0] != idx[1]:
+    #             self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system_mat.getSize()[0],
+    #                                                             self.regions[idx[0]].system_mat.getSize()[1]])
+    #             self.separations[idx[0]][idx[1]].mat.assemble()
+
+    #     #populate an array of the same size as the adjacency matrix of the petsc matrices
+    #     #  using a *nearly* incomprehensible list "comprehension" 
+    #     # this adds the unadultered system to the diagonals, the interpolation matrices where there is a collision
+    #     # and the assembled empty matrices where there is a "separation"
+    #     A_list = [ [self.regions[i].system_mat if i==j
+    #                 else self.separations[i][j].mat if self.adjacency[i][j] == 0 and i!=j
+    #                 else self.collisions[i][j].pen_mat 
+    #                     for i in range(self.num_meshes)]
+    #                  for j in range(self.num_meshes) ]
+               
+    #     # add the penalty to the relevant block of A_list
+    #     for idx,val in np.ndenumerate(self.adjacency):
+    #         # if idx[0]==idx[1]:
+    #         if val==1:
+    #             pen_term = PETSc.Mat().createAIJ(A_list[idx[0]][idx[0]].getSize())
+    #             pen_term.assemble()
+    #             pen_term.setDiagonal(self.collisions[idx[0]][idx[1]].pen_vec)
+    #             pen_term.assemble()
+                
+    #             #add penalty term to diagonal block
+    #             A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
+    #             # if idx[0]<idx[1]:
+    #             #     A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
+    #             # elif idx[0]>idx[1]:
+    #             #     A_list[idx[0]][idx[0]].axpy(-1.0,pen_term)
+
+    #             #TODO: need to come up with a better way of populating the 
+    #             #   nested list than simply filling with the interpolation matrix, then overwriting it...
+
+    #             #add penalty term to off diagonal block (overwriting the )     
+    #             A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
+    #             A_list[idx[0]][idx[1]].assemble()
+    #             A_list[idx[0]][idx[1]].scale(-1.0)
+    #             # if idx[0]<idx[1]:
+    #             #     A_list[idx[0]][idx[1]].scale(-1.0)
+    #             # elif idx[0]>idx[1]:
+    #             #     A_list[idx[0]][idx[1]].scale(1.0)
+
+    #             # # TODO: this correction modifies the warping function discovery, which
+    #             # #       does NOT modify the discovered stiffness matrix properly
+    #             # #apply the correction for the overlap
+    #             # dx_correction = ufl.Measure("dx", 
+    #             #                             domain=self.XSs[idx[0]].msh,
+    #             #                             subdomain_data= self.collisions[idx[0]][idx[1]].celltags[0])
+    #             # res = self.XSs[idx[0]]._construct_residual(dx=dx_correction,
+    #             #                                            return_residual=True)
+    #             # correction = self.XSs[idx[0]]._assemble_system_matrix(residual=res)
+    #             # # correction.view()
+    #             # A_list[idx[0]][idx[0]].axpy(-0.5,correction)
+
+
+    #     A = PETSc.Mat()
+    #     A.createNest(A_list)
+        
+    #     A.assemble()
+
+    #     self.system_mat = A
+
+
+    # def _get_modes(self):
+    #     m,n1=self.system_mat.getSize()
+    #     print('Computing QR factorization')
+    #     A_aij = self.system_mat.convert('aij')
+    #     Acsr = csr_matrix(A_aij.getValuesCSR()[::-1], shape=self.system_mat.size)
+        
+    #     #perform QR factorization and store as struct in householder form
+    #     QR= sparseqr.qr_factorize( Acsr.transpose() )
+
+    #     #build matrix of unit vectors for selecting last 12 columns
+    #     X = np.zeros((m,12))
+    #     for i in range(12):
+    #         X[m-1-i,11-i]=1
+
+    #     #perform matrix multiplication implicitly to construct orthogonal nullspace basis
+    #     self.sols = sparseqr.qmult(QR,X)
+    #     self.sparse_sols = sparseify(self.sols,sparse_format='csc')
+
+
+    # def _decouple_modes(self):
+    #     ''' 
+    #     for each region, decouple the modes corresponding to that region
+    #     '''
+    #     #intialize empty basis transformation matrix
+    #     self.basis_trans_matrix = np.zeros((6,12))
+
+    #     #compute contribution to basis transformation matrix for each region
+    #     for i,region in zip(self.regions,self.regions.values()):
+    #         self.XSs[i].sols = self.sols[region.offset_start:region.offset_end,:]
+    #         self.XSs[i]._decouple_modes(basis_matrix_only=True)
+    #         print(f"Condition number for sub mesh {i}: {np.linalg.cond(self.XSs[i].mat)}")
+    #         self.basis_trans_matrix += self.XSs[i].mat
+    #     #perform the basis transformation (use the sparse matrix to prevent numerical inaccuracies during inversion)
+    #     # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
+        
+    #     print(f"Condition number for overall system: {np.linalg.cond(self.basis_trans_matrix)}")
+    #     self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix)#,sparse_format='csc')
+        
+    #     self.basis_trans_matrix_pinv = sparseify(np.linalg.pinv(self.basis_trans_matrix_sparse.toarray()))
+
+    #     self.sols_decoup = (self.sparse_sols.dot(self.basis_trans_matrix_pinv)).toarray()
+
+    #     #get the decoupled basis
+    #     for i,region in zip(self.regions,self.regions.values()):
+    #         # ubar_uhat_dofs = np.concatenate([self.XSs[i].ubar_vtx_to_dof,self.XSs[i].uhat_vtx_to_dof])
+    #         # self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:][ubar_uhat_dofs,:]
+    #         self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
 
 
 class CrossSectionAnalytical:
