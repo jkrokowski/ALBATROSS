@@ -1442,12 +1442,19 @@ class CoupledCrossSection:
         #base penalty parameter
         self.pen = pen
 
+        #TODO: 
+        self._adjust_penalty()
+
         #compute collisions between all meshes
         self._find_overlap()
 
         # #modify each region's material properties based on the effective material rule 
         # self._adjust_effective_material()
-        
+
+    def _adjust_penalty(self):
+
+        return
+
     def get_xs_stiffness_matrix(self,correction='avg'):
         # #assemble each region's system
         # self._assemble_system_forms()
@@ -1629,6 +1636,7 @@ class CoupledCrossSection:
             XS.C = getMatConstitutiveIsotropic(XS.msh,XS.E,XS.nu)
 
     def _assemble_system_forms(self):
+        #TODO: modify to 
         #construct the residudal and assemble the system mat for each region
         for XS in self.XSs:
             XS._construct_xs_form()
