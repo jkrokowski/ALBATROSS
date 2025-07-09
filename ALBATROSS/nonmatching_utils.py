@@ -5,19 +5,22 @@ from petsc4py import PETSc
 import basix
 from mpi4py import MPI
 import ufl
-from scipy.sparse import csr_matrix
 from scipy.spatial import cKDTree
+from shapely.geometry import Polygon,LineString, Point, MultiLineString
+from shapely.ops import polygonize, unary_union
+import gmsh
+from dolfinx.io import gmshio
+
 
 class Collision:
     '''
     Collection of information about each overlapping section
     '''
-    def __init__(self,collision_bbtree,mesh_indices,celltags,pts,penalty_dofs):
-        self.collision_bbtree = collision_bbtree
+    def __init__(self,bb_tree_collisions,mesh_indices,celltags,pts):
+        self.bb_tree_collisions = bb_tree_collisions
         self.mesh_indices = mesh_indices
         self.celltags = celltags
         self.pts = pts
-        self.penalty_dofs = penalty_dofs
         
     def add_pen_vec(self,pen_vec):
         self.pen_vec = pen_vec
@@ -295,17 +298,232 @@ class CoupledProblem:
 
         return self.solution
     
+def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
+    """
+    Generate a GMSH mesh from a Shapely Polygon or MultiPolygon.
 
+    Parameters
+    ----------
+    polygon : shapely.geometry.Polygon or MultiPolygon
+        The input geometry to mesh.
+    mesh_name : str
+        A name for the gmsh model.
+    mesh_res : float
+        Target mesh element size (resolution).
+
+    Returns
+    -------
+    dolfinx.mesh.Mesh
+        The generated mesh.
+    """
+    if polygon.is_empty:
+        raise ValueError("Provided polygon is empty.")
+
+    gmsh.initialize()
+    gmsh.model.add(mesh_name)
+    point_id = 1
+    curve_id = 1
+    loop_id = 1
+    surface_tags = []
+
+    def estimate_mesh_resolution(poly, elements_across=30):
+        """Estimate a good GMSH mesh resolution based on geometry size."""
+        xmin, ymin = np.array(poly.exterior.coords[:-1]).min(axis=0)
+        xmax, ymax = np.array(poly.exterior.coords[:-1]).max(axis=0)
+        L = min(xmax - xmin, ymax - ymin)
+        return L / elements_across
     
-def convert_petsc_to_numpy(mat,sparse='False'):
-    mataij = mat.convert('aij')
-    mat_sparse = csr_matrix(mataij.getValuesCSR()[::-1], shape=mataij.size)
-    mat_np = mat_sparse.toarray()
-    
-    if sparse is True:
-        return mat,mat_sparse
+    def add_polygon(poly):
+        nonlocal point_id, curve_id, loop_id
+        point_map = {}
+
+        # Outer boundary
+        coords = list(poly.exterior.coords[:-1])  # omit duplicate endpoint
+        outer_pts = []
+        for x, y in coords:
+            pid = gmsh.model.geo.addPoint(x, y, 0, mesh_res, point_id)
+            point_map[(x, y)] = pid
+            outer_pts.append(pid)
+            point_id += 1
+        outer_lines = []
+        for i in range(len(outer_pts)):
+            a = outer_pts[i]
+            b = outer_pts[(i + 1) % len(outer_pts)]
+            lid = gmsh.model.geo.addLine(a, b)
+            outer_lines.append(lid)
+            curve_id += 1
+        outer_loop = gmsh.model.geo.addCurveLoop(outer_lines,reorient=True)
+
+        # Inner holes
+        inner_loops = []
+        for interior in poly.interiors:
+            coords = list(interior.coords[:-1])
+            hole_pts = []
+            for x, y in coords:
+                pid = gmsh.model.geo.addPoint(x, y, 0, mesh_res, point_id)
+                # pid = gmsh.model.geo.addPoint(x, y, 0, tag=point_id)
+                point_map[(x, y)] = pid
+                hole_pts.append(pid)
+                point_id += 1
+            hole_lines = []
+            for i in range(len(hole_pts)):
+                a = hole_pts[i]
+                b = hole_pts[(i + 1) % len(hole_pts)]
+                lid = gmsh.model.geo.addLine(a, b)
+                hole_lines.append(lid)
+                curve_id += 1
+            hole_loop = gmsh.model.geo.addCurveLoop(hole_lines)
+            inner_loops.append(hole_loop)
+
+        surface = gmsh.model.geo.addPlaneSurface([outer_loop] + inner_loops)
+        gmsh.model.geo.mesh.setRecombine(2, surface,angle=75)
+        gmsh.model.addPhysicalGroup(2, [surface], tag=1)
+        surface_tags.append(surface)
+
+        return outer_lines
+    mesh_size = estimate_mesh_resolution(polygon)
+
+    # Support MultiPolygon
+    if polygon.geom_type == "Polygon":
+        lines = add_polygon(polygon)
+    elif polygon.geom_type == "MultiPolygon":
+        for poly in polygon.geoms:
+            add_polygon(poly)
     else:
-        return mat_np
+        raise TypeError(f"Unsupported geometry type: {type(polygon)}")
+
+    gmsh.model.geo.synchronize()
+
+    gmsh.model.mesh.field.add("Distance", 1)
+    gmsh.model.mesh.field.setNumbers(1, "EdgesList", lines)  # or NodesList
+    gmsh.model.mesh.field.add("Threshold", 2)
+    gmsh.model.mesh.field.setNumber(2, "InField", 1)
+    gmsh.model.mesh.field.setNumber(2, "SizeMin", mesh_size)
+    gmsh.model.mesh.field.setNumber(2, "SizeMax", mesh_size*3)
+    gmsh.model.mesh.field.setNumber(2, "DistMin", 0)
+    gmsh.model.mesh.field.setNumber(2, "DistMax", mesh_size*5)
+
+    # gmsh.option.setNumber("Mesh.Optimize", 1)
+    # gmsh.option.setNumber("Mesh.OptimizeNetgen", 1)
+    # gmsh.option.setNumber("Mesh.CharacteristicLengthMin", mesh_size)
+    # gmsh.option.setNumber("Mesh.CharacteristicLengthMax", mesh_size*3) 
+    gmsh.model.mesh.field.setAsBackgroundMesh(2)
+    # gmsh.option.setNumber("Mesh.Algorithm", 8)
+    # gmsh.option.setNumber("Mesh.RecombineAll", 1)
+    # gmsh.option.setNumber("Mesh.SmoothNormals", 1)
+    gmsh.option.setNumber("Mesh.RecombinationAlgorithm",3)  # Blossom
+    # gmsh.option.setNumber("Mesh.SubdivisionAlgorithm", 1)
+    # gmsh.option.setNumber("Mesh.Smoothing", 1)  # number of smoothing steps
+    gmsh.model.mesh.generate(2)
+    # gmsh.fltk.run()
+
+    mesh, _, _ = gmshio.model_to_mesh(gmsh.model, MPI.COMM_WORLD, 0, gdim=2)
+    mesh.name = 'intersection'
+    gmsh.finalize()
+    return mesh
+
+
+def compute_union_polygon(mesh_A, facet_tags_A, mesh_B, facet_tags_B, tag_val=1, gmsh_res=0.0):
+    """
+    Constructs a new mesh T^C over the overlapping region using boundary facet information
+    from meshes A and B. Includes:
+        - All vertices from tagged boundary facets
+        - All intersection points between boundary lines of A and B
+
+    Parameters
+    ----------
+    mesh_A, mesh_B : dolfinx.mesh.Mesh
+        Input meshes.
+    facet_tags_A, facet_tags_B : dolfinx.mesh.meshtags
+        Boundary facet tags with value=tag_val on overlap boundaries.
+    tag_val : int
+        Tag marking boundary facets in the tags.
+    gmsh_res : float
+        Target resolution for gmsh meshing.
+
+    Returns
+    -------
+    dolfinx.mesh.Mesh
+        A new mesh over the overlap region.
+    """
+
+    # Build topology
+    mesh_A.topology.create_connectivity(mesh_A.topology.dim - 1, 0)
+    mesh_B.topology.create_connectivity(mesh_B.topology.dim - 1, 0)
+
+    f2v_A = mesh_A.topology.connectivity(mesh_A.topology.dim - 1, 0)
+    f2v_B = mesh_B.topology.connectivity(mesh_B.topology.dim - 1, 0)
+
+    coords_A = mesh_A.geometry.x
+    coords_B = mesh_B.geometry.x
+
+    # Build LineStrings for A
+    boundary_lines_A = []
+    for facet in facet_tags_A.find(tag_val):
+        verts = f2v_A.links(facet)
+        pts = [coords_A[v,:2] for v in verts]
+        boundary_lines_A.append(LineString(pts))
+
+    # Build LineStrings for B
+    boundary_lines_B = []
+    for facet in facet_tags_B.find(tag_val):
+        verts = f2v_B.links(facet)
+        pts = [coords_B[v,:2] for v in verts]
+        boundary_lines_B.append(LineString(pts))
+
+    # Construct closed polygons
+    poly_A = unary_union(polygonize(MultiLineString(boundary_lines_A)))
+    poly_B = unary_union(polygonize(MultiLineString(boundary_lines_B)))
+    
+    #compute the polygon
+    # poly_C = poly_A.union(poly_B).simplify(1e-16)
+    poly_C = poly_A.intersection(poly_B).simplify(1e-16)
+
+    return poly_C
+
+
+def get_overlap_boundary_facets(mesh, tags, tag_values=(1,2)):
+    """
+    Returns the boundary facets (edges) of the union of cells tagged with 1 or 2.
+
+    Parameters
+    ----------
+    mesh : dolfinx.mesh.Mesh
+    tags : dolfinx.mesh.meshtags
+        Cell tags where values 1 or 2 mark overlapping region.
+    tag_values : tuple
+        The tag values considered "in the overlap".
+
+    Returns
+    -------
+    boundary_facets : np.ndarray
+        Array of facet indices on the boundary of the overlapping region.
+    """
+
+    mesh.topology.create_connectivity(mesh.topology.dim, mesh.topology.dim - 1)
+    mesh.topology.create_connectivity(mesh.topology.dim - 1,  mesh.topology.dim)
+
+    c2f = mesh.topology.connectivity(mesh.topology.dim, mesh.topology.dim - 1)
+    f2c = mesh.topology.connectivity(mesh.topology.dim - 1, mesh.topology.dim)
+
+    # Get the cells marked as overlapping
+    overlap_cells = np.where(np.isin(tags.values, tag_values))[0]
+
+    # Collect all facets belonging to these cells
+    candidate_facets = []
+    for cell in overlap_cells:
+        for facet in c2f.links(cell):
+            adj_cells = f2c.links(facet)
+            #this finds all facets that border a cell NOT in the overlap region,
+            # this is an "internal boundary facet"
+            if np.any([c not in overlap_cells for c in adj_cells]):
+                candidate_facets.append(facet)
+            #we also need to find all facets that only belond to one cell
+            if len(adj_cells) ==1:
+                candidate_facets.append(facet)
+
+    return np.array(candidate_facets, dtype=np.int32)
+
 
 def mark_cells(msh, cell_index,partial=False,pts=None):
     num_cells = msh.topology.index_map(

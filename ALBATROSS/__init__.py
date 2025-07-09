@@ -6,4 +6,8 @@ from ALBATROSS import material
 from ALBATROSS import frame
 from ALBATROSS import mesh
 from ALBATROSS import nonmatching_utils
-# from ALBATROSS import csdl_utils
+from ALBATROSS import petsc_utils
+try:
+    from ALBATROSS import csdl_utils
+except:
+    print("WARNING: CSDL not installed, please install csdl for optimization")
