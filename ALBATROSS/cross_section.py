@@ -1451,8 +1451,8 @@ class CoupledCrossSection:
         #compute collisions between all meshes
         self._find_overlap()
 
-        #construct mortar meshes
-        self._construct_mortar_meshes()
+        # #construct mortar meshes
+        # self._construct_mortar_meshes()
 
     def _adjust_penalty(self):
         h_avg_list = []
@@ -1463,12 +1463,19 @@ class CoupledCrossSection:
             h_avg_list.append(h_avg)
         self.pen /= np.average(h_avg_list)**2
         return
-
+    
     def get_xs_stiffness_matrix(self):
+        self._construct_coupling()
+
         #construct each region's system
         self._construct_system_forms()
 
-        self._build_system_form_list_of_lists()
+        self._organize_system_forms()
+
+        self._get_system_sizes()
+
+        self._get_system_matrices()
+
 
         #construct block system
         # self._construct_block_system()
@@ -1481,7 +1488,7 @@ class CoupledCrossSection:
         
         return
     
-    def _build_system_form_list_of_lists(self):
+    def _organize_system_forms(self):
         #construct the forms, sizes and matrices
         system_forms = []
         for i in range(self.num_meshes):
@@ -1503,7 +1510,34 @@ class CoupledCrossSection:
         system_forms.append(constraint_row)
 
         self.system_forms = system_forms
+    
+    def _get_system_sizes(self):
         
+        system_sizes = []
+        for xs in self.XSs:
+            size = xs.V.dofmap.index_map.size_global * xs.V.dofmap.index_map_bs
+            system_sizes.append(size)
+        size_lm = self.XSs[0].LM.dofmap.index_map.size_global * self.XSs[0].LM.dofmap.index_map_bs
+        system_sizes.append(size_lm)
+        self.system_size_list= system_sizes
+        self.system_sizes = [[(size_i,size_j) for size_j in system_sizes] for size_i in system_sizes]
+
+    
+    def _get_system_matrices(self):
+        system_matrices = []
+        for idx_i,system_forms_i in enumerate(self.system_forms):
+            system_matrices_i = []
+            for idx_j,system_form in enumerate(system_forms_i):
+                if system_form is not None:
+                    system_matrix = fem.petsc.assemble_matrix(fem.form(system_form))
+                else:
+                    system_matrix =PETSc.Mat().createAIJ(self.system_sizes[idx_i][idx_j])
+                system_matrix.assemble()
+                system_matrices_i.append(system_matrix)
+            system_matrices.append(system_matrices_i)
+        
+        self.system_matrices = system_matrices
+
 
     def _find_overlap(self):
         '''
@@ -1586,6 +1620,7 @@ class CoupledCrossSection:
                     # pen_vec = self._build_penalty_vector(self.regions[i],collision_ij)
                     # collision_ij.add_pen_vec(pen_vec)
                     
+                    #TODO: move this to a different location
                     #modify each region's material properties based on the effective material rule 
                     self._adjust_material(collision_ij)
 
@@ -1605,12 +1640,12 @@ class CoupledCrossSection:
         self.adjacency = adjacency
     
     
-    def _construct_mortar_meshes(self):
-        # for i in range(self.num_meshes):
-        #     for j in range(i,self.num_meshes):
+    def _construct_coupling(self):
         for collision in self.collisions:
             mshA = self.meshes[collision[0]]
             mshB = self.meshes[collision[1]]
+            
+            #constructing mortar mesh:
             tags_A,tags_B=self.collisions[collision].celltags
 
             bndry_facets_A = get_overlap_boundary_facets(mshA,tags_A)
@@ -1621,6 +1656,39 @@ class CoupledCrossSection:
 
             poly_C = compute_union_polygon(mshA, facet_tags_A, mshB, facet_tags_B)
             self.collisions[collision].msh = mesh_from_polygon(poly_C)
+        
+            #intialize functions on mortar mesh:
+
+
+            #construct projection operators
+            
+
+            #construct displacement term
+
+            #construct traction term
+            
+                                
+        
+        return
+    
+    def _initialize_mortar_mesh_fxns(self):
+        
+        return
+    
+    def _get_projection_operators(self):
+        return
+    
+
+    def _construct_disp_term(self):
+        return
+    
+    def _construct_traction_term(self):
+        return
+    
+    def _assemble_coupled_system(self):
+        return
+    
+    def _solve_coupled_system(self):
         return
     
 
