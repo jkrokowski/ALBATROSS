@@ -1,4 +1,4 @@
-from ufl import (Argument,derivative,dot,cross,Identity,sqrt,inner,tr,variable,
+from ufl import (Argument,derivative,dot,ds,cross,Identity,sqrt,inner,tr,variable,
                  diff,grad,sin,cos,as_matrix,SpatialCoordinate,FacetNormal,
                  Measure,as_tensor,indices,as_vector,sym,
                  TrialFunction,TestFunction,split)
@@ -1446,7 +1446,7 @@ class CoupledCrossSection:
         self.pen = pen
 
         #adjust penalty based on average mesh size
-        self._adjust_penalty()
+        self._set_penalty_values()
 
         #compute collisions between all meshes
         self._find_overlap()
@@ -1454,14 +1454,15 @@ class CoupledCrossSection:
         # #construct mortar meshes
         # self._construct_mortar_meshes()
 
-    def _adjust_penalty(self):
+    def _set_penalty_values(self):
         h_avg_list = []
         for XS in self.XSs:
             h_expr = ufl.CellDiameter(XS.msh)
             h_avg = fem.assemble_scalar(fem.form(h_expr*XS.dx))
             print(f'average cell size: {h_avg}')
             h_avg_list.append(h_avg)
-        self.pen /= np.average(h_avg_list)**2
+        self.nu_u = self.pen / np.average(h_avg_list)**2
+        self.nu_t = 1
         return
     
     def get_xs_stiffness_matrix(self):
@@ -1656,17 +1657,59 @@ class CoupledCrossSection:
 
             poly_C = compute_union_polygon(mshA, facet_tags_A, mshB, facet_tags_B)
             self.collisions[collision].msh = mesh_from_polygon(poly_C)
+            mesh_C = self.collisions[collision].msh
         
-            #intialize functions on mortar mesh:
-
+            #intialize functions on mortar mesh and add to collision
+            Ve_C = element("CG",mesh_C.topology.cell_name(),1,shape=(3,))
+            self.collisions[collision].fxn_space = fem.functionspace(mesh_C, mixed_element(4*[Ve_C]))
+            VC = self.collisions[collision].fxn_space
+            
+            self.collisions[collision].u = TrialFunction(VC)
+            self.collisions[collision].v = TestFunction(VC)
+            self.collisions[collision].dx = Measure("dx",domain=mesh_C)
+            uC = self.collisions[collision].u
+            vC = self.collisions[collision].v
+            dx_C = self.collisions[collision].dx
 
             #construct projection operators
-            
+            self.collisions[collision].PA = get_interpolation_matrix(VC,self.XSs[collision[0]].V,mixed=True)
+            self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V,mixed=True)
 
-            #construct displacement term
+            #construct displacement term (penalty weighted mass matrix)
+            MC_form = self.nu_u * inner(uC, vC) * dx_C
+            MC = fem.petsc.assemble_matrix(fem.form(MC_form))
+            MC.assemble()
+            self.collisions[collision].MC_form = MC_form
+            self.collisions[collision].MC = MC
 
-            #construct traction term
-            
+            #construct traction term (penalty weighted traction matrix)
+            n = FacetNormal(mesh_C)
+            n3 = as_tensor([0,n[0],n[1]])
+
+            #DG0 space, used for material properties, etc
+            Q = fem.functionspace(mesh_C,('DG',0))
+            #construct DG spaces for modulus of elasticity and poisson ratio (assuming all materials are ISOTROPIC)
+            E = fem.Function(Q)
+            nu = fem.Function(Q)
+            E.x.array[:] = np.full_like(E.x.array,self.XSs[0].materials[0].E,dtype=default_scalar_type)
+            nu.x.array[:] = np.full_like(nu.x.array,self.XSs[0].materials[0].nu,dtype=default_scalar_type)
+            C_C = getMatConstitutiveIsotropic(mesh_C,E,nu)
+            i,j,k,l = indices(4)
+
+            #trial function strain/stress:
+            eps_C = self.XSs[0].warping2strain(uC,0)
+            sigma_c =  as_tensor(C_C[i,j,k,l]*eps_C[k,l],(i,j))
+
+            #test function strain/stress:
+            eps_vC = self.XSs[0].warping2strain(vC,0)
+            sigma_vc =  as_tensor(C_C[i,j,k,l]*eps_vC[k,l],(i,j))
+
+            #traction stiffness matrix:
+            S_C_form = dot(dot(sigma_c,n3),dot(sigma_vc,n3))*ds
+            S_C = fem.petsc.assemble_matrix(fem.form(S_C_form))
+            S_C.assemble()
+            self.collisions[collision].SC_form = S_C_form
+            self.collisions[collision].S_C = S_C
                                 
         
         return
