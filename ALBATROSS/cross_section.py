@@ -30,7 +30,7 @@ from ALBATROSS.nonmatching_utils import (Region,Separation,Collision,
                                          celltags_to_dofs,
                                          get_interpolation_matrix,
                                          get_points_from_cells)
-from ALBATROSS.petsc_utils import convert_petsc_to_numpy
+from ALBATROSS.petsc_utils import convert_petsc_to_numpy,AT_C_B
 default_scalar_type = PETSc.ScalarType    
 
 #TODO: allow user to specify a point to find xs props about
@@ -1477,12 +1477,15 @@ class CoupledCrossSection:
 
         self._get_system_matrices()
 
+        #apply the penalty terms
+        self._apply_coupling()
 
         #construct block system
-        # self._construct_block_system()
+        self._construct_block_system()
 
-        # #apply the penalty terms
-        # self._apply_coupling()
+        #solve for the warping functions
+        # self._solve_block_system()
+
         
         # #map elastic solutions to construct warping functions
         # self._compute_xs_stiffness_matrix(correction=correction)
@@ -1510,7 +1513,9 @@ class CoupledCrossSection:
         constraint_row.append(None)
         system_forms.append(constraint_row)
 
-        self.system_forms = system_forms
+        self.system_LHS_forms = system_forms
+        self.system_RHS_forms = [xs.L_form[0] for xs in self.XSs]
+        self.system_RHS_forms.append(None)
     
     def _get_system_sizes(self):
         
@@ -1526,13 +1531,13 @@ class CoupledCrossSection:
     
     def _get_system_matrices(self):
         system_matrices = []
-        for idx_i,system_forms_i in enumerate(self.system_forms):
+        for idx_i,system_forms_i in enumerate(self.system_LHS_forms):
             system_matrices_i = []
             for idx_j,system_form in enumerate(system_forms_i):
                 if system_form is not None:
                     system_matrix = fem.petsc.assemble_matrix(fem.form(system_form))
                 else:
-                    system_matrix =PETSc.Mat().createAIJ(self.system_sizes[idx_i][idx_j])
+                    system_matrix = PETSc.Mat().createAIJ(self.system_sizes[idx_i][idx_j])
                 system_matrix.assemble()
                 system_matrices_i.append(system_matrix)
             system_matrices.append(system_matrices_i)
@@ -1705,33 +1710,154 @@ class CoupledCrossSection:
             sigma_vc =  as_tensor(C_C[i,j,k,l]*eps_vC[k,l],(i,j))
 
             #traction stiffness matrix:
-            S_C_form = dot(dot(sigma_c,n3),dot(sigma_vc,n3))*ds
+            S_C_form = self.nu_t * dot(dot(sigma_c,n3),dot(sigma_vc,n3))*ds
             S_C = fem.petsc.assemble_matrix(fem.form(S_C_form))
             S_C.assemble()
             self.collisions[collision].SC_form = S_C_form
             self.collisions[collision].S_C = S_C
-                                
+
+            #construct displacement penalty terms
+            PA = self.collisions[collision].PA
+            PB = self.collisions[collision].PB
+            S_AA = AT_C_B(PA, MC, PA)
+            S_AB = AT_C_B(PA, MC, PB)
+            S_BA = AT_C_B(PB, MC, PA)
+            S_BB = AT_C_B(PB, MC, PB)
+
+            #add traction term to the penalty terms:
+            S_AA.axpy(1.0, AT_C_B(PA, S_C, PA) )
+            S_AB.axpy(1.0, AT_C_B(PA, S_C, PB) )
+            S_BA.axpy(1.0, AT_C_B(PB, S_C, PA) )
+            S_BB.axpy(1.0, AT_C_B(PB, S_C, PB) )
+
+            self.collisions[collision].Sij = [[S_AA,S_AB],
+                                              [S_BA,S_BB]]
         
         return
     
-    def _initialize_mortar_mesh_fxns(self):
-        
-        return
-    
-    def _get_projection_operators(self):
-        return
+    def _apply_coupling(self):
+        for enum_idx, (msh_indices,collision) in enumerate(self.collisions.items()):
+            for idx_i in msh_indices:
+                for idx_j in msh_indices:
+                    if idx_i == idx_j:
+                        scale = 1.0
+                    else:
+                        scale = -1.0
+                    #add coupling term to system matrices
+                    self.system_matrices[idx_i][idx_j].axpy(scale,self.collisions[msh_indices].Sij[idx_i][idx_j])
     
 
-    def _construct_disp_term(self):
+    def _construct_block_system(self):
+        #Set up the full block system
+        self.system_mat = PETSc.Mat()
+        self.system_mat.createNest(self.system_matrices)
+
+        # set up the solver with the LHS
+        self.solver = PETSc.KSP().create(self.meshes[0].comm)
+        self.solver.setOperators(self.system_mat)
+        self.solver.setType("preonly")
+        pc = self.solver.getPC()
+        pc.setType("lu")
+        pc.setFactorSolverType("mumps")
+        
+
+
         return
+
+
+    # def _initialize_mortar_mesh_fxns(self):
+        
+    #     return
     
-    def _construct_traction_term(self):
-        return
+    # def _get_projection_operators(self):
+    #     return
     
-    def _assemble_coupled_system(self):
-        return
+
+    # def _construct_disp_term(self):
+    #     return
+    
+    # def _construct_traction_term(self):
+    #     return
+    
+    # def _assemble_coupled_system(self):
+    #     return
     
     def _solve_coupled_system(self):
+        #create functions for solution for each region
+        for xs_num,xs in self.XSs:
+            #populate the warping function and the lagrange multiplier vectors
+            xs.uh = fem.Function(xs.V, name="u_"+str(xs_num))
+            xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num))
+
+        #================== solve constrained system for each mode ==================#
+        solutions = []
+        functions = []
+        lmbdas = []
+        residuals = []
+        L1_list = self.XSs[0].L_form[1] #identical global constraints
+        for idx_l,L1 in enumerate(L1_list):
+            b1 = fem.petsc.assemble_vector(fem.form(L1))
+            self.system_RHS_forms[-1] = b1
+
+            #TODO: Lucky us, no special BCS to apply rn, may change if there were any elastic foundations, etc
+            b = PETSc.Vec().createNest(self.system_RHS_forms)
+
+            xh = b.copy()
+
+            #solve the linear systesm
+            self.solver.solve(b, xh)
+            # xh.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+
+            #get the local vectors:
+            x_local = []
+            offset = 0
+            for size in self.system_size_list:
+                x_local.append(xh.array[offset:offset+size])
+                offset += size
+
+            #populate the warping function and the lagrange multiplier vectors
+            for xs_num,xs in self.XSs:
+                #populate the warping function and the lagrange multiplier vectors
+                # xs.uh = fem.Function(xs.V, name="u_"+str(xs_num)+"_"+str(idx_l))
+                # xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num)+"_"+str(idx_l))
+
+                xs.uh.x.array[: len(x_local[xs_num])] = x_local[xs_num]
+                xs.lmbdah.x.array[: len(x_local[-1])] = x_local[-1]
+
+            # uh.x.scatter_forward()
+            # lmbdah.x.scatter_forward()
+
+            solutions.append(xh.copy())
+
+            #TODO: turn into a loop:
+            functions.append([xs.uh.copy() for xs in self.XSs])
+            lmbdas.append([xs.lmbdah.copy() for xs in self.XSs])
+
+            # #TODO: currently, need to do this because we are using a ufl.TestFunction() in the residual construction
+            # #       This can be re-written so that uh is used to construct the form, so that we don't have to repeatedly
+            # #       re-assemble a00,a10 or a01, just L0 and L1
+            # a00_form = squareXS._construct_xs_form(uh,return_form=True)
+            # a01_form = inner(lmbdah,constraints(squareXS.v))*dx
+            # a10_form = inner(dlmbda, constraints(uh)) * dx
+
+            # #main system residual
+            # residual00 = a00_form + a01_form - L0 
+            # #lagrange multiplier system residual
+            # residual10 = a10_form - L1
+
+            # residuals.append((residual00,residual10))
+
+            # print(f'lagrange multipliers for mode{k}:{x_local[2]}')
+
+
+        #==================== compute overall stiffness matrix ======================#
+        #TODO: loop time!
+        #populate individual functions with warping fucntions
+        for xs in self.XSs:
+            xs.warping_functions = [function[0] for function in functions]
+        # TXS_nm.XSs[1].warping_functions = [functionAB[1] for functionAB in functions]
+
+
         return
     
 
@@ -1808,12 +1934,23 @@ class CoupledCrossSection:
             XS.C = getMatConstitutiveIsotropic(XS.msh,XS.E,XS.nu)
 
     def _construct_system_forms(self):
-        #TODO: modify to 
-        #construct the residudal and assemble the system mat for each region
+        #construct the residual and assemble the system mat for each region
         for XS in self.XSs:
             XS._construct_xs_form()
             XS._construct_KKT_forms()
 
+        #     #construct RHS form vectors with no body force (e.g. unchanged for each mode)
+        #     f0_A= fem.Constant(mesh_A, default_scalar_type([0.0]*12)) 
+        #     L0_A = inner(TXS_nm.XSs[0].v, f0_A) * TXS_nm.XSs[0].dx
+        #     b0_A = fem.petsc.assemble_vector(fem.form(L0_A))
+
+        # #construct RHS forms for the constraints:
+        # f_constraints = []
+        # for i in range(6):
+        #     f1_np = np.zeros((self.system_sizes[-1][-1][0],))
+        #     f1_np[i]= 1.0
+        #     f_constraints.append(f1_np)
+        # system_RHS_forms_constraint = [inner(fem.Constant(self.meshes[0], default_scalar_type(f1)), self.XSs[0].dlmbda) * self.XSs[0].dx for f1 in f_constraints]
 
     def _compute_xs_stiffness_matrix(self,correction=None):
         '''
