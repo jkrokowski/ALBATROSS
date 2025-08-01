@@ -438,6 +438,7 @@ class CrossSection:
             uh.x.scatter_forward()
             lmbdah.x.scatter_forward()
 
+            #TODO: why save the solution vectors and the warping functions/lm's separately?
             self.solution_vectors.append(xh.copy())
             self.warping_functions.append(uh.copy())
             self.lmbdas.append(lmbdah.copy())
@@ -1466,16 +1467,15 @@ class CoupledCrossSection:
         return
     
     def get_xs_stiffness_matrix(self):
+        #construct the background mesh and assemble the penalty term mass matrices
         self._construct_coupling()
 
         #construct each region's system
         self._construct_system_forms()
-
         self._organize_system_forms()
-
         self._get_system_sizes()
-
         self._get_system_matrices()
+        self._get_system_vectors()
 
         #apply the penalty terms
         self._apply_coupling()
@@ -1484,11 +1484,10 @@ class CoupledCrossSection:
         self._construct_block_system()
 
         #solve for the warping functions
-        # self._solve_block_system()
-
+        self._solve_coupled_system()
         
-        # #map elastic solutions to construct warping functions
-        # self._compute_xs_stiffness_matrix(correction=correction)
+        #map elastic solutions to construct warping functions
+        self._compute_xs_stiffness_matrix()
         
         return
     
@@ -1544,6 +1543,12 @@ class CoupledCrossSection:
         
         self.system_matrices = system_matrices
 
+    def _get_system_vectors(self):
+        self.system_RHS_vectors = []
+        for idx_i,system_RHS_form in enumerate(self.system_RHS_forms[:-1]):
+            b0i = fem.petsc.assemble_vector(fem.form(system_RHS_form))
+            self.system_RHS_vectors.append(b0i)
+        self.system_RHS_vectors.append(None)
 
     def _find_overlap(self):
         '''
@@ -1784,23 +1789,22 @@ class CoupledCrossSection:
     
     def _solve_coupled_system(self):
         #create functions for solution for each region
-        for xs_num,xs in self.XSs:
-            #populate the warping function and the lagrange multiplier vectors
+        for xs_num,xs in enumerate(self.XSs):
+            #create the warping function and the lagrange multiplier vectors
             xs.uh = fem.Function(xs.V, name="u_"+str(xs_num))
             xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num))
+            xs.warping_functions = []
+            xs.lmbdas = []
 
-        #================== solve constrained system for each mode ==================#
-        solutions = []
-        functions = []
-        lmbdas = []
+        #================== solve constrained system for each mode ==================#           
         residuals = []
-        L1_list = self.XSs[0].L_form[1] #identical global constraints
+        L1_list = self.XSs[0].L_form[1] #all global constraints are identical
         for idx_l,L1 in enumerate(L1_list):
             b1 = fem.petsc.assemble_vector(fem.form(L1))
-            self.system_RHS_forms[-1] = b1
+            self.system_RHS_vectors[-1] = b1
 
             #TODO: Lucky us, no special BCS to apply rn, may change if there were any elastic foundations, etc
-            b = PETSc.Vec().createNest(self.system_RHS_forms)
+            b = PETSc.Vec().createNest(self.system_RHS_vectors)
 
             xh = b.copy()
 
@@ -1816,22 +1820,22 @@ class CoupledCrossSection:
                 offset += size
 
             #populate the warping function and the lagrange multiplier vectors
-            for xs_num,xs in self.XSs:
+            for xs_num,xs in enumerate(self.XSs):
                 #populate the warping function and the lagrange multiplier vectors
                 # xs.uh = fem.Function(xs.V, name="u_"+str(xs_num)+"_"+str(idx_l))
                 # xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num)+"_"+str(idx_l))
 
                 xs.uh.x.array[: len(x_local[xs_num])] = x_local[xs_num]
                 xs.lmbdah.x.array[: len(x_local[-1])] = x_local[-1]
-
+                xs.warping_functions.append(xs.uh.copy())
+                xs.lmbdas.append(xs.lmbdah.copy())
             # uh.x.scatter_forward()
             # lmbdah.x.scatter_forward()
 
-            solutions.append(xh.copy())
+            # solutions.append(xh.copy())
 
-            #TODO: turn into a loop:
-            functions.append([xs.uh.copy() for xs in self.XSs])
-            lmbdas.append([xs.lmbdah.copy() for xs in self.XSs])
+            # xs.uh.copy() for xs in self.XSs
+            # lmbdas.append([xs.lmbdah.copy() for xs in self.XSs])
 
             # #TODO: currently, need to do this because we are using a ufl.TestFunction() in the residual construction
             # #       This can be re-written so that uh is used to construct the form, so that we don't have to repeatedly
@@ -1851,10 +1855,9 @@ class CoupledCrossSection:
 
 
         #==================== compute overall stiffness matrix ======================#
-        #TODO: loop time!
         #populate individual functions with warping fucntions
-        for xs in self.XSs:
-            xs.warping_functions = [function[0] for function in functions]
+        # for xs in self.XSs:
+        #     xs.warping_functions = [function[0] for function in functions]
         # TXS_nm.XSs[1].warping_functions = [functionAB[1] for functionAB in functions]
 
 
@@ -1924,8 +1927,8 @@ class CoupledCrossSection:
         celltags_j = collision_ij.celltags[1]
 
         for (XS,celltags) in [(XSi,celltags_i),(XSj,celltags_j)]:
-            # cells = celltags.find(1)
-            cells = np.concatenate([celltags.find(1),celltags.find(2)])
+            cells = celltags.find(1)
+            # cells = np.concatenate([celltags.find(1),celltags.find(2)])
             # XS.E.x.array[cells] *= 1/np.sqrt(2)
             # XS.nu.x.array[cells] *= 1/np.sqrt(2)
             XS.E.x.array[cells] *= 0.5
@@ -1952,7 +1955,7 @@ class CoupledCrossSection:
         #     f_constraints.append(f1_np)
         # system_RHS_forms_constraint = [inner(fem.Constant(self.meshes[0], default_scalar_type(f1)), self.XSs[0].dlmbda) * self.XSs[0].dx for f1 in f_constraints]
 
-    def _compute_xs_stiffness_matrix(self,correction=None):
+    def _compute_xs_stiffness_matrix(self):
         '''
         for each region, get the elastic solution modes and compute the stiffness
         store the accumulated matrices for recovery, etc
