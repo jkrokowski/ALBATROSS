@@ -1742,14 +1742,14 @@ class CoupledCrossSection:
     
     def _apply_coupling(self):
         for enum_idx, (msh_indices,collision) in enumerate(self.collisions.items()):
-            for idx_i in msh_indices:
-                for idx_j in msh_indices:
+            for a_num,idx_i in enumerate(msh_indices):
+                for b_num,idx_j in enumerate(msh_indices):
                     if idx_i == idx_j:
                         scale = 1.0
                     else:
                         scale = -1.0
                     #add coupling term to system matrices
-                    self.system_matrices[idx_i][idx_j].axpy(scale,self.collisions[msh_indices].Sij[idx_i][idx_j])
+                    self.system_matrices[idx_i][idx_j].axpy(scale,self.collisions[msh_indices].Sij[a_num][b_num])
     
 
     def _construct_block_system(self):

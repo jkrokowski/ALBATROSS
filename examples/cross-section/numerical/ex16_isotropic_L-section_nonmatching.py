@@ -78,11 +78,11 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-LXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e3)
+LXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e3)
 
 LXS_nm.plot_meshes()
 
-LXS_nm.get_xs_stiffness_matrix(correction=None)
+LXS_nm.get_xs_stiffness_matrix()
 
 
 LXS_nm.plot_warping_fxns()
