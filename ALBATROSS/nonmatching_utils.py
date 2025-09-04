@@ -476,7 +476,7 @@ def compute_union_polygon(mesh_A, facet_tags_A, mesh_B, facet_tags_B, tag_val=1,
     poly_B = unary_union(polygonize(MultiLineString(boundary_lines_B)))
     
     #compute the polygon
-    # poly_C = poly_A.union(poly_B).simplify(1e-16)
+    # poly_C = poly_A.intersection(poly_B)
     poly_C = poly_A.intersection(poly_B).simplify(1e-16)
 
     return poly_C

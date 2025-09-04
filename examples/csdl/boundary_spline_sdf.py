@@ -26,7 +26,60 @@ with XDMFFile(MPI.COMM_WORLD, "output/square_mesh_opt.xdmf", "w") as xdmf:
 # domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 all_nodes= locate_entities(domain,0,lambda x: np.ones_like(x[0]))
 boundary_nodes = locate_entities_boundary(domain,0,lambda x: np.ones_like(x[0]))
+boundary_nodes_left = locate_entities_boundary(domain,0,lambda x: np.isclose(-0.5,x[0]))
+boundary_nodes_right = locate_entities_boundary(domain,0,lambda x: np.isclose(0.5,x[0]))
+boundary_nodes_top = locate_entities_boundary(domain,0,lambda x: np.isclose(0.5,x[1]))
+boundary_nodes_bottom = locate_entities_boundary(domain,0,lambda x: np.isclose(-0.5,x[1]))
 interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
+
+
+#CONSTRUCT BOUNDARY B-SPLINES (with a closed, uniform knot vector)
+num_parametric = 10
+bspline_degree=3
+spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
+xy=domain.geometry.x[boundary_nodes,0:2]
+
+for nodes in [boundary_nodes_left,boundary_nodes_right,boundary_nodes_top,boundary_nodes_bottom]:
+    parametric_coords = np.array([(i,) for i in np.linspace(0,1,nodes.shape[0])])
+    ordering = ALBATROSS.csdl_utils.order_boundary_nodes(domain.geometry.x[nodes,0:2])
+    ordered_vertices = nodes[ordering]
+    inverse_ordering = np.argsort(ordering)
+    # boundary_points = csdl.concatenate([xy[list(ordering)],xy[0:1,:]]) #duplicate the start/endpoint
+    points = domain.geometry.x[ordered_vertices,0:2] #duplicate the start/endpoint
+    print(points)
+    edge_spline_coeffs = spline_space.fit(values = points,parametric_coordinates= parametric_coords)
+    # coeffs = boundary_spline_coeffs.value
+    edge_spline = lfs.Function(spline_space,edge_spline_coeffs,name='edge_spline')
+    
+    #evaluation points:
+    #points should be: 
+    #   -+--
+    #   -+--
+    #   --+-
+    #   ---+
+    evaluation_points = np.array([[0.25,0.25],[0.75,-.75],[.1,.52],[-.1,-.6]])
+    projected_point_vals = edge_spline.evaluate(edge_spline.project(evaluation_points)).value
+    distance = np.abs(evaluation_points-projected_point_vals)
+    
+    sign = #use winding number (very robust and easy to assume b-spline loop is closed)
+
+
+    tangents = edge_spline.evaluate(edge_spline.project(evaluation_points),parametric_derivative_orders =(1)).value
+    
+
+
+    #2D cross product:
+    sign = (tangents[:,0]*distance[:,1]-tangents[:,1]*distance[:,0] ) / csdl.norm(tangents,distance)[:,0]
+    # signed_distance = csdl.expand(sign,distance.shape,action='i->ij')*csdl.norm(distance,axes=(1,))
+    signed_distance = sign*csdl.norm(distance,axes=(1,))
+    
+    print("signed distance for points:")
+    # csdl.cross(csdl.concatenate([tangents,np.zeros((2,1))],axis=1),csdl.concatenate([distance,np.zeros((2,1))],axis=1),axis=1)
+    print(signed_distance.value)
+    print()    
+
+#==========================
+
 
 #order the boundary using a nearest neighbor search:
 ordering = ALBATROSS.csdl_utils.order_boundary_nodes(domain.geometry.x[boundary_nodes,0:2])

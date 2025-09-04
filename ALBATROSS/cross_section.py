@@ -458,7 +458,7 @@ class CrossSection:
 
             # self.residuals.append((residual00,residual10))
 
-            print(f'lagrange multipliers for mode{idx_k}:{x_local[1]}')
+            # print(f'lagrange multipliers for mode{idx_k}:{x_local[1]}')
 
 
     def _compute_xs_stiffness_matrix(self):             

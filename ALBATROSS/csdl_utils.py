@@ -162,6 +162,64 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
                                                          input_vals['xy'].flatten().shape[0]))
 
+class OversetMeshManager(csdl.CustomExplicitOperation):
+    """
+    Manages mesh connectivity and interpolation weights for overlapping meshes
+    during optimization iterations.
+    """
+    
+    def initialize(self):
+        # Design variables that affect mesh positions/shapes
+        self.add_input('design_vars', shape=(n_design_vars,))
+        
+        # Current mesh geometry states
+        self.add_input('mesh_A_coords', shape=(n_nodes_A, 2))
+        self.add_input('mesh_B_coords', shape=(n_nodes_B, 2))
+        
+        # Outputs
+        self.add_output('connectivity_changed', shape=(1,))  # Boolean flag
+        self.add_output('interpolation_weights', shape=(n_interp_weights,))
+        self.add_output('mortar_mesh_coords', shape=(n_mortar_nodes, 2))
+        self.add_output('collision_matrix', shape=(n_elements_A, n_elements_B))
+        
+        # Cached states for comparison
+        self.previous_connectivity = None
+        self.previous_design_vars = None
+        self.tolerance = 1e-6  # Connectivity change threshold
+    
+    def compute(self, inputs, outputs):
+        design_vars = inputs['design_vars']
+        mesh_A = inputs['mesh_A_coords']
+        mesh_B = inputs['mesh_B_coords']
+        
+        # 1. Check if significant geometry change occurred
+        connectivity_changed = self._check_connectivity_change(design_vars, mesh_A, mesh_B)
+        
+        if connectivity_changed:
+            # 2a. Rebuild collision detection and mortar mesh
+            collision_matrix = self._detect_collisions(mesh_A, mesh_B)
+            mortar_coords = self._construct_mortar_mesh(mesh_A, mesh_B, collision_matrix)
+            interp_weights = self._compute_interpolation_weights(mesh_A, mesh_B, mortar_coords)
+            
+            # Cache current state
+            self._cache_current_state(design_vars, collision_matrix)
+        else:
+            # 2b. Only update interpolation weights (linear update)
+            collision_matrix = self.previous_connectivity
+            mortar_coords = self._update_mortar_positions(design_vars)
+            interp_weights = self._update_interpolation_weights(mesh_A, mesh_B, mortar_coords)
+        
+        outputs['connectivity_changed'] = connectivity_changed
+        outputs['interpolation_weights'] = interp_weights
+        outputs['mortar_mesh_coords'] = mortar_coords
+        outputs['collision_matrix'] = collision_matrix
+    
+    def compute_derivatives(self, inputs, derivatives):
+        # Only provide derivatives for smooth (non-connectivity-changing) updates
+        if not self.connectivity_changed:
+            # Compute derivatives of interpolation weights w.r.t. design variables
+            derivatives['interpolation_weights', 'design_vars'] = self._compute_weight_derivatives()
+            derivatives['mortar_mesh_coords', 'design_vars'] = self._compute_mortar_derivatives()
 
 class BeamModel(csdl.CustomExplicitOperation):
     '''

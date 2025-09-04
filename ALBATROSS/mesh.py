@@ -39,12 +39,12 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
      # moved_dofs = fem.locate_dofs_topological(V.sub(0),0,moved_nodes)
      # dofs_to_move = fem.locate_dofs_topological(V,0,nodes_to_move)
 
-     u_bc.vector.array[moved_dofs] += displacement.T.flatten()
+     u_bc.x.array[moved_dofs] += displacement.T.flatten()
      bc = fem.dirichletbc(u_bc,moved_nodes)
      bcs = [bc]
           
      #TODO: need to account for case where not all exterior nodes are moved
-     fem.petsc.set_bc(uh.vector, bcs)
+     # fem.petsc.set_bc(uh.x, bcs)
      if mode == 'hyper_elas':
           u = fem.Function(V)
      else:
