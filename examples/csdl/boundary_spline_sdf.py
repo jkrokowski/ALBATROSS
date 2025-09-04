@@ -32,12 +32,16 @@ boundary_nodes_top = locate_entities_boundary(domain,0,lambda x: np.isclose(0.5,
 boundary_nodes_bottom = locate_entities_boundary(domain,0,lambda x: np.isclose(-0.5,x[1]))
 interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
 
-
+#TODO: need to make this so the SDF is a function of x,y
+#TODO: need to clean up how we handle multiple splines
 #CONSTRUCT BOUNDARY B-SPLINES (with a closed, uniform knot vector)
 num_parametric = 10
 bspline_degree=3
 spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
 xy=domain.geometry.x[boundary_nodes,0:2]
+I_list = []
+d_list = []
+x = csdl.Variable(value = np.array([[0.25,0.25],[0.75,-.75],[.1,.52],[-.1,-.6],[0,0]]))
 
 for nodes in [boundary_nodes_left,boundary_nodes_right,boundary_nodes_top,boundary_nodes_bottom]:
     parametric_coords = np.array([(i,) for i in np.linspace(0,1,nodes.shape[0])])
@@ -46,40 +50,76 @@ for nodes in [boundary_nodes_left,boundary_nodes_right,boundary_nodes_top,bounda
     inverse_ordering = np.argsort(ordering)
     # boundary_points = csdl.concatenate([xy[list(ordering)],xy[0:1,:]]) #duplicate the start/endpoint
     points = domain.geometry.x[ordered_vertices,0:2] #duplicate the start/endpoint
-    print(points)
+    # print(points)
     edge_spline_coeffs = spline_space.fit(values = points,parametric_coordinates= parametric_coords)
     # coeffs = boundary_spline_coeffs.value
     edge_spline = lfs.Function(spline_space,edge_spline_coeffs,name='edge_spline')
     
     #evaluation points:
     #points should be: 
-    #   -+--
+    #   ----
     #   -+--
     #   --+-
     #   ---+
-    evaluation_points = np.array([[0.25,0.25],[0.75,-.75],[.1,.52],[-.1,-.6]])
-    projected_point_vals = edge_spline.evaluate(edge_spline.project(evaluation_points)).value
-    distance = np.abs(evaluation_points-projected_point_vals)
+
+    eval_pts = x
+    proj_eval_pts = edge_spline.evaluate(edge_spline.project(eval_pts))
+    distance_eval = proj_eval_pts-eval_pts
+    sq_distance_eval = csdl.norm(distance_eval,axes=(1,))
+    d_list.append(sq_distance_eval)
+    tangent = edge_spline.evaluate(np.linspace(0,1,8).reshape((8,1)),parametric_derivative_orders =(1)).value
     
-    sign = #use winding number (very robust and easy to assume b-spline loop is closed)
+    #winding number computation:
+    def winding_kernel(t,pts):
+        '''
+        t: array of parametric points
+        p: physical points to compute distance to
+        '''
+        x_t = edge_spline.evaluate(t.reshape((t.shape[0],1)))
+        d = csdl.expand(x_t,pts.shape,action='i->ji')-pts
+        tangent = edge_spline.evaluate(t.reshape((t.shape[0],1)),parametric_derivative_orders =(1))
+        tangents = csdl.expand(tangent,pts.shape,action='i->ji')
+        cross = d[:,0]*tangents[:,1] - d[:,1]*tangents[:,0]
+        denom = csdl.norm(d,axes=(1,))
+        k = cross/denom
+        return k
 
+    w = winding_kernel(np.array([0.0]),eval_pts)
 
-    tangents = edge_spline.evaluate(edge_spline.project(evaluation_points),parametric_derivative_orders =(1)).value
+    #TODO: convert to csdl
+    def trapezoidal_rule(f,m=10,a=0,b=1):
+        t_list = np.linspace(a,b,m)
+        h = (b-a) / (m-1)
+        vals = np.array([winding_kernel(np.array([t]),eval_pts) for t in t_list])
+        return h * (0.5*vals[0] + vals[1:-1].sum() + 0.5*vals[-1])
     
-
-
-    #2D cross product:
-    sign = (tangents[:,0]*distance[:,1]-tangents[:,1]*distance[:,0] ) / csdl.norm(tangents,distance)[:,0]
-    # signed_distance = csdl.expand(sign,distance.shape,action='i->ij')*csdl.norm(distance,axes=(1,))
-    signed_distance = sign*csdl.norm(distance,axes=(1,))
+    #approximate the winding number integral
+    I = trapezoidal_rule(winding_kernel)
+    print(f"winding value: {I.value}")
+    I_list.append(I)
     
-    print("signed distance for points:")
-    # csdl.cross(csdl.concatenate([tangents,np.zeros((2,1))],axis=1),csdl.concatenate([distance,np.zeros((2,1))],axis=1),axis=1)
-    print(signed_distance.value)
-    print()    
+    # sign = (tangents[:,0]*distance[:,1]-tangents[:,1]*distance[:,0] ) / csdl.norm(tangents,distance)[:,0]
+    # # signed_distance = csdl.expand(sign,distance.shape,action='i->ij')*csdl.norm(distance,axes=(1,))
+    # signed_distance = sign*csdl.norm(distance,axes=(1,))
+    
+    print(f"unsigned distance for points: {sq_distance_eval.value}")
+    # print(f"signed distance for points: {csdl.minimum(distance).value}")
+
+    # print(csdl.minimum(distance).value)    
 
 #==========================
+W = I_list[0] +I_list[1] +I_list[2]+I_list[3]
+D = csdl.minimum(csdl.vstack(d_list),rho=10000,axes=(0,)).value
 
+#smooth sign function
+sign = csdl.tanh(100*(csdl.absolute(W)-0.5))
+
+SDF = sign*D
+
+print(f'points: {eval_pts}')
+print(f'SDF at points: {SDF.value}')
+
+#dSDFdx = csdl.derivative(SDF,wrts=x)
 
 #order the boundary using a nearest neighbor search:
 ordering = ALBATROSS.csdl_utils.order_boundary_nodes(domain.geometry.x[boundary_nodes,0:2])
