@@ -1,7 +1,7 @@
 import csdl_alpha as csdl
 import ALBATROSS
 import numpy as np
-from dolfinx.mesh import locate_entities_boundary,locate_entities,exterior_facet_indices
+from dolfinx.mesh import locate_entities_boundary,locate_entities
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
 import lsdo_function_spaces as lfs
@@ -32,6 +32,15 @@ interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
 ordering = ALBATROSS.csdl_utils.order_boundary_nodes(domain.geometry.x[boundary_nodes,0:2])
 ordered_vertices = boundary_nodes[ordering]
 inverse_ordering = np.argsort(ordering)
+
+#initialize CrossSection object
+material = ALBATROSS.material.Material(name='unobtainium',
+                            mat_type='ISOTROPIC',
+                            mech_props={'E':100.0,'nu':0.2},
+                            density=2700)
+
+xs = ALBATROSS.cross_section.CrossSection(domain,[material])
+
 
 xy=domain.geometry.x[boundary_nodes,0:2]
 xy_interior = domain.geometry.x[interior_nodes,0:2]
@@ -78,16 +87,31 @@ outputs_mm = meshSmoothing.evaluate(inputs)
 
 inputs.xy_interior = outputs_mm.xy_interior
 
-crosssection = ALBATROSS.csdl_utils.CrossSection(domain=domain,
-                            xs_analysis_type='TS',
-                            material_type='ISOTROPIC',
-                            material_name='unobtainium',
-                            mech_props={'E':100.0,'nu':0.2},
-                            boundary_nodes=boundary_nodes,
-                            interior_nodes=interior_nodes)
+# crosssection = ALBATROSS.csdl_utils.CrossSection(domain=domain,
+#                             xs_analysis_type='TS',
+#                             material_type='ISOTROPIC',
+#                             material_name='unobtainium',
+#                              mech_props={'E':100.0,'nu':0.2},
+#                             boundary_nodes=boundary_nodes,
+#                             interior_nodes=interior_nodes)
+#
+# outputs = crosssection.evaluate(inputs)
 
-#only evaluate once
-outputs = crosssection.evaluate(inputs)
+warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
+                        boundary_nodes=boundary_nodes,
+                        interior_nodes=interior_nodes
+)
+
+outputs_wf = warping_model.evaluate(inputs)
+
+constitutive_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
+                        boundary_nodes=boundary_nodes,
+                        interior_nodes=interior_nodes
+
+)
+
+outputs = constitutive_model.evaluate(outputs_wf)
+
 K = outputs.K
 K.name = 'stiffness_mat'
 A = outputs.A
@@ -107,6 +131,8 @@ with csdl.namespace('Area constraint'):
 # recorder.stop()
 
 sim = csdl.experimental.PySimulator(recorder)
+
+sim.check_totals()
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

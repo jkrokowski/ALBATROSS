@@ -7,7 +7,7 @@ from mpi4py import MPI
 import scipy.io
 from scipy.sparse import csc_matrix,csr_matrix
 import meshio
-
+from scipy.spatial import cKDTree
 from dolfinx.geometry import bb_tree,compute_collisions_points,compute_colliding_cells
 from ufl import TestFunction,TrialFunction,inner,dx
 from dolfinx.fem.petsc import assemble_matrix,assemble_vector,apply_lifting,set_bc
@@ -227,3 +227,72 @@ def gmsh_to_xdmf(mesh, cell_type, prune_z=False):
 def xy2D_to_yz3D(mesh):
      #TODO: implement this guy
      return
+
+
+
+def order_boundary_nodes(coords):
+    N = len(coords)
+    ordered = [0]  # start with first node
+    used = set(ordered)
+
+    tree = cKDTree(coords)
+    for _ in range(1, N):
+        last = coords[ordered[-1]]
+        dists, idxs = tree.query(last, k=N)
+        next_idx = next(i for i in idxs if i not in used)
+        ordered.append(next_idx)
+        used.add(next_idx)
+
+    return np.array(ordered)
+
+def detect_corners(P, angle_deg_min=30.0, sagitta_min=0.05, k_list=(1,2)):
+    P = np.asarray(P, float)
+    N = len(P)
+    is_corner = np.zeros(N, dtype=bool)
+    score = np.zeros(N)
+
+    def roll(a, s):  # closed loop neighbor indexing
+        return np.roll(a, s, axis=0)
+
+    for k in k_list:
+        p_prev = roll(P, +k)
+        p_next = roll(P, -k)
+
+        v1 = P - p_prev
+        v2 = p_next - P
+
+        # Turning angle
+        cross = v1[:,0]*v2[:,1] - v1[:,1]*v2[:,0]
+        dot   = (v1*v2).sum(axis=1)
+        theta = np.arctan2(cross, dot)         # radians
+        ang   = np.abs(np.degrees(theta))      # degrees
+
+        # Sagitta normalized by chord
+        chord = p_next - p_prev
+        L = np.linalg.norm(chord, axis=1)
+        # distance point->chord (area*2/chord)
+        # area = 0.5*| (p_i - p_prev) x chord |
+        area2 = np.abs((P[:,0]-p_prev[:,0])*chord[:,1] - (P[:,1]-p_prev[:,1])*chord[:,0])
+        d = area2 / L.clip(min=1e-15)
+        s = 2*d / L.clip(min=1e-15)
+
+        # Edge-length sanity
+        eok = (np.linalg.norm(v1,axis=1) > 1e-12) & (np.linalg.norm(v2,axis=1) > 1e-12)
+
+        # Corner score: combine angle + sagitta
+        cur_score = (ang/angle_deg_min) * (s/sagitta_min)
+        mask = (ang >= angle_deg_min) & (s >= sagitta_min) & eok
+
+        # Keep best across scales
+        improve = cur_score > score
+        is_corner = (is_corner & (~improve)) | (mask & improve)
+        score = np.where(improve, cur_score, score)
+
+    # non-max suppression in a small neighborhood
+    for i in range(N):
+        if not is_corner[i]: continue
+        nb = [(i-1)%N,(i+1)%N]
+        for j in nb:
+            if is_corner[j] and score[j] < score[i]:
+                is_corner[j] = False
+    return np.where(is_corner)[0], score

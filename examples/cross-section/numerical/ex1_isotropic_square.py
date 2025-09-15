@@ -28,7 +28,7 @@ squareXS.get_xs_stiffness_matrix()
 # squareXS.plot_warping_fxns()
 
 #plot the warping strains (calcuated from warping functions) 
-# for i in range(3):
+# for i in range(3):sq  
 #     for j in range(3):
 #         print(f'strain component ({i},{j}')
 #         squareXS.plot_warping_strain(component=(i,j))

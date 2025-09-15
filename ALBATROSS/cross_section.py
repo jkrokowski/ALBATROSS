@@ -8,7 +8,7 @@ from dolfinx.fem import (Constant,Expression,assemble_scalar,form,Function,
 from dolfinx import fem
 import numpy as np
 from petsc4py import PETSc
-from dolfinx.mesh import locate_entities_boundary,meshtags
+from dolfinx.mesh import locate_entities_boundary,meshtags,locate_entities,
 from dolfinx import geometry # import compute_collisions_trees
 from scipy.sparse.linalg import inv,lsqr,spsolve
 # import sparseqr
@@ -128,11 +128,20 @@ class CrossSection:
         #vectorfunctionspace for initializing displacement functions
         self.recovery_V = functionspace(self.msh,('CG',self.degree,(self.d,)))
 
+        #label nodes and provide dofs to xy mapping:
+        self.all_nodes = locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
+        self.boundary_nodes =locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        self.interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
+
+        #order the boundary using a nearest neighbor search:
+        ordering = ALBATROSS.csdl_utils.order_boundary_nodes(domain.geometry.x[boundary_nodes,0:2])
+        ordered_vertices = boundary_nodes[ordering]
+        inverse_ordering = np.argsort(ordering)
+
         #initialize warping displacement fxn space
         self._set_up_fxnspace_and_fxns()
-        
-    def get_xs_stiffness_matrix(self):
-               
+
+    def _get_warping_functions(self):
         #construct material constitutive tensor field
         # self.constructConstitutiveField()
 
@@ -152,7 +161,14 @@ class CrossSection:
         if self.verbose:
             print('Computing warping functions....')
         self._set_up_solver()
-        self._solve_system()
+        self._solve_system() 
+
+    def get_xs_stiffness_matrix(self):
+               
+        
+        if self.verbose:
+            print('Computing warping solution....')
+        self._get_warping_functions()
         
         if self.verbose:
             print('Computing Beam Constitutive Matrix....')
@@ -409,7 +425,7 @@ class CrossSection:
         self.solver = ksp
 
     def _solve_system(self):
-        self.solution_vectors= []
+        # self.solution_vectors= []
         self.warping_functions = []
         self.lmbdas = []
         self.residuals = []
@@ -439,7 +455,7 @@ class CrossSection:
             lmbdah.x.scatter_forward()
 
             #TODO: why save the solution vectors and the warping functions/lm's separately?
-            self.solution_vectors.append(xh.copy())
+            # self.solution_vectors.append(xh.copy())
             self.warping_functions.append(uh.copy())
             self.lmbdas.append(lmbdah.copy())
 
@@ -880,6 +896,135 @@ class CrossSection:
         K = K1@sparseify(K2inv).toarray()@K1.T
 
         return K
+    
+    #========== computing derivatives for optimization ===========#
+    def apply_inverse_jacobian(self,d_output_w,d_output_l):
+        '''
+        solve the 6 systems for the action of the warping functions on the residual
+        '''
+        d_residuals = self.pRkpuk.createVecLeft()
+        d_residuals.setUp()
+        d_outputs = self.pRkpuk.createVecRight()
+        d_outputs.setUp()
+        d_outputs_len=d_output_w.shape[0]
+
+        d_residuals_w = np.zeros_like(d_output_w)
+        d_residuals_lmbda = np.zeros_like(d_output_l)
+        for idx in range(d_output_w.shape[1]):
+            with d_outputs.localForm() as rhs_local:
+                rhs_local.set(0.0)
+                rhs_local[:d_outputs_len] = d_output_w[:,idx]
+                rhs_local[d_outputs_len:] = d_output_l[:,idx]
+            # with d_residuals.localForm() as lhs_local:
+            #     lhs_local.set(0.0)
+
+            self.solver.solveTranspose(d_outputs,d_residuals)
+            d_residuals_w[:,idx]= d_residuals.array[:d_outputs_len]
+            d_residuals_lmbda[:,idx]= d_residuals.array[d_outputs_len:]
+
+        return d_residuals_w,d_residuals_lmbda
+
+
+    def compute_VJP(self,d_residuals_w,d_residuals_lmbda):
+        '''
+        d_residual_w shape : num_dofs x 6
+        d_residual_l shape : num_lms x 6
+
+        dRdx_dr = num_nodes
+        '''
+        #set up input vector sizes
+        d_residuals_w_vec_size = d_residuals_w.shape[0]
+        d_residuals_w_vec = PETSc.Vec().createSeq(d_residuals_w_vec_size, comm=PETSc.COMM_SELF)
+        
+        d_residuals_lmbda_vec_size = d_residuals_lmbda.shape[0]
+        d_residuals_lmbda_vec = PETSc.Vec().createSeq(d_residuals_lmbda_vec_size, comm=PETSc.COMM_SELF)
+
+        #set up output vector sizes
+        d_inputs_vec_size = self.VX.dofmap.index_map_bs*self.VX.dofmap.index_map.size_global
+        d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
+
+        dRdx_dr = np.zeros(d_inputs_vec_size)
+        for idx in range(d_residuals_w.shape[1]):
+            dRwdx = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
+            d_residuals_w_vec.x.array = d_residuals_w[:,idx]
+            dRwdx.multTranspose(d_residuals_w_vec,d_inputs_vec) #perform vec-mat product
+            dRdx_dr += d_inputs_vec.x.array
+            
+            dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
+            d_residuals_lmbda_vec.x.array = d_residuals_lmbda[:,idx]
+            dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_vec) #perform vec-mat product
+            dRdx_dr += d_inputs_vec.x.array
+
+        return dRdx_dr
+
+
+
+
+    def _compute_spatial_partials(self,form):
+        return fem.petsc.assemble_vector(fem.form(derivative(form,self.x,self.dX)))
+    
+    
+    def _compute_function_partials(self,Kxij_form,function):
+        return fem.petsc.assemble_vector(fem.form(derivative(Kxij_form,function)))
+
+    # def compute_spatial_totals(self):
+    #     args = self.residuals[0][0].arguments()
+    #     n = max(a.number() for a in args) if args else -1
+    #     self.dX = Argument(self.VX,n+1)
+        
+    #     #for K1 
+    #     self.dK1dx = []
+    #     #set up matrices and vectors for reuse:
+    #     dK1ijdRk = self.pRkpuk.createVecLeft()
+    #     dK1ijdRk.setUp()
+
+    #     pK1ijpuk = self.pRkpuk.createVecRight()
+
+    #     #TODO: replace these two outer loops with the derivatives w.r.t. the contracted beam constitutive matrix K_s
+    #     for idx_i in range(6):
+    #         dK1dx_row = []
+    #         for idx_j in range(6):
+    #             #Kij form
+    #             K1ij=self.K1_form[idx_i][idx_j]
+
+    #             #compute K1 spatial partials
+    #             dK1ijdx = self._compute_spatial_partials(K1ij)
+        
+    #             for idx_k in range(6):
+    #                 #compute K1 function partials (stack function+lagrange multipliers)
+    #                 pK1ijpw = self._compute_function_partials(K1ij,self.warping_functions[idx_k])
+    #                 pK1ijpl = self._compute_function_partials(K1ij,self.lmbdas[idx_k])
+                    
+    #                 #set up RHS of adjoint solve:
+    #                 with pK1ijpuk.localForm() as rhs_local:
+    #                     rhs_local.set(0.0)
+    #                     pK1ijpw_len=pK1ijpw.getSize()
+    #                     rhs_local[:pK1ijpw_len] = pK1ijpw.array
+    #                     rhs_local[pK1ijpw_len:] = pK1ijpl.array
+    #                 pK1ijpuk.assemble()
+    #                 pK1ijpuk.scale(-1.0)
+
+    #                 #compute totals of K1 w.r.t. residual by solving adjoint system ( FE stiffness mat,spatial partials, and function partials) 
+    #                 self.solver.solveTranspose(pK1ijpuk, dK1ijdRk)
+
+    #                 #compute residual spatial partials  (stack function+lagrange multipliers)
+
+
+    #                 #compute implicit contribution with vec-mat product
+    #                 # += dK1ijdRk @  pRkpx to the implicit effect from mode k
+    #                 pRkpx.multTranspose(dK1ijdRk,pK1ijpuk_dukdx)
+    #                 dK1ijdx.aypx(1.0,pK1ijpuk_dukdx)
+
+    #             dK1dx_row.append(dK1ijdx)
+    #     self.dK1dx.append(dK1dx_row)
+
+
+    #     #repeat ^^^^ for K2
+    #     self.dK2dx = []
+
+    #     #then apply chain rule for dKdx
+
+
 
     #TODO: NEED TO UPDATE WITH ADJOINT SENSITIVITY CODE (REQUIRES FIXES TO RESIDUAL ASSEMBLY)
     def compute_xs_stiffness_matrix_sensitivities(self):
@@ -938,8 +1083,8 @@ class CrossSection:
         self.K1 = sparseify(self.K1).toarray()
         self.K2 = sparseify(self.K2).toarray()
 
-        #boundary dofs ([:,:,self.boundary_dofs])
-        self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        # #boundary dofs ([:,:,self.boundary_dofs])
+        # self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         
         #TODO: can simplify this
         #compact einsums:

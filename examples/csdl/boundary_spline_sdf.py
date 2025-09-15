@@ -32,7 +32,7 @@ boundary_nodes_top = locate_entities_boundary(domain,0,lambda x: np.isclose(0.5,
 boundary_nodes_bottom = locate_entities_boundary(domain,0,lambda x: np.isclose(-0.5,x[1]))
 interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
 
-#TODO: need to make this so the SDF is a function of x,y
+#TODO: need to make this so the SDF is a function of xy
 #TODO: need to clean up how we handle multiple splines
 #CONSTRUCT BOUNDARY B-SPLINES (with a closed, uniform knot vector)
 num_parametric = 10
@@ -41,7 +41,7 @@ spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
 xy=domain.geometry.x[boundary_nodes,0:2]
 I_list = []
 d_list = []
-x = csdl.Variable(value = np.array([[0.25,0.25],[0.75,-.75],[.1,.52],[-.1,-.6],[0,0]]))
+xy_test = csdl.Variable(value = np.array([[0.25,0.25],[0.75,-.75],[.1,.52],[-.1,-.6],[0,0]]))
 
 for nodes in [boundary_nodes_left,boundary_nodes_right,boundary_nodes_top,boundary_nodes_bottom]:
     parametric_coords = np.array([(i,) for i in np.linspace(0,1,nodes.shape[0])])
@@ -62,7 +62,7 @@ for nodes in [boundary_nodes_left,boundary_nodes_right,boundary_nodes_top,bounda
     #   --+-
     #   ---+
 
-    eval_pts = x
+    eval_pts = xy_test
     proj_eval_pts = edge_spline.evaluate(edge_spline.project(eval_pts))
     distance_eval = proj_eval_pts-eval_pts
     sq_distance_eval = csdl.norm(distance_eval,axes=(1,))
