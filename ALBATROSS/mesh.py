@@ -38,7 +38,9 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
           dofs_to_move.extend(fem.locate_dofs_topological(V.sub(i),0,nodes_to_move))
      # moved_dofs = fem.locate_dofs_topological(V.sub(0),0,moved_nodes)
      # dofs_to_move = fem.locate_dofs_topological(V,0,nodes_to_move)
-
+     # dofs_to_move = np.sort(dofs_to_move)
+     # moved_dofs = np.sort(moved_dofs)
+     
      u_bc.x.array[moved_dofs] += displacement.T.flatten()
      bc = fem.dirichletbc(u_bc,moved_nodes)
      bcs = [bc]
@@ -145,10 +147,18 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
                A.assemble()
 
                Anp = A.getValues(range(A.getSize()[0]),range(A.getSize()[1]))
+               # print('dofs to move:')
+               # print(dofs_to_move)
+               # print('moved dofs:')
+               # print(moved_dofs)
+               AII = Anp[dofs_to_move,:][:,dofs_to_move]
 
-               J = np.linalg.inv(Anp)@Anp
-          
-          duhdx = J[dofs_to_move,:][:,moved_dofs]
+               AIB = Anp[dofs_to_move,:][:,moved_dofs]
+               # J = np.linalg.inv(Anp)@Anp
+               duhdx = -np.linalg.inv(AII)@AIB
+               duhdx = duhdx[np.argsort(dofs_to_move),:][:,np.argsort(moved_dofs)]
+
+          # duhdx = -J[dofs_to_move,:][:,moved_dofs]
           
           # dofs_to_move_is = PETSc.IS().createGeneral(dofs_to_move, comm=MPI.COMM_WORLD)
           # moved_dofs_is = PETSc.IS().createGeneral(moved_dofs, comm=MPI.COMM_WORLD)

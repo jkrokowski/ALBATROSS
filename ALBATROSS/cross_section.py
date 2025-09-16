@@ -8,7 +8,7 @@ from dolfinx.fem import (Constant,Expression,assemble_scalar,form,Function,
 from dolfinx import fem
 import numpy as np
 from petsc4py import PETSc
-from dolfinx.mesh import locate_entities_boundary,meshtags,locate_entities,
+from dolfinx.mesh import locate_entities_boundary,meshtags,locate_entities
 from dolfinx import geometry # import compute_collisions_trees
 from scipy.sparse.linalg import inv,lsqr,spsolve
 # import sparseqr
@@ -20,7 +20,7 @@ from scifem import create_real_functionspace
 from dolfinx.cpp.la.petsc import get_local_vectors
 
 from ALBATROSS.material import getMatConstitutiveIsotropic
-from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,sparseify
+from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,sparseify,order_boundary_nodes
 from ALBATROSS.nonmatching_utils import (Region,Separation,Collision,
                                          get_bbtrees,get_collision_celltags,
                                          get_overlap_boundary_facets,
@@ -107,7 +107,9 @@ class CrossSection:
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
         self.VX = functionspace(self.msh,("CG",self.degree,(self.tdim,)))
+        self.dX = Argument(self.VX,1) #direction for spatial derivative
         self.n = FacetNormal(self.msh)
+
         
         #compute cross-sectional area and linear density (used for body forces)
         self.A = assemble_scalar(form(1.0*self.dx))
@@ -131,12 +133,16 @@ class CrossSection:
         #label nodes and provide dofs to xy mapping:
         self.all_nodes = locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
         self.boundary_nodes =locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
-        self.interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
+        self.interior_nodes = self.all_nodes[~np.isin(self.all_nodes, self.boundary_nodes)]
+        self.dofs_x_boundary = fem.locate_dofs_topological(self.VX.sub(0),0,self.boundary_nodes)
+        self.dofs_y_boundary = fem.locate_dofs_topological(self.VX.sub(1),0,self.boundary_nodes)
+        self.dofs_x_interior = fem.locate_dofs_topological(self.VX.sub(0),0,self.interior_nodes)
+        self.dofs_y_interior = fem.locate_dofs_topological(self.VX.sub(1),0,self.interior_nodes)
 
         #order the boundary using a nearest neighbor search:
-        ordering = ALBATROSS.csdl_utils.order_boundary_nodes(domain.geometry.x[boundary_nodes,0:2])
-        ordered_vertices = boundary_nodes[ordering]
-        inverse_ordering = np.argsort(ordering)
+        self.boundary_ordering = order_boundary_nodes(self.msh.geometry.x[self.boundary_nodes,0:2])
+        self.ordered_nodes = self.boundary_nodes[self.boundary_ordering]
+        self.inverse_boundary_ordering = np.argsort(self.boundary_ordering)
 
         #initialize warping displacement fxn space
         self._set_up_fxnspace_and_fxns()
@@ -463,16 +469,16 @@ class CrossSection:
             # #TODO: currently, need to do this because we are using a ufl.TestFunction() in the residual construction
             # #       This can be re-written so that uh is used to construct the form, so that we don't have to repeatedly
             # #       re-assemble a00,a10 or a01, just L0 and L1
-            # a00_form = self._construct_xs_form(uh,return_form=True)
-            # a01_form = inner(lmbdah,self._construct_constraint_form(self.v))*self.dx
-            # a10_form = inner(self.dlmbda, self._construct_constraint_form(uh)) * self.dx
+            a00_form = self._construct_xs_form(uh,return_form=True)
+            a01_form = self._construct_constraint_form(lmbdah,self.v)
+            a10_form = self._construct_constraint_form(self.dlmbda,uh)
 
-            # #main system residual
-            # residual00 = a00_form + a01_form - L0 
-            # #lagrange multiplier system residual
-            # residual10 = a10_form - L1
+            #main system residual
+            residual00 = a00_form + a01_form - L0 
+            #lagrange multiplier system residual
+            residual10 = a10_form - L1
 
-            # self.residuals.append((residual00,residual10))
+            self.residuals.append((residual00,residual10))
 
             # print(f'lagrange multipliers for mode{idx_k}:{x_local[1]}')
 
@@ -935,25 +941,32 @@ class CrossSection:
         #set up input vector sizes
         d_residuals_w_vec_size = d_residuals_w.shape[0]
         d_residuals_w_vec = PETSc.Vec().createSeq(d_residuals_w_vec_size, comm=PETSc.COMM_SELF)
-        
+        # print(d_residuals_w_vec_size)
+        # print(d_residuals_w_vec.getSize())
         d_residuals_lmbda_vec_size = d_residuals_lmbda.shape[0]
         d_residuals_lmbda_vec = PETSc.Vec().createSeq(d_residuals_lmbda_vec_size, comm=PETSc.COMM_SELF)
-
+        # print(d_residuals_lmbda_vec_size)
+        # print(d_residuals_lmbda_vec.getSize())
         #set up output vector sizes
         d_inputs_vec_size = self.VX.dofmap.index_map_bs*self.VX.dofmap.index_map.size_global
         d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
+        # print(d_inputs_vec_size)
+        # print(d_inputs_vec.getSize())
 
         dRdx_dr = np.zeros(d_inputs_vec_size)
+        # print(dRdx_dr.shape)
+        #TODO: could speed up here by not creating and destroying these two matrices every time?
         for idx in range(d_residuals_w.shape[1]):
             dRwdx = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
-            d_residuals_w_vec.x.array = d_residuals_w[:,idx]
+            # print(dRwdx.getSize())
+            d_residuals_w_vec.array = d_residuals_w[:,idx]
             dRwdx.multTranspose(d_residuals_w_vec,d_inputs_vec) #perform vec-mat product
-            dRdx_dr += d_inputs_vec.x.array
+            dRdx_dr += d_inputs_vec.array
             
             dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
-            d_residuals_lmbda_vec.x.array = d_residuals_lmbda[:,idx]
+            d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
             dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_vec) #perform vec-mat product
-            dRdx_dr += d_inputs_vec.x.array
+            dRdx_dr += d_inputs_vec.array
 
         return dRdx_dr
 
@@ -961,7 +974,10 @@ class CrossSection:
 
 
     def _compute_spatial_partials(self,form):
-        return fem.petsc.assemble_vector(fem.form(derivative(form,self.x,self.dX)))
+        pfpx = fem.petsc.assemble_matrix(fem.form(derivative(form,self.x,self.dX)))
+        pfpx.assemble()
+        return pfpx
+        # return fem.petsc.assemble_vector(fem.form(derivative(form,self.x,self.dX)))
     
     
     def _compute_function_partials(self,Kxij_form,function):

@@ -44,13 +44,13 @@ recorder.start()
 
 
 #CONSTRUCT A BOUNDARY B-SPLINE (with a closed, uniform knot vector)
-num_parametric = 4
-bspline_degree=3
-boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
-parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+1)])
-boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[0:1,:]]) #duplicate the start/endpoint
-boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
-coeffs = boundary_spline_coeffs.value
+# num_parametric = 4
+# bspline_degree=3
+# boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
+# parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+1)])
+# boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[0:1,:]]) #duplicate the start/endpoint
+# boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
+# coeffs = boundary_spline_coeffs.value
 
 # #TODO: USE A **PERIODIC** B-SPLINE to prevent the corner from being 
 # #make a uniform knot vector of length (num_parametric+6)
@@ -65,18 +65,18 @@ coeffs = boundary_spline_coeffs.value
 
 inputs = csdl.VariableGroup()
 
-# boundary_spline_coeffs.name = 'boundary spline coeffs'
-inputs.coeffs = csdl.Variable(value=coeffs)
-inputs.coeffs.name = 'boundary spline coeffs'
-inputs.coeffs.set_as_design_variable(lower=-2,upper=2,scaler=2)
-boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
+# # boundary_spline_coeffs.name = 'boundary spline coeffs'
+# inputs.coeffs = csdl.Variable(value=coeffs)
+# inputs.coeffs.name = 'boundary spline coeffs'
+# inputs.coeffs.set_as_design_variable(lower=-2,upper=2,scaler=2)
+# boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
 # evaluated_points = boundary_spline.evaluate(parametric_coords,plot=True)
 
 #TODO: increase knot multiplicity or use a composite spline for the boundary
 
-# inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-inputs.xy = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
-inputs.xy.name = 'xy'
+inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
+# inputs.xy = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
+# inputs.xy.name = 'xy'
 inputs.xy.set_as_design_variable(lower=-2,upper=2,scaler=2)
 inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
 
@@ -86,7 +86,7 @@ meshSmoothing = ALBATROSS.csdl_utils.EllipticSmoothing(domain,
 
 outputs_mm = meshSmoothing.evaluate(inputs)
 
-inputs.xy_interior = outputs_mm.xy_interior
+# inputs.xy_interior = outputs_mm.xy_interior
 
 # crosssection = ALBATROSS.csdl_utils.CrossSection(domain=domain,
 #                             xs_analysis_type='TS',
@@ -98,12 +98,12 @@ inputs.xy_interior = outputs_mm.xy_interior
 #
 # outputs = crosssection.evaluate(inputs)
 
-warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
-                        boundary_nodes=xs.boundary_nodes,
-                        interior_nodes=xs.interior_nodes
-)
+# warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
+#                         boundary_nodes=xs.boundary_nodes,
+#                         interior_nodes=xs.interior_nodes
+# )
 
-outputs_wf = warping_model.evaluate(inputs)
+# outputs_wf = warping_model.evaluate(inputs)
 
 # section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
 #                         boundary_nodes=xs.boundary_nodes,
@@ -133,15 +133,15 @@ outputs_wf = warping_model.evaluate(inputs)
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 # sim.compute_totals(outputs_wf.lmbda,inputs.xy)
-sim.check_totals(outputs_wf.w[:10,0],inputs.coeffs,step_size=0.0001,print_results=True)
+# sim.check_totals(outputs_wf.w[:10,0],inputs.coeffs,step_size=0.0001,print_results=True)
 # sim.check_totals(outputs_mm.xy_interior,inputs.coeffs,step_size=0.0001,print_results=True)
 
 #TODO: need to figure out why check totals doesn't seem to affect FD, but does affect normal totals??
 # sim.check_totals(outputs_wf.w[:10,0],inputs.xy,step_size=0.0001,print_results=True) 
-dwdx = sim.compute_totals(outputs_wf.w[:10,0],inputs.coeffs)
-dwdx_FD = sim.compute_totals(outputs_wf.w[:10,0],inputs.xy,use_finite_difference=True,finite_difference_step_size=0.002)
+dudx = sim.check_totals(outputs_mm.xy_interior,inputs.xy)
+# dwdx_FD = sim.compute_totals(outputs_wf.w[:10,0],inputs.xy,use_finite_difference=True,finite_difference_step_size=0.002)
 
-sim.check_totals(outputs_wf.lmbda,inputs.xy,print_results=True)
+# sim.check_totals(outputs_wf.lmbda,inputs.xy,print_results=True)
 # sim.check_totals(outputs_wf.w,inputs.xy,print_results=True)
 
 # print('current K:      ', sim[K])

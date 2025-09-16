@@ -107,7 +107,7 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
     '''
     inputs: nodal positions of cross-sectional mesh'''
     def __init__(self,xs,boundary_nodes=None,interior_nodes=None):
-        super.__init__()
+        super().__init__()
         self.xs = xs
 
         if boundary_nodes is not None:
@@ -124,20 +124,21 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
         # construct output of the model
         outputs = csdl.VariableGroup()
         outputs.w = self.create_output('w', (self.xs.V.dofmap.index_map.size_global,6))
-        outputs.lmbda = self.create_output('lmbda', (self.xs.LM.dofmap.index_map.size_global,6))
+        outputs.lmbda = self.create_output('lmbda', (self.xs.LM.value_size,6))
 
         return outputs
     
     def solve_residual_equations(self, inputs, outputs):
+        print("solve residual equations:")
         #update boundary nodes:
         if self.boundary_nodes is not None: 
-            self.domain.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+            self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
         
         #update interior nodes
         if self.interior_nodes is not None: 
-            self.domain.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+            self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
         else: 
-            self.domain.geometry.x[:,0:2]=inputs['xy']
+            self.xs.msh.geometry.x[:,0:2]=inputs['xy']
 
         #compute warping functions
         self.xs._get_warping_functions()
@@ -146,7 +147,7 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
         outputs['lmbda'] = np.vstack([self.xs.lmbdas[i].x.array for i in range(6)]).T
     
     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
-        
+        print("apply_inverse_jacobian:")
         #TODO: do we need to update the inputs, etc (eg. does the mesh update need to happen here?)
         xy = inputs['xy']
         xy_interior = inputs['xy_interior']
@@ -177,6 +178,7 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
 
 
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
+        print("compute vector-jacobian product:")
         xy = inputs['xy']
         xy_interior = inputs['xy_interior']
         w = outputs['w']
@@ -197,9 +199,10 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
             dRdx_dr = self.xs.compute_VJP(d_residuals['w'],d_residuals['lmbda'])
 
             #TODO: map to boundary or interior nodes
-            verts = np.arange(self.xs.topology.index_map(0).size_global)
-            dofs_vert = fem.locate_dofs_topological(self.xs.VX.sub(1), 0, verts)
-            d_inputs['xy'] = dRdx_dr[]
+            d_inputs['xy'] = np.vstack([dRdx_dr[self.xs.dofs_x_boundary],
+                                        dRdx_dr[self.xs.dofs_y_boundary]]).T
+            d_inputs['xy_interior'] = np.vstack([dRdx_dr[self.xs.dofs_x_interior],
+                                                 dRdx_dr[self.xs.dofs_y_interior]]).T
             
             # d_inputs['xy'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda'] )['boundary']
             # d_inputs['xy_interior'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']) ['interior']
@@ -214,7 +217,7 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         # assign method inputs to input dictionary
         self.declare_input('xy',inputs.xy)
         self.declare_input('xy_interior',inputs.xy_interior)
-
+        self.declare_input('')
 
         K = self.create_output('K', (6,6))
         A = self.create_output('A',(1,))
@@ -244,6 +247,7 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
     def evaluate(self, inputs: csdl.VariableGroup):
         #boundary node position inputs:
         self.declare_input('xy',inputs.xy)
+        # self.declare_input('xy_interior',inputs.xy)
 
         # construct output of the model
         output = csdl.VariableGroup()
@@ -287,8 +291,11 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
                                                         mode='lin_elas')
 
         # derivatives['xy_interior','xy'] = np.ones_like(xy_interior)
-        derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
-                                                         inputs['xy'].flatten().shape[0]))
+        print('duhdx shape:')
+        print(duhdx.shape)
+        derivatives['xy_interior','xy'] = duhdx
+        # derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
+        #                                                  inputs['xy'].flatten().shape[0]))
 
 # class OversetMeshManager(csdl.CustomExplicitOperation):
 #     """
