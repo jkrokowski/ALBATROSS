@@ -4,8 +4,8 @@ import ALBATROSS
 import numpy as np
 
 #create mesh
-N = 20
-H = 1
+N = 2
+H = .75
 W= 1
 tf = 0.1
 tw = 0.1
@@ -68,6 +68,8 @@ from dolfinx import io
 from mpi4py import MPI
 with io.XDMFFile(MPI.COMM_WORLD, f"output/{domain.name}.xdmf", "w") as xdmf:
         xdmf.write_mesh(domain)
+
+TXS.compute_pKpx()
 
 TXS.compute_xs_stiffness_matrix_sensitivities()
 

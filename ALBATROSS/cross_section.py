@@ -138,7 +138,9 @@ class CrossSection:
         self.dofs_y_boundary = fem.locate_dofs_topological(self.VX.sub(1),0,self.boundary_nodes)
         self.dofs_x_interior = fem.locate_dofs_topological(self.VX.sub(0),0,self.interior_nodes)
         self.dofs_y_interior = fem.locate_dofs_topological(self.VX.sub(1),0,self.interior_nodes)
-
+        self.dofs_boundary = np.sort(np.concatenate([self.dofs_x_boundary,self.dofs_y_boundary]))
+        self.dofs_interior = np.sort(np.concatenate([self.dofs_x_interior,self.dofs_y_interior]))
+    
         #order the boundary using a nearest neighbor search:
         self.boundary_ordering = order_boundary_nodes(self.msh.geometry.x[self.boundary_nodes,0:2])
         self.ordered_nodes = self.boundary_nodes[self.boundary_ordering]
@@ -544,7 +546,7 @@ class CrossSection:
         self.S = self.K1inv.T@self.K2@self.K1inv
 
         #compute Beam Stiffness Matrix
-        self.K =  self.K1.T@self.K2inv@self.K1
+        self.K =  self.K1@self.K2inv@self.K1.T
 
     
     def rigid_constraints(self,u):
@@ -1073,6 +1075,10 @@ class CrossSection:
             
             #TODO: can simplify this
             #compact einsums:
+            term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pw, self.K2inv, self.K1)
+            term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pw,self.K2inv,self.K1)
+            term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pw)
+
             term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pw, self.K2inv, self.K1)
             term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pw,self.K2inv,self.K1)
             term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pw)

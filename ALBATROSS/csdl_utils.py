@@ -228,14 +228,10 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         self.declare_input('w',inputs.w)
         self.declare_input('lmbda',inputs.lmbda)
 
-        K = self.create_output('K', (6,6))
-        A = self.create_output('A',(1,))
-
         # construct output of the model
         outputs = csdl.VariableGroup()
-        outputs.K = K
-
-        outputs.A = A
+        outputs.K = self.create_output('K', (6,6))
+        outputs.A = self.create_output('A',(1,))
 
         return outputs
     
@@ -296,10 +292,14 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         pKpl = self.xs.compute_pKpl()
 
         #declare derivatives
-        derivatives['K', 'xy'] = np.vstack([pKpx[:,self.xs.dofs_x_boundary],
-                                        pKpx[:,self.xs.dofs_y_boundary]]).T #return (36 x num_boundary_nodes*2)
-        derivatives['K', 'xy_interior'] = np.vstack([pKpx[:,self.xs.dofs_x_interior],
-                                        pKpx[:,self.xs.dofs_y_interior]]).T #return (36 x num_interior_nodes*2)
+        print('input vals:')
+        print(inputs['xy'])
+        derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
+        derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
+        # derivatives['K', 'xy'] = np.hstack([pKpx[:,self.xs.dofs_x_boundary],
+        #                                 pKpx[:,self.xs.dofs_y_boundary]]) #return (36 x num_boundary_nodes*2)
+        # derivatives['K', 'xy_interior'] = np.hstack([pKpx[:,self.xs.dofs_x_interior],
+        #                                 pKpx[:,self.xs.dofs_y_interior]]) #return (36 x num_interior_nodes*2)
         derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
         derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
 
@@ -323,11 +323,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         output = csdl.VariableGroup()
 
         #create output for new interior node positions
-        xy_interior = self.create_output('xy_interior',(self.interior_nodes.shape[0],2))
-        
-        #save output
-        output.xy_interior = xy_interior
-        output.xy_interior.name = 'xy_interior, output'
+        output.xy_interior = self.create_output('xy_interior',(self.interior_nodes.shape[0],2))
+        # output.xy_interior.name = 'xy_interior, output'
 
         return output
 

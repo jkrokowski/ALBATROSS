@@ -33,17 +33,10 @@ xs = ALBATROSS.cross_section.CrossSection(domain,[material])
 xy=domain.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
 
-# inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-# inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
-
-# xy = inputs.xy
-# xy_interior = inputs.xy_interior
-
 recorder = csdl.Recorder(inline=True)
 recorder.start()
 
-
-#CONSTRUCT A BOUNDARY B-SPLINE (with a closed, uniform knot vector)
+#=====FIT BOUNDARY B-SPLINE ========#
 num_parametric = 6
 bspline_degree=3
 boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
@@ -52,36 +45,31 @@ boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[0:1,:]]) #
 boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
 coeffs = boundary_spline_coeffs.value
 
-# #TODO: USE A **PERIODIC** B-SPLINE to prevent the corner from being 
-# #make a uniform knot vector of length (num_parametric+6)
-# num_ctrl_pts = num_parametric+bspline_degree*2+2
-# knot_indices = np.arange(0,num_ctrl_pts)
-# num_repeated_ctrl_pts = 3
-# # knots = (knot_indices)/(num_ctrl_pts-1)
-# knots = (knot_indices-bspline_degree)/(num_parametric-1)
-# periodic_bspline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,),knots=knots,knot_indices=knot_indices)
-# parametric_coords2 = np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0])])
-# periodic_boundary_spline_coeffs = periodic_bspline_spaceordered_nodes.fit(values = xy[list(ordering)],parametric_coordinates= parametric_coords2)
-
+# =======evaluate b-spline for boundary points ======#
 inputs = csdl.VariableGroup()
 inputs.coeffs = csdl.Variable(value=coeffs,name='boundary spline coeffs')
 inputs.coeffs.set_as_design_variable(lower=-2,upper=2,scaler=2)
-
 boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
-xy_eval = boundary_spline.evaluate(parametric_coords)
-inputs.xy = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
-inputs.xy.name = 'xy'
-inputs.xy.set_as_design_variable(lower=-2,upper=2,scaler=2)
-inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
+xy_boundary = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
+xy_boundary.name = 'xy'
+xy_boundary.set_as_design_variable(lower=-2,upper=2,scaler=2)
 
+#create interior node variable
+xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
+
+#=====mesh motion=======#
+inputs_mm = csdl.VariableGroup()
+inputs_mm.xy = xy_boundary
+inputs_mm.xy_interior = xy_interior
 meshSmoothing = ALBATROSS.csdl_utils.EllipticSmoothing(domain,
                                                        xs.boundary_nodes,
                                                        xs.interior_nodes)
+outputs_mm = meshSmoothing.evaluate(inputs_mm)
 
-outputs_mm = meshSmoothing.evaluate(inputs)
-
-inputs_w = outputs_mm
-inputs_w.xy = inputs.xy
+#===== warping function computation =======#
+inputs_w = csdl.VariableGroup()
+inputs_w.xy = xy_boundary
+inputs_w.xy_interior = outputs_mm.xy_interior
 
 warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
                         boundary_nodes=xs.boundary_nodes,
@@ -89,13 +77,16 @@ warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
 
 outputs_w = warping_model.evaluate(inputs_w)
 
+#======= cross-section stiffness matrix ==========#
 section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
                         boundary_nodes=xs.boundary_nodes,
                         interior_nodes=xs.interior_nodes)
 
-inputs_sec = outputs_w
-inputs_sec.xy = inputs_w.xy
-inputs_sec.xy_interior = inputs_w.xy_interior
+inputs_sec = csdl.VariableGroup()
+inputs_sec.xy = xy_boundary
+inputs_sec.xy_interior = outputs_mm.xy_interior
+inputs_sec.w = outputs_w.w
+inputs_sec.lmbda = outputs_w.lmbda
 
 outputs_sec = section_model.evaluate(inputs_sec)
 

@@ -7,8 +7,8 @@ from mpi4py import MPI
 import lsdo_function_spaces as lfs
 
 
-N = 3
-W = 1
+N = 2
+W = 1.2
 H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
 
@@ -128,9 +128,33 @@ outputs_sec = section_model.evaluate(inputs)
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 # sim.check_totals(outputs_w.w[:10,0],inputs.coeffs)
-sim.check_totals(outputs_sec.K[0,0],inputs.w)
+
+xy_node0 = inputs.xy.get(csdl.slice[0,:])
+# reduced_w = inputs.w.get(csdl.slice[25:30,0])
+K00 = outputs_sec.K.get(csdl.slice[0,0])
+
+
+# K00 = outputs_sec.K[0,0]
+K00.name = 'K00'
+
+# xy_node0 = inputs.xy[0,:]
+xy_node0.name = 'xy_node0'
+
+dKdx_check = sim.check_totals(outputs_sec.K,inputs.xy,step_size=0.000001,print_results=True)
+
+#TODO: currently have accurate derivatives, except it seems that the partials are a bit scrambled for 
+for i in range(36):
+    print(i,np.linalg.norm(dKdx_check[outputs_sec.K,inputs.xy]['value'][i]-dKdx_check[outputs_sec.K,inputs.xy]['fd_value'][i]))
+
+dK00dx = sim.compute_totals(K00,reduced_xy)
+dK00dx_FD = sim.compute_totals(K00,reduced_xy,use_finite_difference=True,finite_difference_step_size=0.001)
+dK00dw = sim.compute_totals(K00,reduced_w)
+dK00dw_FD = sim.compute_totals(K00,reduced_w,use_finite_difference=True,finite_difference_step_size=0.001)
+
+# sim.check_totals(outputs_sec.K[0,0],inputs.w[25:30,0])
 # sim.check_totals(outputs_wf.w[:10,0],inputs.coeffs,step_size=0.0001,print_results=True)
 # sim.check_totals(outputs_mm.xy_interior,inputs.coeffs,step_size=0.0001,print_results=True)
+
 
 #TODO: need to figure out why check totals doesn't seem to affect FD, but does affect normal totals??
 # sim.check_totals(outputs_wf.w[:10,0],inputs.xy,step_size=0.0001,print_results=True) 
