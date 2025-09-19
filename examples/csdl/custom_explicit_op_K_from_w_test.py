@@ -7,7 +7,7 @@ from mpi4py import MPI
 import lsdo_function_spaces as lfs
 
 
-N = 4
+N = 3
 W = 1
 H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -33,71 +33,79 @@ xs = ALBATROSS.cross_section.CrossSection(domain,[material])
 xy=domain.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
 
-# inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-# inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
+recorder = csdl.Recorder(inline=True)
+recorder.start()
+
+inputs = csdl.VariableGroup()
+
+inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
+inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
 
 # xy = inputs.xy
 # xy_interior = inputs.xy_interior
 
-recorder = csdl.Recorder(inline=True)
-recorder.start()
 
 
-#CONSTRUCT A BOUNDARY B-SPLINE (with a closed, uniform knot vector)
-num_parametric = 6
-bspline_degree=3
-boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
-parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+1)])
-boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[0:1,:]]) #duplicate the start/endpoint
-boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
-coeffs = boundary_spline_coeffs.value
+# #CONSTRUCT A BOUNDARY B-SPLINE (with a closed, uniform knot vector)
+# num_parametric = 6
+# bspline_degree=3
+# boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
+# parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+1)])
+# boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[0:1,:]]) #duplicate the start/endpoint
+# boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
+# coeffs = boundary_spline_coeffs.value
 
-# #TODO: USE A **PERIODIC** B-SPLINE to prevent the corner from being 
-# #make a uniform knot vector of length (num_parametric+6)
-# num_ctrl_pts = num_parametric+bspline_degree*2+2
-# knot_indices = np.arange(0,num_ctrl_pts)
-# num_repeated_ctrl_pts = 3
-# # knots = (knot_indices)/(num_ctrl_pts-1)
-# knots = (knot_indices-bspline_degree)/(num_parametric-1)
-# periodic_bspline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,),knots=knots,knot_indices=knot_indices)
-# parametric_coords2 = np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0])])
-# periodic_boundary_spline_coeffs = periodic_bspline_spaceordered_nodes.fit(values = xy[list(ordering)],parametric_coordinates= parametric_coords2)
+# # #TODO: USE A **PERIODIC** B-SPLINE to prevent the corner from being 
+# # #make a uniform knot vector of length (num_parametric+6)
+# # num_ctrl_pts = num_parametric+bspline_degree*2+2
+# # knot_indices = np.arange(0,num_ctrl_pts)
+# # num_repeated_ctrl_pts = 3
+# # # knots = (knot_indices)/(num_ctrl_pts-1)
+# # knots = (knot_indices-bspline_degree)/(num_parametric-1)
+# # periodic_bspline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,),knots=knots,knot_indices=knot_indices)
+# # parametric_coords2 = np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0])])
+# # periodic_boundary_spline_coeffs = periodic_bspline_spaceordered_nodes.fit(values = xy[list(ordering)],parametric_coordinates= parametric_coords2)
 
-inputs = csdl.VariableGroup()
-inputs.coeffs = csdl.Variable(value=coeffs,name='boundary spline coeffs')
-inputs.coeffs.set_as_design_variable(lower=-2,upper=2,scaler=2)
 
-boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
-xy_eval = boundary_spline.evaluate(parametric_coords)
-inputs.xy = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
-inputs.xy.name = 'xy'
-inputs.xy.set_as_design_variable(lower=-2,upper=2,scaler=2)
-inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
+# # boundary_spline_coeffs.name = 'boundary spline coeffs'
+# inputs.coeffs = csdl.Variable(value=coeffs)
+# inputs.coeffs.name = 'boundary spline coeffs'
+# inputs.coeffs.set_as_design_variable(lower=-2,upper=2,scaler=2)
+# boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
+# # evaluated_points = boundary_spline.evaluate(parametric_coords,plot=True)
 
-meshSmoothing = ALBATROSS.csdl_utils.EllipticSmoothing(domain,
-                                                       xs.boundary_nodes,
-                                                       xs.interior_nodes)
+# #TODO: increase knot multiplicity or use a composite spline for the boundary
 
-outputs_mm = meshSmoothing.evaluate(inputs)
+# inputs.xy = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
+# inputs.xy.name = 'xy'
+# inputs.xy.set_as_design_variable(lower=-2,upper=2,scaler=2)
+# inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
 
-inputs_w = outputs_mm
-inputs_w.xy = inputs.xy
+# meshSmoothing = ALBATROSS.csdl_utils.EllipticSmoothing(domain,
+#                                                        xs.boundary_nodes,
+#                                                        xs.interior_nodes)
 
-warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
-                        boundary_nodes=xs.boundary_nodes,
-                        interior_nodes=xs.interior_nodes)
+# outputs_mm = meshSmoothing.evaluate(inputs)
 
-outputs_w = warping_model.evaluate(inputs_w)
+# inputs_w = outputs_mm
+# inputs_w.xy = inputs.xy
+
+# warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
+#                         boundary_nodes=xs.boundary_nodes,
+#                         interior_nodes=xs.interior_nodes)
+
+# outputs_w = warping_model.evaluate(inputs_w)
+
+xs._get_warping_functions()
 
 section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
                         boundary_nodes=xs.boundary_nodes,
                         interior_nodes=xs.interior_nodes)
 
-inputs_sec = outputs_w
-inputs_sec.xy = inputs_w.xy
-inputs_sec.xy_interior = inputs_w.xy_interior
-
-outputs_sec = section_model.evaluate(inputs_sec)
+inputs.w = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
+inputs.lmbda = csdl.Variable(value=np.vstack([xs.lmbdas[i].x.array for i in range(6)]).T)
+    
+outputs_sec = section_model.evaluate(inputs)
 
 # K = outputs.K
 # K.name = 'stiffness_mat'
@@ -119,9 +127,8 @@ outputs_sec = section_model.evaluate(inputs_sec)
 
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
-recorder.visualize_adjacency_matrix()
-# sim.check_totals(outputs_w.w[25:30:,5],inputs.coeffs)
-sim.check_totals(outputs_sec.K[0,0],inputs.coeffs)
+# sim.check_totals(outputs_w.w[:10,0],inputs.coeffs)
+sim.check_totals(outputs_sec.K[0,0],inputs.w)
 # sim.check_totals(outputs_wf.w[:10,0],inputs.coeffs,step_size=0.0001,print_results=True)
 # sim.check_totals(outputs_mm.xy_interior,inputs.coeffs,step_size=0.0001,print_results=True)
 

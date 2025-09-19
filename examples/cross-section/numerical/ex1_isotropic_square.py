@@ -3,7 +3,7 @@ import ALBATROSS
 import numpy as np
 
 #cross-section mesh definition
-N = 10 #number of quad elements per side
+N = 4 #number of quad elements per side
 W = 1 #square height  
 H = 1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
@@ -54,6 +54,13 @@ print("Computed bending stiffness:")
 print(squareXS.K[4,4])
 # exit()
 
-squareXS.compute_xs_stiffness_matrix_sensitivities()
+pKpx = squareXS.compute_pKpx()
 
-squareXS.plot_sensitivities()
+squareXS.compute_pKpw()
+squareXS.compute_pKpl()
+
+
+print()
+# squareXS.compute_xs_stiffness_matrix_sensitivities()
+
+# squareXS.plot_sensitivities()

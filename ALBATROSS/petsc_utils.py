@@ -1,5 +1,6 @@
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix,vstack
 from petsc4py import PETSc
+# from ALBATROSS.utils import sparseify
    
 def convert_petsc_to_numpy(mat,sparse='False'):
     mataij = mat.convert('aij')
@@ -10,6 +11,14 @@ def convert_petsc_to_numpy(mat,sparse='False'):
         return mat,mat_sparse
     else:
         return mat_np
+
+def sparse_mat_from_loflofvec(l_of_l_of_vec):
+    flat_list = [vec for row in l_of_l_of_vec for vec in row]
+    sparse_list = []
+    for vec in flat_list:
+        sparse_list.append(csr_matrix(vec.array))
+    sparse_mat = vstack(sparse_list)
+    return sparse_mat
     
 def AT_C_B(A: PETSc.Mat, M: PETSc.Mat, B: PETSc.Mat) -> PETSc.Mat:
     """

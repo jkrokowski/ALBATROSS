@@ -30,7 +30,7 @@ from ALBATROSS.nonmatching_utils import (Region,Separation,Collision,
                                          celltags_to_dofs,
                                          get_interpolation_matrix,
                                          get_points_from_cells)
-from ALBATROSS.petsc_utils import convert_petsc_to_numpy,AT_C_B
+from ALBATROSS.petsc_utils import convert_petsc_to_numpy,AT_C_B,sparse_mat_from_loflofvec
 default_scalar_type = PETSc.ScalarType    
 
 #TODO: allow user to specify a point to find xs props about
@@ -982,6 +982,186 @@ class CrossSection:
     
     def _compute_function_partials(self,Kxij_form,function):
         return fem.petsc.assemble_vector(fem.form(derivative(Kxij_form,function)))
+
+
+    def compute_pKpx(self):       
+        self.pK1px_form = [[derivative(self.K1_form[idx1][idx2],self.x,self.dX)
+                            for idx2 in range(6)] 
+                                for idx1 in range(6)]
+        self.pK2px_form = [[derivative(self.K2_form[idx1][idx2],self.x,self.dX)
+                            for idx2 in range(6)] 
+                                for idx1 in range(6)]
+                
+        self.pK1px_lol = [[petsc.assemble_vector(form(self.pK1px_form[idx1][idx2]))
+                        for idx2 in range(6)] 
+                            for idx1 in range(6)]
+        self.pK2px_lol = [[petsc.assemble_vector(form(self.pK2px_form[idx1][idx2]))
+                for idx2 in range(6)] 
+                    for idx1 in range(6)]
+
+        self.pK1px_sparse = sparse_mat_from_loflofvec(self.pK1px_lol)
+        self.pK2px_sparse = sparse_mat_from_loflofvec(self.pK2px_lol)
+        
+        self.pK1px = self.pK1px_sparse.toarray().reshape((6,6,self.pK1px_sparse.shape[1]))
+        self.pK2px = self.pK2px_sparse.toarray().reshape((6,6,self.pK2px_sparse.shape[1]))
+
+
+        # #boundary dofs ([:,:,self.boundary_dofs])
+        # self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        
+        #TODO: can simplify this by flattening the K matrix into a vector, then the derivative is a matrix, not a third order tensor
+        #compact einsums:
+        term1 = np.einsum("ijm,ik,kl->jlm", self.pK1px, self.K2inv, self.K1)
+        term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2px,self.K2inv,self.K1)
+        term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1px)
+
+        #full sensitivities
+        self.pKpx = term1 + term2 + term3 
+               
+        # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
+        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
+        # indices_to=[]
+        # for i in range(self.VX.num_sub_spaces):
+        #     _,map_to = self.VX.sub(i).collapse()
+        #     indices_to.extend(map_to)
+        # self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
+
+        # #find all the indices where the boundary_node is in the boundary_dof_to_vertex_map and save those indices as a list
+        
+        # boundary_indices = []
+        # for i in self.boundary_nodes:
+        #     boundary_indices.extend(list(np.where(self.boundary_dof_to_vertex_map==i)[0]))
+        
+        # self.pKpx_boundary = self.dKpx[:,:,boundary_indices]
+
+        return self.pKpx.reshape((36,self.pKpx.shape[-1]))
+    
+
+    def compute_pKpw(self):
+        self.pK1pw_form = [[[derivative(self.K1_form[idx1][idx2],self.warping_functions[idx3])
+                                for idx2 in range(6)] 
+                                    for idx1 in range(6)]
+                            for idx3 in range(6)] 
+        self.pK2pw_form = [[[derivative(self.K2_form[idx1][idx2],self.warping_functions[idx3])
+                                for idx2 in range(6)] 
+                                    for idx1 in range(6)]
+                            for idx3 in range(6)] 
+          
+        self.pK1pw_lol = [[[petsc.assemble_vector(form(self.pK1pw_form[idx3][idx1][idx2]))
+                        for idx2 in range(6)] 
+                            for idx1 in range(6)]
+                            for idx3 in range(6)] 
+
+        self.pK2pw_lol = [[[petsc.assemble_vector(form(self.pK2pw_form[idx3][idx1][idx2]))
+                            for idx2 in range(6)] 
+                                for idx1 in range(6)]
+                                        for idx3 in range(6)] 
+        
+        #TODO: looks like this doesn't return the derivatives in the same way that 
+        # self.pKpw = np.zeros((36,self.warping_functions[0].x.array.shape[0]*6))
+        self.pKpw = np.zeros((6,6,6,self.warping_functions[0].x.array.shape[0]))
+        warping_len = self.warping_functions[0].x.array.shape[0]
+        for idx3 in range(6):
+            self.pK1pw_sparse = sparse_mat_from_loflofvec(self.pK1pw_lol[idx3])
+            self.pK2pw_sparse = sparse_mat_from_loflofvec(self.pK2pw_lol[idx3])
+            
+            self.pK1pw = self.pK1pw_sparse.toarray().reshape((6,6,self.pK1pw_sparse.shape[1]))
+            self.pK2pw = self.pK2pw_sparse.toarray().reshape((6,6,self.pK2pw_sparse.shape[1]))
+
+            # #boundary dofs ([:,:,self.boundary_dofs])
+            # self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+            
+            #TODO: can simplify this
+            #compact einsums:
+            term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pw, self.K2inv, self.K1)
+            term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pw,self.K2inv,self.K1)
+            term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pw)
+
+            #full sensitivities
+            # start = warping_len*idx3
+            # stop = warping_len*(idx3+1)
+            # self.pKpw[:,start:stop] = (term1 + term2 + term3).T.reshape((warping_len,36)).T
+            self.pKpw[:,:,idx3,] = (term1 + term2 + term3)
+              
+        # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
+        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
+        # indices_to=[]
+        # for i in range(self.VX.num_sub_spaces):
+        #     _,map_to = self.VX.sub(i).collapse()
+        #     indices_to.extend(map_to)
+        # self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
+
+        # #find all the indices where the boundary_node is in the boundary_dof_to_vertex_map and save those indices as a list
+        
+        # boundary_indices = []
+        # for i in self.boundary_nodes:
+        #     boundary_indices.extend(list(np.where(self.boundary_dof_to_vertex_map==i)[0]))
+        
+        # self.pKpx_boundary = self.dKpx[:,:,boundary_indices]
+
+        return self.pKpw.reshape(36,warping_len*6)
+    
+    def compute_pKpl(self):
+        self.pK1pl_form = [[[derivative(self.K1_form[idx1][idx2],self.lmbdas[idx3])
+                                for idx2 in range(6)] 
+                                    for idx1 in range(6)]
+                            for idx3 in range(6)] 
+        self.pK2pl_form = [[[derivative(self.K2_form[idx1][idx2],self.lmbdas[idx3])
+                                for idx2 in range(6)] 
+                                    for idx1 in range(6)]
+                            for idx3 in range(6)] 
+          
+        self.pK1pl_lol = [[[petsc.assemble_vector(form(self.pK1pl_form[idx3][idx1][idx2]))
+                        for idx2 in range(6)] 
+                            for idx1 in range(6)]
+                            for idx3 in range(6)] 
+
+        self.pK2pl_lol = [[[petsc.assemble_vector(form(self.pK2pl_form[idx3][idx1][idx2]))
+                            for idx2 in range(6)] 
+                                for idx1 in range(6)]
+                                        for idx3 in range(6)] 
+        
+        self.pKpl = np.zeros((36,self.lmbdas[0].x.array.shape[0]*6))
+        lm_len = self.lmbdas[0].x.array.shape[0]
+        for idx3 in range(6):
+            self.pK1pl_sparse = sparse_mat_from_loflofvec(self.pK1pl_lol[idx3])
+            self.pK2pl_sparse = sparse_mat_from_loflofvec(self.pK2pl_lol[idx3])
+            
+            self.pK1pl = self.pK1pl_sparse.toarray().reshape((6,6,self.pK1pl_sparse.shape[1]))
+            self.pK2pl = self.pK2pl_sparse.toarray().reshape((6,6,self.pK2pl_sparse.shape[1]))
+
+            # #boundary dofs ([:,:,self.boundary_dofs])
+            # self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+            
+            #TODO: can simplify this
+            #compact einsums:
+            term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pl, self.K2inv, self.K1)
+            term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pl,self.K2inv,self.K1)
+            term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pl)
+
+            #full sensitivities
+            start = lm_len*idx3
+            stop = lm_len*(idx3+1)
+            self.pKpl[:,start:stop] = (term1 + term2 + term3).reshape((36,lm_len))
+               
+        # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
+        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
+        # indices_to=[]
+        # for i in range(self.VX.num_sub_spaces):
+        #     _,map_to = self.VX.sub(i).collapse()
+        #     indices_to.extend(map_to)
+        # self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
+
+        # #find all the indices where the boundary_node is in the boundary_dof_to_vertex_map and save those indices as a list
+        
+        # boundary_indices = []
+        # for i in self.boundary_nodes:
+        #     boundary_indices.extend(list(np.where(self.boundary_dof_to_vertex_map==i)[0]))
+        
+        # self.pKpx_boundary = self.dKpx[:,:,boundary_indices]
+
+        return self.pKpl
+    
 
     # def compute_spatial_totals(self):
     #     args = self.residuals[0][0].arguments()

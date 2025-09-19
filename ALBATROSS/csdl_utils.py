@@ -147,7 +147,7 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
         outputs['lmbda'] = np.vstack([self.xs.lmbdas[i].x.array for i in range(6)]).T
     
     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
-        print("apply_inverse_jacobian:")
+        # print("apply_inverse_jacobian:")
         #TODO: do we need to update the inputs, etc (eg. does the mesh update need to happen here?)
         xy = inputs['xy']
         xy_interior = inputs['xy_interior']
@@ -178,7 +178,7 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
 
 
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
-        print("compute vector-jacobian product:")
+        # print("compute vector-jacobian product:")
         xy = inputs['xy']
         xy_interior = inputs['xy_interior']
         w = outputs['w']
@@ -210,29 +210,99 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
 
 
 class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
-    def __init__(self):
+    def __init__(self,xs,boundary_nodes=None,interior_nodes=None):
         super().__init__()
+        self.xs = xs
+
+        if boundary_nodes is not None:
+            self.boundary_nodes = boundary_nodes
+
+        if interior_nodes is not None:
+            self.interior_nodes = interior_nodes
+
 
     def evaluate(self,inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
         self.declare_input('xy',inputs.xy)
         self.declare_input('xy_interior',inputs.xy_interior)
-        self.declare_input('')
+        self.declare_input('w',inputs.w)
+        self.declare_input('lmbda',inputs.lmbda)
 
         K = self.create_output('K', (6,6))
         A = self.create_output('A',(1,))
 
         # construct output of the model
-        output = csdl.VariableGroup()
-        output.K = K
+        outputs = csdl.VariableGroup()
+        outputs.K = K
 
-        output.A = A
+        outputs.A = A
+
+        return outputs
     
     def compute(self, inputs, outputs):
-        return super().compute(inputs, outputs)
+        print('compute beam matrix from warping function state')
+        #update boundary nodes:
+        if self.boundary_nodes is not None: 
+            self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        
+        #update interior nodes
+        if self.interior_nodes is not None: 
+            self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+        else: 
+            self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+
+        
+        # w_len = self.xs.warping_functions[0].x.array.shape[0]
+        # lmbda_len = self.xs.lmbdas[0].x.array.shape[0]
+        # offset_w = 0
+        # offset_l = 0
+        for i in range(6):
+            self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
+            self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+        # inputs['w'] = np.vstack([self.xs.warping_functions[i].x.array for i in range(6)]).T
+        # inputs['lmbda'] = np.vstack([self.xs.lmbdas[i].x.array for i in range(6)]).T
+    
+        self.xs._compute_xs_stiffness_matrix()
+
+        outputs['K'] = self.xs.K
+        outputs['A'] = self.xs.A
     
     def compute_derivatives(self, inputs, outputs, derivatives):
-        return super().compute_derivatives(inputs, outputs, derivatives)
+        print('compute beam matrix derivatives...')
+        #update boundary nodes:
+        if self.boundary_nodes is not None: 
+            self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        
+        #update interior nodes
+        if self.interior_nodes is not None: 
+            self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+        else: 
+            self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+        
+        # w_len = self.xs.warping_functions[0].x.array.shape[0]
+        # lmbda_len = self.xs.lmbdas[0].x.array.shape[0]
+        # offset_w = 0
+        # offset_l = 0
+        for i in range(6):
+            self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
+            self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+        # inputs['w'] = np.vstack([self.xs.warping_functions[i].x.array for i in range(6)]).T
+        # inputs['lmbda'] = np.vstack([self.xs.lmbdas[i].x.array for i in range(6)]).T
+    
+        self.xs._compute_xs_stiffness_matrix()
+                
+        pKpx = self.xs.compute_pKpx()
+        pKpw = self.xs.compute_pKpw()
+        pKpl = self.xs.compute_pKpl()
+
+        #declare derivatives
+        derivatives['K', 'xy'] = np.vstack([pKpx[:,self.xs.dofs_x_boundary],
+                                        pKpx[:,self.xs.dofs_y_boundary]]).T #return (36 x num_boundary_nodes*2)
+        derivatives['K', 'xy_interior'] = np.vstack([pKpx[:,self.xs.dofs_x_interior],
+                                        pKpx[:,self.xs.dofs_y_interior]]).T #return (36 x num_interior_nodes*2)
+        derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
+        derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
+
 
 class EllipticSmoothing(csdl.CustomExplicitOperation):
 
@@ -262,10 +332,11 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         return output
 
     def compute(self, inputs, outputs):
-        
+        print(f'perform elliptic smoothing (step {self.step})')
         # displacement = inputs['xy']-inputs['xy_prev']
         displacement = inputs['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
         
+        #
         xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
                                                     self.boundary_nodes,
                                                     displacement,
@@ -291,8 +362,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
                                                         mode='lin_elas')
 
         # derivatives['xy_interior','xy'] = np.ones_like(xy_interior)
-        print('duhdx shape:')
-        print(duhdx.shape)
+        # print('duhdx shape:')
+        # print(duhdx.shape)
         derivatives['xy_interior','xy'] = duhdx
         # derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
         #                                                  inputs['xy'].flatten().shape[0]))
