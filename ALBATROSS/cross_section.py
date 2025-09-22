@@ -522,7 +522,8 @@ class CrossSection:
         # internal energy
         Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
 
-        # differentiation of the constructed form 
+        # differentiation of the constructed form
+        self.A_form = 1.0*dx
         self.K1_form = [[diff(P_form[idx1],c[idx2]) for idx2 in range(6)] 
                         for idx1 in range(6)]
         self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx2 in range(6)]
@@ -546,7 +547,8 @@ class CrossSection:
         self.S = self.K1inv.T@self.K2@self.K1inv
 
         #compute Beam Stiffness Matrix
-        self.K =  self.K1@self.K2inv@self.K1.T
+        # self.K =  self.K1@self.K2inv@self.K1.T
+        self.K =  (self.A**2)*self.K2inv
 
     
     def rigid_constraints(self,u):
@@ -1018,8 +1020,14 @@ class CrossSection:
         term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1px)
 
         #full sensitivities
-        self.pKpx = term1 + term2 + term3 
-               
+        self.pKpx_original = term1 + term2 + term3 
+        
+        pApx = petsc.assemble_vector(form(derivative(self.A_form,self.x,self.dX)))
+        term1 = 2*self.A*np.einsum('ij,k->ijk',self.K2inv,pApx.array)
+        term2 = -np.einsum("ij,jkl,km->iml", self.K2inv,self.pK2px,self.K2inv)
+
+        self.pKpx = term1 + self.A**2 * term2
+
         # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
         # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
         # indices_to=[]
