@@ -45,7 +45,6 @@ inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,nam
 # xy_interior = inputs.xy_interior
 
 
-
 # #CONSTRUCT A BOUNDARY B-SPLINE (with a closed, uniform knot vector)
 # num_parametric = 6
 # bspline_degree=3
@@ -140,11 +139,17 @@ K00.name = 'K00'
 # xy_node0 = inputs.xy[0,:]
 xy_node0.name = 'xy_node0'
 
-dKdx_check = sim.check_totals(outputs_sec.K,inputs.xy,step_size=0.000001,print_results=True)
+dKdx_check = sim.check_totals(outputs_sec.K,inputs.xy,step_size=1e-6,print_results=True)
+dKdx = dKdx_check[outputs_sec.K,inputs.xy]['value']
+dKdx_FD = dKdx_check[outputs_sec.K,inputs.xy]['fd_value']
 
-#TODO: currently have accurate derivatives, except it seems that the partials are a bit scrambled for 
+#check norms across K matrix entries (for all x)
 for i in range(36):
-    print(i,np.linalg.norm(dKdx_check[outputs_sec.K,inputs.xy]['value'][i]-dKdx_check[outputs_sec.K,inputs.xy]['fd_value'][i]))
+    print(i,np.linalg.norm(dKdx[i,:]-dKdx_FD[i,:]))
+
+#check norms across x
+for i in range(xs.boundary_nodes.shape[0]*2):
+    print(i,np.linalg.norm(dKdx[:,i]-dKdx_FD[:,i]))
 
 dK00dx = sim.compute_totals(K00,reduced_xy)
 dK00dx_FD = sim.compute_totals(K00,reduced_xy,use_finite_difference=True,finite_difference_step_size=0.001)

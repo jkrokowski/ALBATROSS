@@ -225,8 +225,8 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         # assign method inputs to input dictionary
         self.declare_input('xy',inputs.xy)
         self.declare_input('xy_interior',inputs.xy_interior)
-        self.declare_input('w',inputs.w)
-        self.declare_input('lmbda',inputs.lmbda)
+        # self.declare_input('w',inputs.w)
+        # self.declare_input('lmbda',inputs.lmbda)
 
         # construct output of the model
         outputs = csdl.VariableGroup()
@@ -240,24 +240,18 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         #update boundary nodes:
         if self.boundary_nodes is not None: 
             self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
-        
+
         #update interior nodes
         if self.interior_nodes is not None: 
             self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
         else: 
             self.xs.msh.geometry.x[:,0:2]=inputs['xy']
 
-        
-        # w_len = self.xs.warping_functions[0].x.array.shape[0]
-        # lmbda_len = self.xs.lmbdas[0].x.array.shape[0]
-        # offset_w = 0
-        # offset_l = 0
-        for i in range(6):
-            self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
-            self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-        # inputs['w'] = np.vstack([self.xs.warping_functions[i].x.array for i in range(6)]).T
-        # inputs['lmbda'] = np.vstack([self.xs.lmbdas[i].x.array for i in range(6)]).T
-    
+        # for i in range(6):
+        #     self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
+        #     self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+        print('mesh coords:')
+        print(self.xs.msh.geometry.x[:,0:2])
         self.xs._compute_xs_stiffness_matrix()
 
         outputs['K'] = self.xs.K
@@ -266,42 +260,39 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
     def compute_derivatives(self, inputs, outputs, derivatives):
         print('compute beam matrix derivatives...')
         #update boundary nodes:
-        if self.boundary_nodes is not None: 
-            self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        # if self.boundary_nodes is not None: 
+        #     self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
         
-        #update interior nodes
-        if self.interior_nodes is not None: 
-            self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        else: 
-            self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+        # #update interior nodes
+        # if self.interior_nodes is not None: 
+        #     self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+        # else: 
+        #     self.xs.msh.geometry.x[:,0:2]=inputs['xy']
         
-        # w_len = self.xs.warping_functions[0].x.array.shape[0]
-        # lmbda_len = self.xs.lmbdas[0].x.array.shape[0]
-        # offset_w = 0
-        # offset_l = 0
-        for i in range(6):
-            self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
-            self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-        # inputs['w'] = np.vstack([self.xs.warping_functions[i].x.array for i in range(6)]).T
-        # inputs['lmbda'] = np.vstack([self.xs.lmbdas[i].x.array for i in range(6)]).T
-    
-        self.xs._compute_xs_stiffness_matrix()
+        # for i in range(6):
+        #     self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
+        #     self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+        
+        # self.xs._compute_xs_stiffness_matrix()
                 
         pKpx = self.xs.compute_pKpx()
-        pKpw = self.xs.compute_pKpw()
-        pKpl = self.xs.compute_pKpl()
+        # pKpw = self.xs.compute_pKpw()
+        # pKpl = self.xs.compute_pKpl()
 
         #declare derivatives
         print('input vals:')
         print(inputs['xy'])
+        print('mesh coords:')
+        print(self.xs.msh.geometry.x[:,0:2])
         derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
+        # derivatives['K', 'xy'] = pKpx[:,np.concatenate([self.xs.dofs_x_boundary,self.xs.dofs_y_boundary])]
         derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
         # derivatives['K', 'xy'] = np.hstack([pKpx[:,self.xs.dofs_x_boundary],
         #                                 pKpx[:,self.xs.dofs_y_boundary]]) #return (36 x num_boundary_nodes*2)
         # derivatives['K', 'xy_interior'] = np.hstack([pKpx[:,self.xs.dofs_x_interior],
         #                                 pKpx[:,self.xs.dofs_y_interior]]) #return (36 x num_interior_nodes*2)
-        derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
-        derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
+        # derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
+        # derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
 
 
 class EllipticSmoothing(csdl.CustomExplicitOperation):

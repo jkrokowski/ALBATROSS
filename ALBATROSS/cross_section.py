@@ -537,6 +537,8 @@ class CrossSection:
                      for idx2 in range(6)] 
                         for idx1 in range(6)])
         
+        self.A = assemble_scalar(fem.form(self.A_form))
+        
         #store K1^-1 for recovery and sensitivity computation
         self.K1inv = np.linalg.inv(self.K1)
 
@@ -989,41 +991,41 @@ class CrossSection:
 
 
     def compute_pKpx(self):       
-        self.pK1px_form = [[derivative(self.K1_form[idx1][idx2],self.x,self.dX)
-                            for idx2 in range(6)] 
-                                for idx1 in range(6)]
+        # self.pK1px_form = [[derivative(self.K1_form[idx1][idx2],self.x,self.dX)
+        #                     for idx2 in range(6)] 
+        #                         for idx1 in range(6)]
         self.pK2px_form = [[derivative(self.K2_form[idx1][idx2],self.x,self.dX)
                             for idx2 in range(6)] 
                                 for idx1 in range(6)]
                 
-        self.pK1px_lol = [[petsc.assemble_vector(form(self.pK1px_form[idx1][idx2]))
-                        for idx2 in range(6)] 
-                            for idx1 in range(6)]
+        # self.pK1px_lol = [[petsc.assemble_vector(form(self.pK1px_form[idx1][idx2]))
+        #                 for idx2 in range(6)] 
+        #                     for idx1 in range(6)]
         self.pK2px_lol = [[petsc.assemble_vector(form(self.pK2px_form[idx1][idx2]))
                 for idx2 in range(6)] 
                     for idx1 in range(6)]
 
-        self.pK1px_sparse = sparse_mat_from_loflofvec(self.pK1px_lol)
+        # self.pK1px_sparse = sparse_mat_from_loflofvec(self.pK1px_lol)
         self.pK2px_sparse = sparse_mat_from_loflofvec(self.pK2px_lol)
         
-        self.pK1px = self.pK1px_sparse.toarray().reshape((6,6,self.pK1px_sparse.shape[1]))
+        # self.pK1px = self.pK1px_sparse.toarray().reshape((6,6,self.pK1px_sparse.shape[1]))
         self.pK2px = self.pK2px_sparse.toarray().reshape((6,6,self.pK2px_sparse.shape[1]))
 
 
         # #boundary dofs ([:,:,self.boundary_dofs])
         # self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         
-        #TODO: can simplify this by flattening the K matrix into a vector, then the derivative is a matrix, not a third order tensor
-        #compact einsums:
-        term1 = np.einsum("ijm,ik,kl->jlm", self.pK1px, self.K2inv, self.K1)
-        term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2px,self.K2inv,self.K1)
-        term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1px)
+        # #TODO: can simplify this by flattening the K matrix into a vector, then the derivative is a matrix, not a third order tensor
+        # #compact einsums:
+        # term1 = np.einsum("ijm,ik,kl->jlm", self.pK1px, self.K2inv, self.K1)
+        # term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2px,self.K2inv,self.K1)
+        # term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1px)
 
         #full sensitivities
-        self.pKpx_original = term1 + term2 + term3 
+        # self.pKpx_original = term1 + term2 + term3 
         
-        pApx = petsc.assemble_vector(form(derivative(self.A_form,self.x,self.dX)))
-        term1 = 2*self.A*np.einsum('ij,k->ijk',self.K2inv,pApx.array)
+        self.pApx = petsc.assemble_vector(form(derivative(self.A_form,self.x,self.dX)))
+        term1 = 2*self.A*np.einsum('ij,k->ijk',self.K2inv,self.pApx.array)
         term2 = -np.einsum("ij,jkl,km->iml", self.K2inv,self.pK2px,self.K2inv)
 
         self.pKpx = term1 + self.A**2 * term2
@@ -1071,6 +1073,9 @@ class CrossSection:
         # self.pKpw = np.zeros((36,self.warping_functions[0].x.array.shape[0]*6))
         self.pKpw = np.zeros((6,6,6,self.warping_functions[0].x.array.shape[0]))
         warping_len = self.warping_functions[0].x.array.shape[0]
+
+        # pApw = petsc.assemble_vector(form(derivative(self.A_form,self.w)))
+        # term1 = 2*self.A*np.einsum('ij,k->ijk',self.K2inv,pApw.array)
         for idx3 in range(6):
             self.pK1pw_sparse = sparse_mat_from_loflofvec(self.pK1pw_lol[idx3])
             self.pK2pw_sparse = sparse_mat_from_loflofvec(self.pK2pw_lol[idx3])
@@ -1083,19 +1088,18 @@ class CrossSection:
             
             #TODO: can simplify this
             #compact einsums:
-            term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pw, self.K2inv, self.K1)
-            term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pw,self.K2inv,self.K1)
-            term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pw)
+            # term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pw, self.K2inv, self.K1)
+            # term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pw,self.K2inv,self.K1)
+            # term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pw)
 
-            term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pw, self.K2inv, self.K1)
-            term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pw,self.K2inv,self.K1)
-            term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pw)
+            term2 = -np.einsum("ij,jkl,km->iml", self.K2inv,self.pK2pw,self.K2inv)
 
             #full sensitivities
             # start = warping_len*idx3
             # stop = warping_len*(idx3+1)
             # self.pKpw[:,start:stop] = (term1 + term2 + term3).T.reshape((warping_len,36)).T
-            self.pKpw[:,:,idx3,] = (term1 + term2 + term3)
+            # self.pKpw[:,:,idx3,] = (term1 + term2 + term3)
+            self.pKpw[:,:,idx3,] = self.A**2 * term2
               
         # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
         # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
@@ -1147,16 +1151,19 @@ class CrossSection:
             # #boundary dofs ([:,:,self.boundary_dofs])
             # self.boundary_nodes = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
             
-            #TODO: can simplify this
-            #compact einsums:
-            term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pl, self.K2inv, self.K1)
-            term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pl,self.K2inv,self.K1)
-            term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pl)
+            # #TODO: can simplify this
+            # #compact einsums:
+            # term1 = np.einsum("ijm,ik,kl->jlm", self.pK1pl, self.K2inv, self.K1)
+            # term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2pl,self.K2inv,self.K1)
+            # term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1pl)
+            
+            term2 = -np.einsum("ij,jkl,km->iml", self.K2inv,self.pK2pl,self.K2inv)
 
             #full sensitivities
             start = lm_len*idx3
             stop = lm_len*(idx3+1)
-            self.pKpl[:,start:stop] = (term1 + term2 + term3).reshape((36,lm_len))
+            # self.pKpl[:,start:stop] = (term1 + term2 + term3).reshape((36,lm_len))
+            self.pKpl[:,start:stop] = (self.A**2 * term2).reshape((36,lm_len))
                
         # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
         # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
