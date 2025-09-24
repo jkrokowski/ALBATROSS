@@ -101,7 +101,13 @@ section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
                         boundary_nodes=xs.boundary_nodes,
                         interior_nodes=xs.interior_nodes)
 
-inputs.w = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
+#set up
+warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
+start = 0
+end = 6
+warping_slice = csdl.Variable(value = warping_input.value[start:end,0])
+
+inputs.w = warping_input.set(csdl.slice[start:end,0],warping_slice)
 inputs.lmbda = csdl.Variable(value=np.vstack([xs.lmbdas[i].x.array for i in range(6)]).T)
     
 outputs_sec = section_model.evaluate(inputs)
@@ -126,18 +132,18 @@ outputs_sec = section_model.evaluate(inputs)
 
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
-# sim.check_totals(outputs_w.w[:10,0],inputs.coeffs)
 
-xy_node0 = inputs.xy.get(csdl.slice[0,:])
-# reduced_w = inputs.w.get(csdl.slice[25:30,0])
-K00 = outputs_sec.K.get(csdl.slice[0,0])
+dKdw_check = sim.check_totals(outputs_sec.K,warping_slice,step_size=1e-6,print_results=True)
+dKdw = dKdw_check[outputs_sec.K,warping_slice]['value']
+dKdw_FD = dKdw_check[outputs_sec.K,warping_slice]['fd_value']
 
+#check norms across K matrix entries (for all x)
+for i in range(36):
+    print(i,np.linalg.norm(dKdw[i,:]-dKdw_FD[i,:]))
 
-# K00 = outputs_sec.K[0,0]
-K00.name = 'K00'
-
-# xy_node0 = inputs.xy[0,:]
-xy_node0.name = 'xy_node0'
+# #check norms across x
+# for i in range(xs.boundary_nodes.shape[0]*2):
+#     print(i,np.linalg.norm(dKdw[:,i]-dKdw_FD[:,i]))
 
 dKdx_check = sim.check_totals(outputs_sec.K,inputs.xy,step_size=1e-6,print_results=True)
 dKdx = dKdx_check[outputs_sec.K,inputs.xy]['value']

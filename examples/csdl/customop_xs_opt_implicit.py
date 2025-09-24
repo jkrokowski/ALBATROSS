@@ -7,7 +7,7 @@ from mpi4py import MPI
 import lsdo_function_spaces as lfs
 
 
-N = 4
+N = 2
 W = 1
 H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -112,7 +112,7 @@ sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 recorder.visualize_adjacency_matrix()
 # sim.check_totals(outputs_w.w[25:30:,5],inputs.coeffs)
-sim.check_totals(outputs_sec.K[0,0],inputs.coeffs)
+sim.check_totals(outputs_sec.K,inputs.coeffs)
 # sim.check_totals(outputs_wf.w[:10,0],inputs.coeffs,step_size=0.0001,print_results=True)
 # sim.check_totals(outputs_mm.xy_interior,inputs.coeffs,step_size=0.0001,print_results=True)
 

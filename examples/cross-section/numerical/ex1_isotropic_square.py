@@ -4,7 +4,7 @@ import numpy as np
 
 #cross-section mesh definition
 N = 2 #number of quad elements per side
-W = 1 #square height  
+W = 1.2 #square height  
 H = 1 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
@@ -56,8 +56,10 @@ print(squareXS.K[4,4])
 
 pKpx = squareXS.compute_pKpx()
 
-squareXS.compute_pKpw()
-squareXS.compute_pKpl()
+pKpw = squareXS.compute_pKpw()
+pKpl = squareXS.compute_pKpl()
+
+dKdw00_FD = np.load('dKdw_FD.npy')
 
 
 print()

@@ -549,8 +549,8 @@ class CrossSection:
         self.S = self.K1inv.T@self.K2@self.K1inv
 
         #compute Beam Stiffness Matrix
-        # self.K =  self.K1@self.K2inv@self.K1.T
-        self.K =  (self.A**2)*self.K2inv
+        self.K =  self.K1@self.K2inv@self.K1.T
+        # self.K =  (self.A**2)*self.K2inv
 
     
     def rigid_constraints(self,u):
@@ -991,24 +991,24 @@ class CrossSection:
 
 
     def compute_pKpx(self):       
-        # self.pK1px_form = [[derivative(self.K1_form[idx1][idx2],self.x,self.dX)
-        #                     for idx2 in range(6)] 
-        #                         for idx1 in range(6)]
+        self.pK1px_form = [[derivative(self.K1_form[idx1][idx2],self.x,self.dX)
+                            for idx2 in range(6)] 
+                                for idx1 in range(6)]
         self.pK2px_form = [[derivative(self.K2_form[idx1][idx2],self.x,self.dX)
                             for idx2 in range(6)] 
                                 for idx1 in range(6)]
                 
-        # self.pK1px_lol = [[petsc.assemble_vector(form(self.pK1px_form[idx1][idx2]))
-        #                 for idx2 in range(6)] 
-        #                     for idx1 in range(6)]
+        self.pK1px_lol = [[petsc.assemble_vector(form(self.pK1px_form[idx1][idx2]))
+                        for idx2 in range(6)] 
+                            for idx1 in range(6)]
         self.pK2px_lol = [[petsc.assemble_vector(form(self.pK2px_form[idx1][idx2]))
                 for idx2 in range(6)] 
                     for idx1 in range(6)]
 
-        # self.pK1px_sparse = sparse_mat_from_loflofvec(self.pK1px_lol)
+        self.pK1px_sparse = sparse_mat_from_loflofvec(self.pK1px_lol)
         self.pK2px_sparse = sparse_mat_from_loflofvec(self.pK2px_lol)
         
-        # self.pK1px = self.pK1px_sparse.toarray().reshape((6,6,self.pK1px_sparse.shape[1]))
+        self.pK1px = self.pK1px_sparse.toarray().reshape((6,6,self.pK1px_sparse.shape[1]))
         self.pK2px = self.pK2px_sparse.toarray().reshape((6,6,self.pK2px_sparse.shape[1]))
 
 
@@ -1017,12 +1017,12 @@ class CrossSection:
         
         # #TODO: can simplify this by flattening the K matrix into a vector, then the derivative is a matrix, not a third order tensor
         # #compact einsums:
-        # term1 = np.einsum("ijm,ik,kl->jlm", self.pK1px, self.K2inv, self.K1)
-        # term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2px,self.K2inv,self.K1)
-        # term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1px)
+        term1 = np.einsum("ijm,ik,kl->jlm", self.pK1px, self.K2inv, self.K1)
+        term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1.T,self.K2inv,self.pK2px,self.K2inv,self.K1)
+        term3 = np.einsum("ij,jk,lkm->ilm", self.K1.T, self.K2inv, self.pK1px)
 
         #full sensitivities
-        # self.pKpx_original = term1 + term2 + term3 
+        self.pKpx_original = term1 + term2 + term3 
         
         self.pApx = petsc.assemble_vector(form(derivative(self.A_form,self.x,self.dX)))
         term1 = 2*self.A*np.einsum('ij,k->ijk',self.K2inv,self.pApx.array)
@@ -1065,8 +1065,8 @@ class CrossSection:
                             for idx3 in range(6)] 
 
         self.pK2pw_lol = [[[petsc.assemble_vector(form(self.pK2pw_form[idx3][idx1][idx2]))
-                            for idx2 in range(6)] 
-                                for idx1 in range(6)]
+                            for idx1 in range(6)] 
+                                for idx2 in range(6)]
                                         for idx3 in range(6)] 
         
         #TODO: looks like this doesn't return the derivatives in the same way that 
@@ -1074,8 +1074,8 @@ class CrossSection:
         self.pKpw = np.zeros((6,6,6,self.warping_functions[0].x.array.shape[0]))
         warping_len = self.warping_functions[0].x.array.shape[0]
 
-        # pApw = petsc.assemble_vector(form(derivative(self.A_form,self.w)))
-        # term1 = 2*self.A*np.einsum('ij,k->ijk',self.K2inv,pApw.array)
+        pApw = petsc.assemble_vector(form(derivative(self.A_form,self.warping_functions[0])))
+        term1 = 2*self.A*np.einsum('ij,k->ijk',self.K2inv,pApw.array)
         for idx3 in range(6):
             self.pK1pw_sparse = sparse_mat_from_loflofvec(self.pK1pw_lol[idx3])
             self.pK2pw_sparse = sparse_mat_from_loflofvec(self.pK2pw_lol[idx3])
@@ -1120,19 +1120,19 @@ class CrossSection:
         return self.pKpw.reshape(36,warping_len*6)
     
     def compute_pKpl(self):
-        self.pK1pl_form = [[[derivative(self.K1_form[idx1][idx2],self.lmbdas[idx3])
-                                for idx2 in range(6)] 
-                                    for idx1 in range(6)]
-                            for idx3 in range(6)] 
+        # self.pK1pl_form = [[[derivative(self.K1_form[idx1][idx2],self.lmbdas[idx3])
+        #                         for idx2 in range(6)] 
+        #                             for idx1 in range(6)]
+        #                     for idx3 in range(6)] 
         self.pK2pl_form = [[[derivative(self.K2_form[idx1][idx2],self.lmbdas[idx3])
                                 for idx2 in range(6)] 
                                     for idx1 in range(6)]
                             for idx3 in range(6)] 
           
-        self.pK1pl_lol = [[[petsc.assemble_vector(form(self.pK1pl_form[idx3][idx1][idx2]))
-                        for idx2 in range(6)] 
-                            for idx1 in range(6)]
-                            for idx3 in range(6)] 
+        # self.pK1pl_lol = [[[petsc.assemble_vector(form(self.pK1pl_form[idx3][idx1][idx2]))
+        #                 for idx2 in range(6)] 
+        #                     for idx1 in range(6)]
+        #                     for idx3 in range(6)] 
 
         self.pK2pl_lol = [[[petsc.assemble_vector(form(self.pK2pl_form[idx3][idx1][idx2]))
                             for idx2 in range(6)] 
@@ -1142,10 +1142,10 @@ class CrossSection:
         self.pKpl = np.zeros((36,self.lmbdas[0].x.array.shape[0]*6))
         lm_len = self.lmbdas[0].x.array.shape[0]
         for idx3 in range(6):
-            self.pK1pl_sparse = sparse_mat_from_loflofvec(self.pK1pl_lol[idx3])
+            # self.pK1pl_sparse = sparse_mat_from_loflofvec(self.pK1pl_lol[idx3])
             self.pK2pl_sparse = sparse_mat_from_loflofvec(self.pK2pl_lol[idx3])
             
-            self.pK1pl = self.pK1pl_sparse.toarray().reshape((6,6,self.pK1pl_sparse.shape[1]))
+            # self.pK1pl = self.pK1pl_sparse.toarray().reshape((6,6,self.pK1pl_sparse.shape[1]))
             self.pK2pl = self.pK2pl_sparse.toarray().reshape((6,6,self.pK2pl_sparse.shape[1]))
 
             # #boundary dofs ([:,:,self.boundary_dofs])
