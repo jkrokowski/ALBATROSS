@@ -210,9 +210,10 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
 
 
 class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
-    def __init__(self,xs,boundary_nodes=None,interior_nodes=None):
+    def __init__(self,xs,boundary_nodes=None,interior_nodes=None,check_partials='False'):
         super().__init__()
         self.xs = xs
+        self.check_partials =check_partials
 
         if boundary_nodes is not None:
             self.boundary_nodes = boundary_nodes
@@ -223,11 +224,13 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
 
     def evaluate(self,inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
-        # self.declare_input('xy',inputs.xy)
-        # self.declare_input('xy_interior',inputs.xy_interior)
-        self.declare_input('w',inputs.w)
-        self.declare_input('lmbda',inputs.lmbda)
-
+        if self.check_partials != 'w':
+            self.declare_input('xy',inputs.xy)
+            self.declare_input('xy_interior',inputs.xy_interior)
+        if self.check_partials != 'x':
+            self.declare_input('w',inputs.w)
+            self.declare_input('lmbda',inputs.lmbda)
+        
         # construct output of the model
         outputs = csdl.VariableGroup()
         outputs.K = self.create_output('K', (6,6))
@@ -239,21 +242,22 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
     
     def compute(self, inputs, outputs):
         print('compute beam matrix from warping function state')
-        # #update boundary nodes:
-        # if self.boundary_nodes is not None: 
-        #     self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        if self.check_partials != 'w':
+            #update boundary nodes:
+            if self.boundary_nodes is not None: 
+                self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
 
-        # #update interior nodes
-        # if self.interior_nodes is not None: 
-        #     self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        # else: 
-        #     self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+            #update interior nodes
+            if self.interior_nodes is not None: 
+                self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+            else: 
+                self.xs.msh.geometry.x[:,0:2]=inputs['xy']
 
-        for i in range(6):
-            self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
-            self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-        # print('mesh coords:')
-        # print(self.xs.msh.geometry.x[:,0:2])
+        if self.check_partials != 'x':
+            for i in range(6):
+                self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
+                self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+
         self.xs._compute_xs_stiffness_matrix()
 
         outputs['K'] = self.xs.K
@@ -276,10 +280,17 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         #     self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
         
         # self.xs._compute_xs_stiffness_matrix()
-                
-        # pKpx = self.xs.compute_pKpx()
-        pKpw = self.xs.compute_pKpw()
-        pKpl = self.xs.compute_pKpl()
+        if self.check_partials != 'w':                
+            pKpx = self.xs.compute_pKpx()
+            derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
+            derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
+        
+        if self.check_partials != 'x':
+            pKpw = self.xs.compute_pKpw()
+            pKpl = self.xs.compute_pKpl()
+            derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
+            derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
+
 
         # print('input vals:')
         # print(inputs['xy'])
@@ -287,11 +298,7 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         # print(self.xs.msh.geometry.x[:,0:2])
         
         #declare derivatives
-        # derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
-        # derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
-        derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
-        derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
-
+        
         # derivatives['K', 'xy'] = pKpx[:,np.concatenate([self.xs.dofs_x_boundary,self.xs.dofs_y_boundary])]
         # derivatives['K', 'xy'] = np.hstack([pKpx[:,self.xs.dofs_x_boundary],
         #                                 pKpx[:,self.xs.dofs_y_boundary]]) #return (36 x num_boundary_nodes*2)

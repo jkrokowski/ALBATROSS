@@ -59,8 +59,39 @@ pKpx = squareXS.compute_pKpx()
 pKpw = squareXS.compute_pKpw()
 pKpl = squareXS.compute_pKpl()
 
-dKdw00_FD = np.load('dKdw_FD.npy')
+def computeFDcheck(xs,step_size,mode='x'):
+    K1=xs.K1
+    K2=xs.K2
+    K2inv=xs.K2inv
+    K=xs.K
+    
+    if mode =='x':
+        xs.msh.geometry.x[0,0] +=step_size
+    elif mode =='w':
+        xs.warping_functions[0].x.array[0] +=step_size
+    
+    xs._compute_xs_stiffness_matrix()
 
+    dK1dx = (xs.K1 - K1) /step_size
+    dK2dx = (xs.K2 - K2) /step_size
+    dKdx = (xs.K - K) /step_size
+    dK2invdx = (xs.K2inv - K2inv) /step_size
+
+    np.save('dK1d'+mode+'_FD_d'+mode+'='+str(step_size)+'.npy',dK1dx)
+    np.save('dK2d'+mode+'_FD_d'+mode+'='+str(step_size)+'.npy',dK2dx)
+    np.save('dK2invd'+mode+'_FD_d'+mode+'='+str(step_size)+'.npy',dK2invdx)
+    np.save('dKd'+mode+'_FD_d'+mode+'='+str(step_size)+'.npy',dKdx)
+    
+    #return mesh to orginal position and recompute values
+    if mode =='x':
+        xs.msh.geometry.x[0,0] -=step_size
+    elif mode =='w':
+        xs.warping_functions[0].x.array[0] -=step_size
+    
+    xs._compute_xs_stiffness_matrix()
+
+computeFDcheck(squareXS,step_size=0.0001,mode='x')
+computeFDcheck(squareXS,step_size=0.0001,mode='w')
 
 print()
 # squareXS.compute_xs_stiffness_matrix_sensitivities()

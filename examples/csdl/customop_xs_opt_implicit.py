@@ -68,7 +68,7 @@ outputs_mm = meshSmoothing.evaluate(inputs_mm)
 
 #===== warping function computation =======#
 inputs_w = csdl.VariableGroup()
-inputs_w.xy = xy_boundary
+inputs_w.xy = inputs_mm.xy
 inputs_w.xy_interior = outputs_mm.xy_interior
 
 warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,

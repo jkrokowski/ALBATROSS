@@ -29,86 +29,37 @@ material = ALBATROSS.material.Material(name='unobtainium',
 
 xs = ALBATROSS.cross_section.CrossSection(domain,[material])
 
-#get imp
 xy=domain.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
+
+#restrict custom explicit operation to 'x', 'w', or 'False'
+check_partials = 'w'
 
 recorder = csdl.Recorder(inline=True)
 recorder.start()
 
 inputs = csdl.VariableGroup()
 
-inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
-
-# xy = inputs.xy
-# xy_interior = inputs.xy_interior
-
-
-# #CONSTRUCT A BOUNDARY B-SPLINE (with a closed, uniform knot vector)
-# num_parametric = 6
-# bspline_degree=3
-# boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
-# parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+1)])
-# boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[0:1,:]]) #duplicate the start/endpoint
-# boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
-# coeffs = boundary_spline_coeffs.value
-
-# # #TODO: USE A **PERIODIC** B-SPLINE to prevent the corner from being 
-# # #make a uniform knot vector of length (num_parametric+6)
-# # num_ctrl_pts = num_parametric+bspline_degree*2+2
-# # knot_indices = np.arange(0,num_ctrl_pts)
-# # num_repeated_ctrl_pts = 3
-# # # knots = (knot_indices)/(num_ctrl_pts-1)
-# # knots = (knot_indices-bspline_degree)/(num_parametric-1)
-# # periodic_bspline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,),knots=knots,knot_indices=knot_indices)
-# # parametric_coords2 = np.array([(i,) for i in np.linspace(0,1,boundary_nodes.shape[0])])
-# # periodic_boundary_spline_coeffs = periodic_bspline_spaceordered_nodes.fit(values = xy[list(ordering)],parametric_coordinates= parametric_coords2)
-
-
-# # boundary_spline_coeffs.name = 'boundary spline coeffs'
-# inputs.coeffs = csdl.Variable(value=coeffs)
-# inputs.coeffs.name = 'boundary spline coeffs'
-# inputs.coeffs.set_as_design_variable(lower=-2,upper=2,scaler=2)
-# boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
-# # evaluated_points = boundary_spline.evaluate(parametric_coords,plot=True)
-
-# #TODO: increase knot multiplicity or use a composite spline for the boundary
-
-# inputs.xy = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
-# inputs.xy.name = 'xy'
-# inputs.xy.set_as_design_variable(lower=-2,upper=2,scaler=2)
-# inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
-
-# meshSmoothing = ALBATROSS.csdl_utils.EllipticSmoothing(domain,
-#                                                        xs.boundary_nodes,
-#                                                        xs.interior_nodes)
-
-# outputs_mm = meshSmoothing.evaluate(inputs)
-
-# inputs_w = outputs_mm
-# inputs_w.xy = inputs.xy
-
-# warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
-#                         boundary_nodes=xs.boundary_nodes,
-#                         interior_nodes=xs.interior_nodes)
-
-# outputs_w = warping_model.evaluate(inputs_w)
+if check_partials != 'w':
+    inputs.xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
+    inputs.xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
 
 xs._get_warping_functions()
 
 section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
                         boundary_nodes=xs.boundary_nodes,
-                        interior_nodes=xs.interior_nodes)
+                        interior_nodes=xs.interior_nodes,
+                        check_partials=check_partials)
 
 #set up
-warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
-start = 0
-end = 6
-warping_slice = csdl.Variable(value = warping_input.value[start:end,0])
+if check_partials != 'x':
+    warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
+    start = 0
+    end = 12
+    warping_slice = csdl.Variable(value = warping_input.value[start:end,0])
 
-inputs.w = warping_input.set(csdl.slice[start:end,0],warping_slice)
-inputs.lmbda = csdl.Variable(value=np.vstack([xs.lmbdas[i].x.array for i in range(6)]).T)
+    inputs.w = warping_input.set(csdl.slice[start:end,0],warping_slice)
+    inputs.lmbda = csdl.Variable(value=np.vstack([xs.lmbdas[i].x.array for i in range(6)]).T)
     
 outputs_sec = section_model.evaluate(inputs)
 
@@ -133,29 +84,47 @@ outputs_sec = section_model.evaluate(inputs)
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
-dKdw_check = sim.check_totals(outputs_sec.K,warping_slice,step_size=1e-6,print_results=True)
-dKdw = dKdw_check[outputs_sec.K,warping_slice]['value']
-dKdw_FD = dKdw_check[outputs_sec.K,warping_slice]['fd_value']
+#============ WARPING FUNCTION PARTIAL DERIVATIVE CHECK =========#
+if check_partials == 'w':
+    print('checking pK/pw...')
+    dKdw_check = sim.check_totals(outputs_sec.K,warping_slice,step_size=1e-6,print_results=True)
+    dKdw = dKdw_check[outputs_sec.K,warping_slice]['value']
+    dKdw_FD = dKdw_check[outputs_sec.K,warping_slice]['fd_value']
 
-#check norms across K matrix entries (for all x)
-for i in range(36):
-    print(i,np.linalg.norm(dKdw[i,:]-dKdw_FD[i,:]))
+    #check norms across K matrix entries (for all x)
+    for i in range(36):
+        print(i,np.linalg.norm(dKdw[i,:]-dKdw_FD[i,:]),np.linalg.norm(dKdw[i,:]),np.linalg.norm(dKdw_FD[i,:]))
+    
+    step_size=0.0001
+    dK1dw0_FD=np.load('dK1dw_FD_dw='+str(step_size)+'.npy')
+    dK2dw0_FD=np.load('dK2dw_FD_dw='+str(step_size)+'.npy')
+    dK2invdw0_FD=np.load('dK2invdw_FD_dw='+str(step_size)+'.npy')
+    dKdw0_FD=np.load('dKdw_FD_dw='+str(step_size)+'.npy')
+    
+    # #check norms across x
+    # for i in range(xs.boundary_nodes.shape[0]*2):
+    #     print(i,np.linalg.norm(dKdw[:,i]-dKdw_FD[:,i]))
 
-# #check norms across x
-# for i in range(xs.boundary_nodes.shape[0]*2):
-#     print(i,np.linalg.norm(dKdw[:,i]-dKdw_FD[:,i]))
+#============ SPATIAL PARTIAL DERIVATIVE CHECK ========#
+if check_partials == 'x':
+    print('checking pK/px...')
+    dKdx_check = sim.check_totals(outputs_sec.K,inputs.xy,step_size=1e-6,print_results=True)
+    dKdx = dKdx_check[outputs_sec.K,inputs.xy]['value']
+    dKdx_FD = dKdx_check[outputs_sec.K,inputs.xy]['fd_value']
 
-dKdx_check = sim.check_totals(outputs_sec.K,inputs.xy,step_size=1e-6,print_results=True)
-dKdx = dKdx_check[outputs_sec.K,inputs.xy]['value']
-dKdx_FD = dKdx_check[outputs_sec.K,inputs.xy]['fd_value']
+    #check norms across K matrix entries (for all x)
+    for i in range(36):
+        print(i,np.linalg.norm(dKdx[i,:]-dKdx_FD[i,:]),np.linalg.norm(dKdx[i,:]),np.linalg.norm(dKdx_FD[i,:]))
 
-#check norms across K matrix entries (for all x)
-for i in range(36):
-    print(i,np.linalg.norm(dKdx[i,:]-dKdx_FD[i,:]))
+    #check norms across x
+    for i in range(xs.boundary_nodes.shape[0]*2):
+        print(i,np.linalg.norm(dKdx[:,i]-dKdx_FD[:,i]),np.linalg.norm(dKdx[:,i]),np.linalg.norm(dKdx_FD[:,i]))
 
-#check norms across x
-for i in range(xs.boundary_nodes.shape[0]*2):
-    print(i,np.linalg.norm(dKdx[:,i]-dKdx_FD[:,i]))
+    step_size=0.0001
+    dK1dx0_FD=np.load('dK1dx_FD_dx='+str(step_size)+'.npy')
+    dK2dx0_FD=np.load('dK2dx_FD_dx='+str(step_size)+'.npy')
+    dK2invdx0_FD=np.load('dK2invdx_FD_dx='+str(step_size)+'.npy')
+    dKd0_FD=np.load('dKdx_FD_dx='+str(step_size)+'.npy')
 
 dK00dx = sim.compute_totals(K00,reduced_xy)
 dK00dx_FD = sim.compute_totals(K00,reduced_xy,use_finite_difference=True,finite_difference_step_size=0.001)
