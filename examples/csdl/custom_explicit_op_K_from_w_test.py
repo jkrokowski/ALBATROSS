@@ -55,10 +55,11 @@ section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
 if check_partials != 'x':
     warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
     start = 0
-    end = 1
-    warping_slice = csdl.Variable(value = warping_input.value[start:end,1])
+    end = 12
+    wf_num = 0
+    warping_slice = csdl.Variable(value = warping_input.value[start:end,wf_num])
 
-    inputs.w = warping_input.set(csdl.slice[start:end,0],warping_slice)
+    inputs.w = warping_input.set(csdl.slice[start:end,wf_num],warping_slice)
     inputs.lmbda = csdl.Variable(value=np.vstack([xs.lmbdas[i].x.array for i in range(6)]).T)
     
 outputs_sec = section_model.evaluate(inputs)
@@ -87,7 +88,7 @@ sim.run()
 #============ WARPING FUNCTION PARTIAL DERIVATIVE CHECK =========#
 if check_partials == 'w':
     print('checking pK/pw...')
-    dKdw_check = sim.check_totals(outputs_sec.K,warping_slice,step_size=1e-6,print_results=True)
+    dKdw_check = sim.check_totals(outputs_sec.K,warping_slice,step_size=1e-8,print_results=True)
     dKdw = dKdw_check[outputs_sec.K,warping_slice]['value']
     dKdw_FD = dKdw_check[outputs_sec.K,warping_slice]['fd_value']
 
@@ -95,12 +96,12 @@ if check_partials == 'w':
     for i in range(36):
         print(i,np.linalg.norm(dKdw[i,:]-dKdw_FD[i,:]),np.linalg.norm(dKdw[i,:]),np.linalg.norm(dKdw_FD[i,:]))
     
-    step_size=0.0001
-    wf_num = 'w1'
-    dK1dwn_FD=np.load('dK1d'+wf_num+'_FD_dw='+str(step_size)+'.npy')
-    dK2dwn_FD=np.load('dK2d'+wf_num+'_FD_dw='+str(step_size)+'.npy')
-    dK2invdwn_FD=np.load('dK2invd'+wf_num+'_FD_dw='+str(step_size)+'.npy')
-    dKdwn_FD=np.load('dKd'+wf_num+'_FD_dw='+str(step_size)+'.npy')
+    # step_size=0.0001
+    # # wf_num = 'w3'
+    # dK1dwn_FD=np.load('dK1dw'+str(wf_num)+'_FD_dw='+str(step_size)+'.npy')
+    # dK2dwn_FD=np.load('dK2dw'+str(wf_num)+'_FD_dw='+str(step_size)+'.npy')
+    # dK2invdwn_FD=np.load('dK2invdw'+str(wf_num)+'_FD_dw='+str(step_size)+'.npy')
+    # dKdwn_FD=np.load('dKdw'+str(wf_num)+'_FD_dw='+str(step_size)+'.npy')
     
     # #check norms across x
     # for i in range(xs.boundary_nodes.shape[0]*2):

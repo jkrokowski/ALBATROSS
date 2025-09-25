@@ -7,7 +7,7 @@ from mpi4py import MPI
 import lsdo_function_spaces as lfs
 
 
-N = 2
+N = 20
 W = 1
 H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -37,7 +37,7 @@ recorder = csdl.Recorder(inline=True)
 recorder.start()
 
 #=====FIT BOUNDARY B-SPLINE ========#
-num_parametric = 6
+num_parametric = 30
 bspline_degree=3
 boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
 parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+1)])
@@ -48,11 +48,11 @@ coeffs = boundary_spline_coeffs.value
 # =======evaluate b-spline for boundary points ======#
 inputs = csdl.VariableGroup()
 inputs.coeffs = csdl.Variable(value=coeffs,name='boundary spline coeffs')
-inputs.coeffs.set_as_design_variable(lower=-2,upper=2,scaler=2)
+inputs.coeffs.set_as_design_variable(lower=-.75,upper=.75,scaler=100)
 boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
 xy_boundary = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
 xy_boundary.name = 'xy'
-xy_boundary.set_as_design_variable(lower=-2,upper=2,scaler=2)
+# xy_boundary.set_as_design_variable(lower=-1,upper=1,scaler=1000)
 
 #create interior node variable
 xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
@@ -90,39 +90,31 @@ inputs_sec.lmbda = outputs_w.lmbda
 
 outputs_sec = section_model.evaluate(inputs_sec)
 
-# K = outputs.K
+K = outputs_sec.K
 # K.name = 'stiffness_mat'
-# A = outputs.A
+A = outputs_sec.A
 # A.name = 'area'
 
-# with csdl.namespace('Objective'):
-#     f = -K[5,5]
-#     f.add_name('max_bending_stiffness')
-#     f.set_as_objective()
+with csdl.namespace('Objective'):
+    f = -K[5,5]
+    f.add_name('max_bending_stiffness')
+    f.set_as_objective()
 
-# with csdl.namespace('Area constraint'):
-#     g1 = K[0,0]
-#     g1.add_name('g1')
-#     g1.set_as_constraint(upper=125,lower=75) # constraint
+with csdl.namespace('Area constraint'):
+    g1 = K[0,0]
+    g1.add_name('g1')
+    g1.set_as_constraint(upper=125,lower=75) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
 
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
-recorder.visualize_adjacency_matrix()
-# sim.check_totals(outputs_w.w[25:30:,5],inputs.coeffs)
-sim.check_totals(outputs_sec.K,inputs.coeffs)
-# sim.check_totals(outputs_wf.w[:10,0],inputs.coeffs,step_size=0.0001,print_results=True)
-# sim.check_totals(outputs_mm.xy_interior,inputs.coeffs,step_size=0.0001,print_results=True)
 
-#TODO: need to figure out why check totals doesn't seem to affect FD, but does affect normal totals??
-# sim.check_totals(outputs_wf.w[:10,0],inputs.xy,step_size=0.0001,print_results=True) 
-dwdx = sim.compute_totals(outputs_wf.w[:10,0],inputs.coeffs)
-dwdx_FD = sim.compute_totals(outputs_wf.w[:10,0],inputs.xy,use_finite_difference=True,finite_difference_step_size=0.002)
+# recorder.visualize_adjacency_matrix()
 
-sim.check_totals(outputs_wf.lmbda,inputs.xy,print_results=True)
-# sim.check_totals(outputs_wf.w,inputs.xy,print_results=True)
+#uncommment this to check the total derivatives of the pipeline
+# sim.check_totals(outputs_sec.K,inputs.coeffs)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
@@ -139,7 +131,7 @@ from modopt import PySLSQP
 prob = CSDLAlphaProblem(problem_name='bending_stiffness_max',simulator=sim)
 
 # optimizer = SLSQP(prob,recording=True,solver_options={'ftol':1e-8, 'maxiter':20})
-optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':20,'acc':1e-6,'iprint':2})
+optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':100,'acc':1e-6,'iprint':2})
 
 # Check first derivatives at the initial guess, if needed
 # optimizer.check_first_derivatives(prob.x0,step=0.001)

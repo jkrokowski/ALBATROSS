@@ -257,7 +257,7 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
             for i in range(6):
                 self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
                 self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-
+        self.xs.plot_mesh()
         self.xs._compute_xs_stiffness_matrix()
 
         outputs['K'] = self.xs.K

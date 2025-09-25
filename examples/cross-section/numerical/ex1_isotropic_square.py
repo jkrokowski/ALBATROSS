@@ -71,7 +71,7 @@ def computeFDcheck(xs,step_size,mode='x'):
         label = mode+str(x_num)
 
     elif mode =='w':
-        wf_num = 0
+        wf_num = 3
         xs.warping_functions[wf_num].x.array[0] +=step_size
         label = mode+str(wf_num)
 
@@ -89,13 +89,13 @@ def computeFDcheck(xs,step_size,mode='x'):
     
     #return mesh to orginal position and recompute values
     if mode =='x':
-        xs.msh.geometry.x[0,0] -=step_size
+        xs.msh.geometry.x[x_num,0] -=step_size
     elif mode =='w':
-        xs.warping_functions[0].x.array[0] -=step_size
+        xs.warping_functions[wf_num].x.array[0] -=step_size
     
     xs._compute_xs_stiffness_matrix()
 
-computeFDcheck(squareXS,step_size=0.0001,mode='x')
+# computeFDcheck(squareXS,step_size=0.0001,mode='x')
 computeFDcheck(squareXS,step_size=0.0001,mode='w')
 
 print()

@@ -1073,7 +1073,7 @@ class CrossSection:
         
         #TODO: looks like this doesn't return the derivatives in the same way that 
         # self.pKpw = np.zeros((36,self.warping_functions[0].x.array.shape[0]*6))
-        self.pKpw = np.zeros((6,6,6,self.warping_functions[0].x.array.shape[0]))
+        self.pKpw = np.zeros((6,6,self.warping_functions[0].x.array.shape[0],6))
         # self.pKpw_original = np.zeros((6,6,6,self.warping_functions[0].x.array.shape[0]))
         warping_len = self.warping_functions[0].x.array.shape[0]
 
@@ -1106,7 +1106,7 @@ class CrossSection:
             # start = warping_len*idx3
             # stop = warping_len*(idx3+1)
             # self.pKpw[:,start:stop] = (term1 + term2 + term3).T.reshape((warping_len,36)).T
-            self.pKpw[:,:,idx3,] = (term1 + term2 + term3)
+            self.pKpw[:,:,:,idx3] = (term1 + term2 + term3)
             # self.pKpw[:,:,idx3,] = - self.A**2 * np.einsum("ij,jkl,km->iml", self.K2inv,self.pK2pw,self.K2inv)
               
         # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
