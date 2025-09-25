@@ -55,8 +55,8 @@ section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
 if check_partials != 'x':
     warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
     start = 0
-    end = 12
-    warping_slice = csdl.Variable(value = warping_input.value[start:end,0])
+    end = 1
+    warping_slice = csdl.Variable(value = warping_input.value[start:end,1])
 
     inputs.w = warping_input.set(csdl.slice[start:end,0],warping_slice)
     inputs.lmbda = csdl.Variable(value=np.vstack([xs.lmbdas[i].x.array for i in range(6)]).T)
@@ -96,10 +96,11 @@ if check_partials == 'w':
         print(i,np.linalg.norm(dKdw[i,:]-dKdw_FD[i,:]),np.linalg.norm(dKdw[i,:]),np.linalg.norm(dKdw_FD[i,:]))
     
     step_size=0.0001
-    dK1dw0_FD=np.load('dK1dw_FD_dw='+str(step_size)+'.npy')
-    dK2dw0_FD=np.load('dK2dw_FD_dw='+str(step_size)+'.npy')
-    dK2invdw0_FD=np.load('dK2invdw_FD_dw='+str(step_size)+'.npy')
-    dKdw0_FD=np.load('dKdw_FD_dw='+str(step_size)+'.npy')
+    wf_num = 'w1'
+    dK1dwn_FD=np.load('dK1d'+wf_num+'_FD_dw='+str(step_size)+'.npy')
+    dK2dwn_FD=np.load('dK2d'+wf_num+'_FD_dw='+str(step_size)+'.npy')
+    dK2invdwn_FD=np.load('dK2invd'+wf_num+'_FD_dw='+str(step_size)+'.npy')
+    dKdwn_FD=np.load('dKd'+wf_num+'_FD_dw='+str(step_size)+'.npy')
     
     # #check norms across x
     # for i in range(xs.boundary_nodes.shape[0]*2):
@@ -124,7 +125,7 @@ if check_partials == 'x':
     dK1dx0_FD=np.load('dK1dx_FD_dx='+str(step_size)+'.npy')
     dK2dx0_FD=np.load('dK2dx_FD_dx='+str(step_size)+'.npy')
     dK2invdx0_FD=np.load('dK2invdx_FD_dx='+str(step_size)+'.npy')
-    dKd0_FD=np.load('dKdx_FD_dx='+str(step_size)+'.npy')
+    dKdx0_FD=np.load('dKdx_FD_dx='+str(step_size)+'.npy')
 
 dK00dx = sim.compute_totals(K00,reduced_xy)
 dK00dx_FD = sim.compute_totals(K00,reduced_xy,use_finite_difference=True,finite_difference_step_size=0.001)

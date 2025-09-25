@@ -66,10 +66,15 @@ def computeFDcheck(xs,step_size,mode='x'):
     K=xs.K
     
     if mode =='x':
-        xs.msh.geometry.x[0,0] +=step_size
+        x_num =0
+        xs.msh.geometry.x[x_num,0] +=step_size
+        label = mode+str(x_num)
+
     elif mode =='w':
-        xs.warping_functions[0].x.array[0] +=step_size
-    
+        wf_num = 0
+        xs.warping_functions[wf_num].x.array[0] +=step_size
+        label = mode+str(wf_num)
+
     xs._compute_xs_stiffness_matrix()
 
     dK1dx = (xs.K1 - K1) /step_size
@@ -77,10 +82,10 @@ def computeFDcheck(xs,step_size,mode='x'):
     dKdx = (xs.K - K) /step_size
     dK2invdx = (xs.K2inv - K2inv) /step_size
 
-    np.save('dK1d'+mode+'_FD_d'+mode+'='+str(step_size)+'.npy',dK1dx)
-    np.save('dK2d'+mode+'_FD_d'+mode+'='+str(step_size)+'.npy',dK2dx)
-    np.save('dK2invd'+mode+'_FD_d'+mode+'='+str(step_size)+'.npy',dK2invdx)
-    np.save('dKd'+mode+'_FD_d'+mode+'='+str(step_size)+'.npy',dKdx)
+    np.save('dK1d'+label+'_FD_d'+mode+'='+str(step_size)+'.npy',dK1dx)
+    np.save('dK2d'+label+'_FD_d'+mode+'='+str(step_size)+'.npy',dK2dx)
+    np.save('dK2invd'+label+'_FD_d'+mode+'='+str(step_size)+'.npy',dK2invdx)
+    np.save('dKd'+label+'_FD_d'+mode+'='+str(step_size)+'.npy',dKdx)
     
     #return mesh to orginal position and recompute values
     if mode =='x':
