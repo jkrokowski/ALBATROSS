@@ -2,6 +2,8 @@ import csdl_alpha as csdl
 import ALBATROSS
 # from scipy.spatial import cKDTree
 import numpy as np
+from dolfinx.io import XDMFFile
+from mpi4py import MPI
 
 # custom cross-sectional model
 class CrossSection(csdl.CustomExplicitOperation):
@@ -257,7 +259,8 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
             for i in range(6):
                 self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
                 self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-        self.xs.plot_mesh()
+        
+        # self.xs.plot_mesh()
         self.xs._compute_xs_stiffness_matrix()
 
         outputs['K'] = self.xs.K
@@ -307,12 +310,13 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
 
 class EllipticSmoothing(csdl.CustomExplicitOperation):
 
-    def __init__(self,domain,boundary_nodes,interior_nodes):
+    def __init__(self,domain,boundary_nodes,interior_nodes,filename='xs'):
         super().__init__()
         self.domain = domain
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
         self.step = 0.0
+        self.filename =filename
 
 
     def evaluate(self, inputs: csdl.VariableGroup):
@@ -341,7 +345,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
                                                     self.interior_nodes,
                                                     mode='lin_elas',
                                                     plot_result=False,
-                                                    step=self.step)
+                                                    step=self.step,
+                                                    filename=self.filename)
         self.step += 1.0
 
         outputs['xy_interior']=xy_interior

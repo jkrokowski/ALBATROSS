@@ -10,7 +10,7 @@ from ALBATROSS.utils import gmsh_to_xdmf,get_pts_and_cells
 import pyvista
 from petsc4py import PETSc
 
-def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False,mode='poisson',step=0):
+def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False,mode='poisson',step=0,filename='xs'):
      '''Function to apply elliptic smoothing to a mesh
      given a prescribed boundary motion
      
@@ -116,7 +116,7 @@ def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,
      # msh.geometry.x[moved_nodes,0:2] += displacement
      
      if get_deriv is not True:
-          with XDMFFile(MPI.COMM_WORLD, "output/square_mesh_opt.xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
+          with XDMFFile(MPI.COMM_WORLD, "output/"+filename+".xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
                # xdmf.write_mesh(msh)
                xdmf.write_function(uh,step)
 
