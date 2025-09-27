@@ -6,10 +6,19 @@ from dolfinx.io import XDMFFile
 from mpi4py import MPI
 import lsdo_function_spaces as lfs
 
+'''
+This optimization problem is not well-posed with just the bending stiffness maximization
+A potential way to counter this (without applying constraints on the boundary self-intersections)
+would be to add a shear stiffness constraint as well as the area constraint?
+the shear stiffness constraint prevents the "web" from necking down and self intersecting
 
-N = 20
-W = 1
-H = 1
+UPDATE: the shear stiffness constraint didn't work because element inversion is not handled well by the cross-section model
+maybe this needs to be "fixed" by the mesh smoothing?
+'''
+
+N = 10
+W = .5
+H = .6
 points = [[-W/2,-H/2],[W/2, H/2]]
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
@@ -54,7 +63,7 @@ recorder.start()
 #create interior node variable
 xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
 xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-xy.set_as_design_variable(lower=-1,upper=1,scaler=1000)
+xy.set_as_design_variable(lower=-1,upper=1,scaler=100)
 
 #=====mesh motion=======#
 inputs_mm = csdl.VariableGroup()
@@ -103,7 +112,12 @@ with csdl.namespace('Objective'):
 with csdl.namespace('Area constraint'):
     g1 = K[0,0]
     g1.add_name('g1')
-    g1.set_as_constraint(upper=125,lower=75) # constraint
+    g1.set_as_constraint(upper=35,lower=25) # constraint
+
+with csdl.namespace('Shear constraint'):
+    g2 = K[2,2]
+    g2.add_name('g2')
+    g2.set_as_constraint(lower=4) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()

@@ -5,7 +5,7 @@ import numpy as np
 
 #create mesh
 N = 3
-H = 1.25
+H = 1.2
 W= 1.0
 tf = 0.1
 tw = 0.1

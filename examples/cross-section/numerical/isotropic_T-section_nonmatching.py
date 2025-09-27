@@ -25,7 +25,7 @@ tw = 1/w_to_w
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
 mesh_0.geometry.x[:, :2] -= .5
 mesh_0.geometry.x[:, 1] *= tf
-mesh_0.geometry.x[:, 0] *= 2*W
+mesh_0.geometry.x[:, 0] *= W
 mesh_0.geometry.x[:, 1] += H/2 - tf/2
 mesh_0.name = 'f'
 

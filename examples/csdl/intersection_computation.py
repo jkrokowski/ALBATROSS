@@ -1,7 +1,7 @@
 import csdl_alpha as csdl
 import ALBATROSS
 import numpy as np
-from dolfinx.mesh import locate_entities_boundary,locate_entities,exterior_facet_indices
+from dolfinx.mesh import CellType,locate_entities_boundary,locate_entities,exterior_facet_indices,create_unit_square
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
 import lsdo_function_spaces as lfs
@@ -10,27 +10,161 @@ recorder = csdl.Recorder(inline=True)
 recorder.start()
 
 inputs = csdl.VariableGroup()
+N = 4
+offset = 1
 
-N = 10
-W = 1
+h_to_f = 10
+w_to_w = 10
+
+m1,n1 = N*h_to_f+offset,N
+m2,n2 = N,N*w_to_w+offset
+
 H = 1
-points = [[-W/2,-H/2],[W/2, H/2]]
+W = 1
+tf = 1/h_to_f
+tw = 1/w_to_w
 
-domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
-domain.name = 'square_mesh_sdf_test'
-with XDMFFile(MPI.COMM_WORLD, "output/square_mesh_sdf_test.xdmf", "w") as xdmf:
-    xdmf.write_mesh(domain)
+mesh_A = create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=CellType.quadrilateral)
+boundary_labels_A = {}
+boundary_labels_A['left'] = -W/2
+boundary_labels_A['right'] = W/2
+boundary_labels_A['top'] = H/2
+boundary_labels_A['bottom'] = H/2-tf
+mesh_A.geometry.x[:, :2] -= .5          #center at 0
+mesh_A.geometry.x[:, 0] *= W            #scale x
+mesh_A.geometry.x[:, 1] *= tf           #scale y
+mesh_A.geometry.x[:, 1] += H/2 - tf/2   #translate vertically
+mesh_A.name = 'mesh_A'
 
-# radius = 1
-# num_el = 40 #number of elements through wall thickness
-# domain = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
-all_nodes= locate_entities(domain,0,lambda x: np.ones_like(x[0]))
-boundary_nodes = locate_entities_boundary(domain,0,lambda x: np.ones_like(x[0]))
-boundary_nodes_left = locate_entities_boundary(domain,0,lambda x: np.isclose(-0.5,x[0]))
-boundary_nodes_right = locate_entities_boundary(domain,0,lambda x: np.isclose(0.5,x[0]))
-boundary_nodes_top = locate_entities_boundary(domain,0,lambda x: np.isclose(0.5,x[1]))
-boundary_nodes_bottom = locate_entities_boundary(domain,0,lambda x: np.isclose(-0.5,x[1]))
-interior_nodes = all_nodes[~np.isin(all_nodes, boundary_nodes)]
+with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_A.name+".xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_A)
+
+mesh_B = create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=CellType.quadrilateral)
+boundary_labels_B = {}
+boundary_labels_B['left'] =-W/2
+boundary_labels_B['right'] = W/2
+boundary_labels_B['top'] = H/2
+boundary_labels_B['bottom'] = H/2-tf
+mesh_B.geometry.x[:, :2] -= .5      #center at 0
+mesh_B.geometry.x[:, 0] *= tw       #scale x
+mesh_B.geometry.x[:, 1] *= W        #scale y
+mesh_B.name = 'mesh_B'
+
+with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_B.name+".xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_B)
+
+def get_labeled_nodes(msh,boundary_labels):
+    node_labels = {}
+    node_labels['all']=locate_entities(msh,0,lambda x: np.ones_like(x[0]))
+    node_labels['boundary'] = locate_entities_boundary(msh,0,lambda x: np.ones_like(x[0]))
+    node_labels['left'] = locate_entities_boundary(msh,0,lambda x: np.isclose(boundary_labels['left'],x[0]))
+    node_labels['right'] = locate_entities_boundary(msh,0,lambda x: np.isclose(boundary_labels['right'],x[0]))
+    node_labels['top'] = locate_entities_boundary(msh,0,lambda x: np.isclose(boundary_labels['top'],x[1]))
+    node_labels['bottom'] = locate_entities_boundary(msh,0,lambda x: np.isclose(boundary_labels['bottom'],x[1]))
+    node_labels['interior'] = node_labels['all'][~np.isin( node_labels['all'], node_labels['boundary'])]
+
+    return node_labels
+
+node_labels_A = get_labeled_nodes(mesh_A,boundary_labels_A)
+node_labels_B = get_labeled_nodes(mesh_B,boundary_labels_B)
+
+def fit_boundary_b_splines(msh,node_labels):
+    '''
+    return a set of b-splines that form a closed loop for the rectangle
+    '''
+    #use the same b-spline space for all edges
+    num_parametric = 10
+    bspline_degree=3
+    spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
+    
+    boundary_splines = {}
+    edges = ['left','right','top','bottom']
+    for edge in edges:
+        nodes = node_labels[edge]
+
+        parametric_coords = np.array([(i,) for i in np.linspace(0,1,nodes.shape[0])])
+        #TODO: need to check if this always returns points ordered in the same winding directions
+        ordering = ALBATROSS.utils.order_boundary_nodes(msh.geometry.x[nodes,0:2])
+        ordered_vertices = nodes[ordering]
+        # inverse_ordering = np.argsort(ordering)
+        points = msh.geometry.x[ordered_vertices,0:2]
+        edge_spline_coeffs = spline_space.fit(values = points,parametric_coordinates= parametric_coords)
+        edge_spline = lfs.Function(spline_space,edge_spline_coeffs,name=edge+'_spline')
+        boundary_spline[edge] = edge_spline
+
+    return boundary_splines
+
+boundary_splines_A = fit_boundary_b_splines(mesh_A,node_labels_A)
+
+class SignedDistanceFunction():
+    def __init__(self,msh,boundary_splines):
+        '''
+        pass in the series of b-spline edges
+        '''
+        self.msh = msh
+        self.boundary_splines = boundary_splines
+
+
+    def evaluate(self,eval_pts):
+        d_list = []
+        W = csdl.Variable(shape=eval_pts.shape)
+        for spline in self.boundary_splines:
+            #compute squared distance for each point to each spline
+            proj_eval_pts = spline.evaluate(spline.project(eval_pts))
+            distance_eval = proj_eval_pts-eval_pts
+            sq_dist = csdl.norm(distance_eval,axes=(1,))
+
+            #compute winding number integral for each evaluation point for this b-spline
+            W += self._winding_number_for_spline_segment(spline,eval_pts)
+
+
+        D = csdl.minimum(csdl.vstack(d_list),rho=10000,axes=(0,))
+
+        #compute winding number for each evaluation point
+        W = csdl.Variable(shape=eval_pts)
+        for spline in self.boundary_splines:
+            W += self._winding_number_for_spline_segment(eval_pts)
+
+        #get sign from winding number
+        sign = csdl.tanh(100*(csdl.absolute(W)-0.5))
+
+        return sign*D
+    
+    def _winding_number_for_spline_segment(self,spline,eval_pts):
+        '''
+        use the trapezoidal rule to approximate the winding number integral for each spline
+        '''
+        num_parametric = 11
+        t = np.linspace(0,1,num_parametric)
+        x_t = spline.evaluate(t).reshape(num_parametric,2)
+        tangents = spline.evaluate(t,parametric_derivative_orders =(1)).reshape(num_parametric,2)
+        h = 1/num_parametric
+        w = csdl.Variable(shape=eval_pts.shape[0])
+        for i in csdl.frange(eval_pts.shape[0]):
+            for j in csdl.frange(x_t.shape[0]):
+                self._winding_kernel(spline,x_t[j],eval_pts[i],tangents[j])
+
+            # w[i] = 
+
+
+        return w
+
+    def _winding_kernel(spline,x_t,pt,tangent):
+        '''
+        x_t: physical point along spline at parametric location t
+        p: physical point to compute distance
+        tangent: tangent vector along spline at parametric location t
+        '''
+        d = x_t-pt
+        cross = d[:,0]*tangent[1] - d[:,1]*tangent[0]
+        denom = csdl.norm(d)
+        return cross/denom
+        
+
+phi_A = SignedDistanceFunction(mesh_A,boundary_splines_A)
+
+signedDistance = phi_A.evaluate(np.array([[0.25,0.25],[0.75,-.75],[.1,.52],[-.1,-.6],[0,0]]))
+
 
 #TODO: need to make this so the SDF is a function of xy
 #TODO: need to clean up how we handle multiple splines
@@ -87,7 +221,6 @@ for nodes in [boundary_nodes_left,boundary_nodes_right,boundary_nodes_top,bounda
     w = winding_kernel(np.array([0.0]),eval_pts)
 
     #TODO: convert to csdl
-    #this uses the winding function to compute the integral 
     def trapezoidal_rule(f,m=10,a=0,b=1):
         t_list = np.linspace(a,b,m)
         h = (b-a) / (m-1)
@@ -106,6 +239,7 @@ for nodes in [boundary_nodes_left,boundary_nodes_right,boundary_nodes_top,bounda
     print(f"unsigned distance for points: {sq_distance_eval.value}")
     # print(f"signed distance for points: {csdl.minimum(distance).value}")
 
+    # print(csdl.minimum(distance).value)    
 
 #==========================
 W = I_list[0] +I_list[1] +I_list[2]+I_list[3]
