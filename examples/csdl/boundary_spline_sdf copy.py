@@ -11,10 +11,10 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-N = 10
+N = 3
 W = 1
-H = 1
-points = [[-W/2,-H/2],[W/2, H/2]]
+H = .1
+points = [[-0.5,0.4],[-0.5+W, 0.4+H]]
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
 domain.name = 'square_mesh_sdf_test'
@@ -43,7 +43,12 @@ I_list = []
 d_list = []
 #points should be: INSIDE, OUTSIDE,  OUTSIDE, OUTSIDE, INSIDE (neg=INSIDE,pos=OUTSIDE)
 xy_test = csdl.Variable(value = np.array([[0.25,0.25],[0.75,-.75],[.1,.52],[-.1,-.6],[0,0]]))
-
+#Points should be: INSIDE, OUTSIDE, OUTSIDE, OUTSIDE, INSIDE
+# xy_test = csdl.Variable(value= np.array([  [0.0,   0.45],
+#                                             [0.0,   0.0],
+#                                             [.1,    0.52],
+#                                             [-.51,  0.45],
+#                                             [0.25,  0.48]]))
 for nodes in [boundary_nodes_left,boundary_nodes_right,boundary_nodes_top,boundary_nodes_bottom]:
     parametric_coords = np.array([(i,) for i in np.linspace(0,1,nodes.shape[0])])
     ordering = ALBATROSS.utils.order_boundary_nodes(domain.geometry.x[nodes,0:2])
