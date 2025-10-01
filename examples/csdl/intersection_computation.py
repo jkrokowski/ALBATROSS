@@ -10,6 +10,9 @@ recorder = csdl.Recorder(inline=True)
 recorder.start()
 
 inputs = csdl.VariableGroup()
+
+delta = 0.2
+
 N = 4
 offset = 1
 
@@ -41,17 +44,33 @@ with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_A.name+".xdmf", "w") as xd
 
 mesh_B = create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=CellType.quadrilateral)
 boundary_labels_B = {}
-boundary_labels_B['left'] =-tf/2
-boundary_labels_B['right'] = tf/2
+boundary_labels_B['left'] =-tf/2 + delta
+boundary_labels_B['right'] = tf/2 + delta
 boundary_labels_B['top'] = H/2
 boundary_labels_B['bottom'] = -H/2
 mesh_B.geometry.x[:, :2] -= .5      #center at 0
 mesh_B.geometry.x[:, 0] *= tw       #scale x
 mesh_B.geometry.x[:, 1] *= W        #scale y
+mesh_B.geometry.x[:,0] += delta     #translate horizontally for test
 mesh_B.name = 'mesh_B'
 
 with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_B.name+".xdmf", "w") as xdmf:
     xdmf.write_mesh(mesh_B)
+
+mesh_C = create_unit_square(MPI.COMM_WORLD, 10, 10,cell_type=CellType.quadrilateral)
+boundary_labels_C = {}
+boundary_labels_C['left'] =-tf/2
+boundary_labels_C['right'] = tf/2
+boundary_labels_C['top'] = H/2
+boundary_labels_C['bottom'] = H/2-tw/2
+mesh_C.geometry.x[:, :2] -= .5      #center at 0
+mesh_C.geometry.x[:, 0] *= tw       #scale x
+mesh_C.geometry.x[:, 1] *= tf         #scale y
+mesh_C.geometry.x[:, 1] += H/2 - tf/2   #translate vertically
+mesh_C.name = 'mesh_C'
+
+with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+".xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_C)
 
 def get_labeled_nodes(msh,boundary_labels):
     node_labels = {}
@@ -67,6 +86,7 @@ def get_labeled_nodes(msh,boundary_labels):
 
 node_labels_A = get_labeled_nodes(mesh_A,boundary_labels_A)
 node_labels_B = get_labeled_nodes(mesh_B,boundary_labels_B)
+node_labels_C = get_labeled_nodes(mesh_C,boundary_labels_C)
 
 def orientation_xy(points):
     # points: array-like of shape (n,2); will be treated as closed (last connects to first)
@@ -144,6 +164,7 @@ def fit_boundary_b_splines(msh,node_labels):
 
 boundary_splines_A = fit_boundary_b_splines(mesh_A,node_labels_A)
 boundary_splines_B = fit_boundary_b_splines(mesh_B,node_labels_B)
+boundary_splines_C = fit_boundary_b_splines(mesh_C,node_labels_C)
 
 class SignedDistanceFunction():
     def __init__(self,msh,boundary_splines):
@@ -246,6 +267,25 @@ dphindx = csdl.derivative(signed_distance_intersection,eval_pts)
 # in order to update mortar mesh boundary nodes, use:
 dphindx_norm = csdl.norm(dphindx,axes=(1,))
 step = dphindx/csdl.expand(dphindx_norm,dphindx.shape,'i->ij')
-new_mortar_mesh_pts = eval_pts - csdl.matvec(step.T(),signed_distance_intersection).reshape(eval_pts.shape[0],2)
+new_eval_pts = eval_pts - csdl.matvec(step.T(),signed_distance_intersection).reshape(eval_pts.shape[0],2)
 
+
+#test with mesh C boundary points:
+mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['boundary'],:2])
+
+signed_distance_A = phi_A.evaluate(mesh_C_boundary_pts)
+signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
+signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
+
+dphindxc = csdl.derivative(signed_distance_intersection,mesh_C_boundary_pts)
+dphindxc_norm = csdl.norm(dphindxc,axes=(1,))
+step_c = dphindxc/csdl.expand(dphindxc_norm,dphindxc.shape,'i->ij')
+
+new_mortar_mesh_pts = mesh_C_boundary_pts - csdl.matvec(step_c.T(),signed_distance_intersection).reshape(mesh_C_boundary_pts.shape[0],2)
+
+mesh_C.geometry.x[node_labels_C['boundary'],:2] = new_mortar_mesh_pts.value
+
+with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_C)
+boundary_splines_C.evaluate(np.array(0.0))
 print()
