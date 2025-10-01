@@ -277,6 +277,7 @@ signed_distance_A = phi_A.evaluate(mesh_C_boundary_pts)
 signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
 signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
 
+#use derivative of SDF w.r.t. boundary nodes to compute new boundary node points
 dphindxc = csdl.derivative(signed_distance_intersection,mesh_C_boundary_pts)
 dphindxc_norm = csdl.norm(dphindxc,axes=(1,))
 step_c = dphindxc/csdl.expand(dphindxc_norm,dphindxc.shape,'i->ij')
@@ -287,5 +288,18 @@ mesh_C.geometry.x[node_labels_C['boundary'],:2] = new_mortar_mesh_pts.value
 
 with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.xdmf", "w") as xdmf:
     xdmf.write_mesh(mesh_C)
-boundary_splines_C.evaluate(np.array(0.0))
+
+
+
+signed_distance_A = phi_A.evaluate(boundary_splines_C['left'].evaluate())
+signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
+signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
+
+csdl.derivative(signed_distance_intersection,boundary_splines_C['left'].coefficients)
+
+
+# boundary_splines_C['left'].refit()
+parametric_coords = np.array([(i,) for i in np.linspace(0,1,node_labels_C['left'].shape[0])])
+basis_mat = boundary_splines_C['left'].space.compute_basis_matrix(parametric_coords).toarray()
+physical_points =basis_mat@boundary_splines_C['left'].coefficients.value
 print()
