@@ -242,6 +242,14 @@ class SignedDistanceFunction():
         denom = csdl.norm(d,axes=(2,))
         return cross/csdl.square(denom)
         
+class SignedDistanceIntersection():
+    def __init__(self,sdfs):
+        self.sdfs =sdfs
+    
+    def evaluate(self,eval_pts):
+        
+        return csdl.maximum(self.sdfs[0],self.sdfs[1],rho=100000)
+    
 
 phi_A = SignedDistanceFunction(mesh_A,boundary_splines_A)
 
@@ -275,8 +283,11 @@ mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['bound
 
 signed_distance_A = phi_A.evaluate(mesh_C_boundary_pts)
 signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
-signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
 
+phi_C = SignedDistanceIntersection([phi_A,phi_B])
+    
+# signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
+signed_distance_intersection = phi_C.evaluate(mesh_C_boundary_pts)
 #use derivative of SDF w.r.t. boundary nodes to compute new boundary node points
 dphindxc = csdl.derivative(signed_distance_intersection,mesh_C_boundary_pts)
 dphindxc_norm = csdl.norm(dphindxc,axes=(1,))
@@ -291,15 +302,19 @@ with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.x
 
 
 
-signed_distance_A = phi_A.evaluate(boundary_splines_C['left'].evaluate())
-signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
-signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
+# signed_distance_A = phi_A.evaluate(boundary_splines_C['left'].evaluate())
+# signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
+# signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
 
-csdl.derivative(signed_distance_intersection,boundary_splines_C['left'].coefficients)
+# csdl.derivative(signed_distance_intersection,boundary_splines_C['left'].coefficients)
 
 
 # boundary_splines_C['left'].refit()
+#
 parametric_coords = np.array([(i,) for i in np.linspace(0,1,node_labels_C['left'].shape[0])])
+# spline_space = lfs.BSplineSpace(1,(3,),(5,)) #TODO: update with the orginal spline space from the spline construction
+# spline_coeffs = spline_space.fit(values = new_mortar_mesh_pts,parametric_coordinates= parametric_coords)
+# physical_coords = boundary_splines_C['left'].evaluate(parametric_coords)
 basis_mat = boundary_splines_C['left'].space.compute_basis_matrix(parametric_coords).toarray()
 physical_points =basis_mat@boundary_splines_C['left'].coefficients.value
 print()
