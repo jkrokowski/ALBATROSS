@@ -180,7 +180,6 @@ class SignedDistanceFunction():
         w_list = []
         # W = csdl.Variable(shape=eval_pts.shape)
         for spline in list(self.boundary_splines.values()):
-            print(spline.name)
             #compute squared distance for each point to each spline
             proj_eval_pts = spline.evaluate(spline.project(eval_pts))
             distance_eval = proj_eval_pts-eval_pts
@@ -247,8 +246,10 @@ class SignedDistanceIntersection():
         self.sdfs =sdfs
     
     def evaluate(self,eval_pts):
-        
-        return csdl.maximum(self.sdfs[0],self.sdfs[1],rho=100000)
+        phi_A = self.sdfs[0].evaluate(eval_pts)
+        phi_B = self.sdfs[1].evaluate(eval_pts)
+
+        return csdl.maximum(phi_A,phi_B,rho=100000)
     
 
 phi_A = SignedDistanceFunction(mesh_A,boundary_splines_A)
@@ -295,26 +296,106 @@ step_c = dphindxc/csdl.expand(dphindxc_norm,dphindxc.shape,'i->ij')
 
 new_mortar_mesh_pts = mesh_C_boundary_pts - csdl.matvec(step_c.T(),signed_distance_intersection).reshape(mesh_C_boundary_pts.shape[0],2)
 
-mesh_C.geometry.x[node_labels_C['boundary'],:2] = new_mortar_mesh_pts.value
+# #update mortar mesh boundary nodes and output
+# mesh_C.geometry.x[node_labels_C['boundary'],:2] = new_mortar_mesh_pts.value
 
-with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.xdmf", "w") as xdmf:
-    xdmf.write_mesh(mesh_C)
-
-
-
-# signed_distance_A = phi_A.evaluate(boundary_splines_C['left'].evaluate())
-# signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
-# signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
-
-# csdl.derivative(signed_distance_intersection,boundary_splines_C['left'].coefficients)
+# with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.xdmf", "w") as xdmf:
+#     xdmf.write_mesh(mesh_C)
 
 
-# boundary_splines_C['left'].refit()
-#
+#===== CONSTRUCT UPDATE TO B-SPLINE COEFFICIENTS (LEFT EDGE) =========# 
+
 parametric_coords = np.array([(i,) for i in np.linspace(0,1,node_labels_C['left'].shape[0])])
 # spline_space = lfs.BSplineSpace(1,(3,),(5,)) #TODO: update with the orginal spline space from the spline construction
 # spline_coeffs = spline_space.fit(values = new_mortar_mesh_pts,parametric_coordinates= parametric_coords)
 # physical_coords = boundary_splines_C['left'].evaluate(parametric_coords)
 basis_mat = boundary_splines_C['left'].space.compute_basis_matrix(parametric_coords).toarray()
-physical_points =basis_mat@boundary_splines_C['left'].coefficients.value
+physical_points = basis_mat@boundary_splines_C['left'].coefficients.value
+
+mesh_C_left_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['left'],:2])
+
+#equivalent expressions:
+#boundary_splines_C['left'].evaluate(parametric_coords) == mesh_C_left_boundary_pts
+# phi_k = phi_C.evaluate(mesh_C_left_boundary_pts)
+mesh_C_left_boundary_pts_from_spline=boundary_splines_C['left'].evaluate(parametric_coords)
+phi_k = phi_C.evaluate(mesh_C_left_boundary_pts_from_spline)
+
+grad_phi_k  = csdl.derivative(phi_k,mesh_C_left_boundary_pts_from_spline)
+#construct "duplicated" basis matrix
+Nxy = np.kron(basis_mat,np.eye((2)))
+
+A = grad_phi_k@Nxy
+Anp = A.value
+
+dP,_,_,_ =np.linalg.lstsq(Anp,-phi_k.value)
+
+
+#===== CONSTRUCT UPDATE TO B-SPLINE COEFFICIENTS (TOP EDGE) =========# 
+parametric_coords = np.array([(i,) for i in np.linspace(0,1,node_labels_C['top'].shape[0])])
+# spline_space = lfs.BSplineSpace(1,(3,),(5,)) #TODO: update with the orginal spline space from the spline construction
+# spline_coeffs = spline_space.fit(values = new_mortar_mesh_pts,parametric_coordinates= parametric_coords)
+# physical_coords = boundary_splines_C['top'].evaluate(parametric_coords)
+basis_mat = boundary_splines_C['top'].space.compute_basis_matrix(parametric_coords).toarray()
+physical_points = basis_mat@boundary_splines_C['top'].coefficients.value
+
+mesh_C_top_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['top'],:2])
+
+#equivalent expressions:
+#boundary_splines_C['top'].evaluate(parametric_coords) == mesh_C_top_boundary_pts
+# phi_k = phi_C.evaluate(mesh_C_top_boundary_pts)
+
+# weird check of the iterative approach:
+for i in range(5):
+    mesh_C_top_boundary_pts_from_spline = boundary_splines_C['top'].evaluate(parametric_coords)
+    phi_k = phi_C.evaluate(mesh_C_top_boundary_pts_from_spline)
+
+    grad_phi_k  = csdl.derivative(phi_k,mesh_C_top_boundary_pts_from_spline)
+    #construct "duplicated" basis matrix
+    Nxy = np.kron(basis_mat,np.eye((2)))
+
+    A = grad_phi_k@Nxy
+    Anp = A.value
+    
+    dP,_,_,_ =np.linalg.lstsq(Anp,-phi_k.value)
+
+    tangents = boundary_splines_C['top'].evaluate(parametric_coords,parametric_derivative_orders =(1))
+    
+    #1 - 1/10
+    lmlbar = csdl.norm(mesh_C_top_boundary_pts_from_spline[1:,:]-mesh_C_top_boundary_pts_from_spline[:-1,:],axes=(1,)).value
+    H = np.eye(10)-np.sum(lmlbar)/10
+
+    Tx = ( np.hstack([np.diag(-tangents[:-1,0].flatten().value,0),np.zeros((tangents[:-1,0].value.shape[0],1))])
+            + np.diag(tangents[1:,0].flatten().value,1)[:-1,:] )
+    Ty = ( np.hstack([np.diag(-tangents[:-1,1].flatten().value,0),np.zeros((tangents[:-1,1].value.shape[0],1))])
+            + np.diag(tangents[1:,1].flatten().value,1)[:-1,:] )
+    # Ty = np.diag(-tangents[:-1,1].flatten().value,0)+np.diag(tangents[1:,1].flatten().value,1)[:-1,:]
+    Jlx = np.kron(Tx,np.array([[1,0]]))+np.kron(Ty,np.array([[0,1]]))
+
+    B = H@Jlx@Nxy
+    
+    eta = 1e3
+    alpha = 0.5
+    LHS = Anp.T@Anp #+ eta*B.T@B
+    RHS = -alpha*Anp.T@phi_k.value #-eta*B.T@lmlbar
+    A_aug = np.vstack([Anp,np.sqrt(eta)*B])
+    b_aug = np.hstack([-0.5*phi_k.value,-np.sqrt(eta)*lmlbar])
+    dP_equi, *_ = np.linalg.lstsq(A_aug,b_aug)
+
+    LHS = Anp.T@Anp #+ eta*B.T@B
+    RHS = -alpha*Anp.T@phi_k.value #-eta*B.T@lmlbar
+    dP_equi = np.linalg.solve(LHS,RHS)
+    
+
+    boundary_splines_C['top'].coefficients.value += dP_equi.reshape(5,2)
+    # new_mortar_mesh_pts = basis_mat@(boundary_splines_C['top'].coefficients.value + dP_equi.reshape(5,2))
+
+    # boundary_splines_C['top'].coefficients.value += dP.reshape(5,2)
+    new_mortar_mesh_pts = boundary_splines_C['top'].evaluate(parametric_coords).value
+
+    #update mortar mesh boundary nodes and output
+    mesh_C.geometry.x[node_labels_C['top'],:2] = new_mortar_mesh_pts
+
+    with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_step_"+str(i)+"_boundary_update.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh_C)
+
 print()
