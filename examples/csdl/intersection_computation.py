@@ -343,6 +343,8 @@ mesh_C_top_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['t
 #equivalent expressions:
 #boundary_splines_C['top'].evaluate(parametric_coords) == mesh_C_top_boundary_pts
 # phi_k = phi_C.evaluate(mesh_C_top_boundary_pts)
+Nprime = boundary_splines_C['top'].space.compute_basis_matrix(parametric_coords,parametric_derivative_orders =(1)).toarray()
+Nprimexy = np.kron(Nprime,np.eye((2)))
 
 # weird check of the iterative approach:
 for i in range(5):
@@ -351,42 +353,67 @@ for i in range(5):
 
     grad_phi_k  = csdl.derivative(phi_k,mesh_C_top_boundary_pts_from_spline)
     #construct "duplicated" basis matrix
-    Nxy = np.kron(basis_mat,np.eye((2)))
 
     A = grad_phi_k@Nxy
     Anp = A.value
-    
+    alpha = 1
     dP,_,_,_ =np.linalg.lstsq(Anp,-phi_k.value)
 
-    tangents = boundary_splines_C['top'].evaluate(parametric_coords,parametric_derivative_orders =(1))
-    
-    #1 - 1/10
-    lmlbar = csdl.norm(mesh_C_top_boundary_pts_from_spline[1:,:]-mesh_C_top_boundary_pts_from_spline[:-1,:],axes=(1,)).value
-    H = np.eye(10)-np.sum(lmlbar)/10
+    boundary_splines_C['top'].coefficients.value += alpha*dP.reshape(5,2)
 
-    Tx = ( np.hstack([np.diag(-tangents[:-1,0].flatten().value,0),np.zeros((tangents[:-1,0].value.shape[0],1))])
-            + np.diag(tangents[1:,0].flatten().value,1)[:-1,:] )
-    Ty = ( np.hstack([np.diag(-tangents[:-1,1].flatten().value,0),np.zeros((tangents[:-1,1].value.shape[0],1))])
-            + np.diag(tangents[1:,1].flatten().value,1)[:-1,:] )
+    #"Turning" enforcement
+    tangents = boundary_splines_C['top'].evaluate(parametric_coords,parametric_derivative_orders =(1))
+    normals_k = grad_phi_k.value.reshape(11,11,2)[np.arange(11),np.arange(11),:]
+    r_k = np.sum(tangents.value*normals_k,axis=1)
+    B =  grad_phi_k.value@Nprimexy
+    eta = 1e-3
+    alpha = .1
+    A_aug = np.vstack([Anp,np.sqrt(eta)*B])
+    b_aug = np.hstack([-alpha*phi_k.value,-np.sqrt(eta)*r_k])
+    dP_tan, *_ = np.linalg.lstsq(A_aug,b_aug)
+
+    dP_tan2, *_ = np.linalg.lstsq(B,r_k)
+
+    # boundary_splines_C['top'].coefficients.value += dP_tan.reshape(5,2)
+    
+
+    turning_val = (phi_k.value@grad_phi_k.value).reshape(11,2)@np.array([[0,-1],[1,0]])
+    #1 - 1/10
+    lk= csdl.norm(mesh_C_top_boundary_pts_from_spline[1:,:]-mesh_C_top_boundary_pts_from_spline[:-1,:],axes=(1,)).value
+    # H = np.sum(lmlbar)*np.eye(lmlbar.shape[0])-np.average(lmlbar)
+
+    Tx = ( np.hstack([-np.diag(tangents[:-1,0].flatten().value/lk,0),np.zeros((tangents[:-1,0].value.shape[0],1))])
+            + np.diag(tangents[1:,0].flatten().value/lk,1)[:-1,:] )
+    Ty = ( np.hstack([-np.diag(tangents[:-1,1].flatten().value/lk,0),np.zeros((tangents[:-1,1].value.shape[0],1))])
+            + np.diag(tangents[1:,1].flatten().value/lk,1)[:-1,:] )
+    # Tx = ( np.hstack([np.diag(-tangents[:-1,0].flatten().value,0),np.zeros((tangents[:-1,0].value.shape[0],1))])
+    #         + np.diag(tangents[1:,0].flatten().value,1)[:-1,:] )
+    # Ty = ( np.hstack([np.diag(-tangents[:-1,1].flatten().value,0),np.zeros((tangents[:-1,1].value.shape[0],1))])
+    #         + np.diag(tangents[1:,1].flatten().value,1)[:-1,:] )
+    # Tx = ( np.hstack([np.diag(-turning_val[:-1,0].flatten(),0),np.zeros((turning_val[:-1,0].shape[0],1))])
+    #         + np.diag(turning_val[1:,0].flatten(),1)[:-1,:] )
+    # Ty = ( np.hstack([np.diag(-turning_val[:-1,1].flatten(),0),np.zeros((turning_val[:-1,1].shape[0],1))])
+    #         + np.diag(turning_val[1:,1].flatten(),1)[:-1,:] )
     # Ty = np.diag(-tangents[:-1,1].flatten().value,0)+np.diag(tangents[1:,1].flatten().value,1)[:-1,:]
     Jlx = np.kron(Tx,np.array([[1,0]]))+np.kron(Ty,np.array([[0,1]]))
-
-    B = H@Jlx@Nxy
     
-    eta = 1e3
-    alpha = 0.5
-    LHS = Anp.T@Anp #+ eta*B.T@B
-    RHS = -alpha*Anp.T@phi_k.value #-eta*B.T@lmlbar
+    
+    # B = H@Jlx@Nxy
+    B = Jlx@Nxy
+    # print()
+    eta = 1e-9
+    alpha = 1
+    # LHS = Anp.T@Anp #+ eta*B.T@B
+    # RHS = -alpha*Anp.T@phi_k.value #-eta*B.T@lmlbar
     A_aug = np.vstack([Anp,np.sqrt(eta)*B])
-    b_aug = np.hstack([-0.5*phi_k.value,-np.sqrt(eta)*lmlbar])
+    b_aug = np.hstack([-alpha*phi_k.value,-np.sqrt(eta)*np.log(lk)])
     dP_equi, *_ = np.linalg.lstsq(A_aug,b_aug)
 
-    LHS = Anp.T@Anp #+ eta*B.T@B
-    RHS = -alpha*Anp.T@phi_k.value #-eta*B.T@lmlbar
-    dP_equi = np.linalg.solve(LHS,RHS)
+    # LHS = Anp.T@Anp #+ eta*B.T@B
+    # RHS = -alpha*Anp.T@phi_k.value #-eta*B.T@lmlbar
+    # dP_equi = np.linalg.solve(LHS,RHS)
     
-
-    boundary_splines_C['top'].coefficients.value += dP_equi.reshape(5,2)
+    # boundary_splines_C['top'].coefficients.value += dP_equi.reshape(5,2)
     # new_mortar_mesh_pts = basis_mat@(boundary_splines_C['top'].coefficients.value + dP_equi.reshape(5,2))
 
     # boundary_splines_C['top'].coefficients.value += dP.reshape(5,2)
