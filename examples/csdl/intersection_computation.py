@@ -160,11 +160,11 @@ def fit_boundary_b_splines(msh,node_labels):
         edge_spline = lfs.Function(spline_space,edge_spline_coeffs,name=edge+'_spline')
         boundary_splines[edge] = edge_spline
 
-    return boundary_splines
+    return boundary_splines,ordered_boundary_vertices
 
-boundary_splines_A = fit_boundary_b_splines(mesh_A,node_labels_A)
-boundary_splines_B = fit_boundary_b_splines(mesh_B,node_labels_B)
-boundary_splines_C = fit_boundary_b_splines(mesh_C,node_labels_C)
+boundary_splines_A,boundary_order_A = fit_boundary_b_splines(mesh_A,node_labels_A)
+boundary_splines_B,boundary_order_B  = fit_boundary_b_splines(mesh_B,node_labels_B)
+boundary_splines_C,boundary_order_C  = fit_boundary_b_splines(mesh_C,node_labels_C)
 
 class SignedDistanceFunction():
     def __init__(self,msh,boundary_splines):
@@ -280,7 +280,8 @@ new_eval_pts = eval_pts - csdl.matvec(step.T(),signed_distance_intersection).res
 
 
 #test with mesh C boundary points:
-mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['boundary'],:2])
+# mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['boundary'],:2])
+mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[boundary_order_C,:2])
 
 signed_distance_A = phi_A.evaluate(mesh_C_boundary_pts)
 signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
@@ -296,12 +297,25 @@ step_c = dphindxc/csdl.expand(dphindxc_norm,dphindxc.shape,'i->ij')
 
 new_mortar_mesh_pts = mesh_C_boundary_pts - csdl.matvec(step_c.T(),signed_distance_intersection).reshape(mesh_C_boundary_pts.shape[0],2)
 
-# #update mortar mesh boundary nodes and output
-# mesh_C.geometry.x[node_labels_C['boundary'],:2] = new_mortar_mesh_pts.value
+#update mortar mesh boundary nodes and output
+mesh_C.geometry.x[boundary_order_C,:2] = new_mortar_mesh_pts.value
 
-# with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.xdmf", "w") as xdmf:
-#     xdmf.write_mesh(mesh_C)
+with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_C)
 
+ordered_boundary_pts = mesh_C.geometry.x[boundary_order_C,:2]
+
+lk = np.linalg.norm(np.roll(ordered_boundary_pts,-1,axis=0)-ordered_boundary_pts,axis=1)
+# lk = csdl.norm(ordered_boundary_pts[1:,:]-ordered_boundary_pts[:-1,:],axes=(1,)).value
+
+lbar = np.average(lk)
+bad_bois = np.where(lk<lbar)[0]
+
+phi_C_new = phi_C.evaluate(new_mortar_mesh_pts)
+
+dphindxc_new = csdl.derivative(phi_C_new,new_mortar_mesh_pts)
+for i in bad_bois:
+    dphindxc_new[i,:].value.reshape(40,2)[i,:]
 
 #===== CONSTRUCT UPDATE TO B-SPLINE COEFFICIENTS (LEFT EDGE) =========# 
 
