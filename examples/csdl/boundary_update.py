@@ -289,7 +289,7 @@ mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[boundary_order_C,:2]
 signed_distance_A = phi_A.evaluate(mesh_C_boundary_pts)
 signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
 
-phi_C = SignedDistanceIntersection([phi_A,phi_B],rho=100)
+phi_C = SignedDistanceIntersection([phi_A,phi_B],rho=10000)
     
 # signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
 signed_distance_intersection = phi_C.evaluate(mesh_C_boundary_pts)
@@ -300,15 +300,15 @@ step_c = dphindxc/csdl.expand(dphindxc_norm,dphindxc.shape,'i->ij')
 
 new_mortar_mesh_pts = mesh_C_boundary_pts - csdl.matvec(step_c.T(),signed_distance_intersection).reshape(mesh_C_boundary_pts.shape[0],2)
 
-#update mortar mesh boundary nodes and output
-mesh_C.geometry.x[boundary_order_C,:2] = new_mortar_mesh_pts.value
+# #update mortar mesh boundary nodes and output
+# mesh_C.geometry.x[boundary_order_C,:2] = new_mortar_mesh_pts.value
 
-with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_smooth.xdmf", "w") as xdmf:
-    xdmf.write_mesh(mesh_C)
+# with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_smooth.xdmf", "w") as xdmf:
+#     xdmf.write_mesh(mesh_C)
 
-ordered_boundary_pts = mesh_C.geometry.x[boundary_order_C,:2]
+# ordered_boundary_pts = mesh_C.geometry.x[boundary_order_C,:2]
 
-lk = np.linalg.norm(np.roll(ordered_boundary_pts,-1,axis=0)-ordered_boundary_pts,axis=1)
+lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
 # lk = csdl.norm(ordered_boundary_pts[1:,:]-ordered_boundary_pts[:-1,:],axes=(1,)).value
 
 lbar = np.average(lk)
@@ -319,6 +319,74 @@ phi_C_new = phi_C.evaluate(new_mortar_mesh_pts)
 dphindxc_new = csdl.derivative(phi_C_new,new_mortar_mesh_pts)
 for i in bad_bois:
     dphindxc_new[i,:].value.reshape(40,2)[i,:]
+
+#csdl has some stuff where shapes are flattened, so easier to just duplicate the point to force the shapes to behave
+anchor_point_val = mesh_C.geometry.x[boundary_order_C[0],:2].reshape(1,2)
+anchor_point= csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
+
+def project_to_new_boundary(phi,eval_pts):
+    signed_distance = phi.evaluate(eval_pts)
+    dSDdx=csdl.derivative(signed_distance,eval_pts)
+    dSDdx_norm = csdl.norm(dSDdx,axes=(1,))
+    step = dSDdx/csdl.expand(dSDdx_norm,dSDdx.shape,'i->ij')
+
+    projected_pts = eval_pts - csdl.matvec(step.T(),signed_distance).reshape(eval_pts.shape[0],2)
+
+    return projected_pts
+
+def return_SDF_normal(phi,eval_pts):
+    signed_distance = phi.evaluate(eval_pts)
+    dSDdx=csdl.derivative(signed_distance,eval_pts)
+    dSDdx_norm = csdl.norm(dSDdx,axes=(1,))
+    step = dSDdx/csdl.expand(dSDdx_norm,dSDdx.shape,'i->ij')
+    return step
+
+#project anchorpoint:
+anchor_point_update = project_to_new_boundary(phi_C,anchor_point)
+
+# mesh_C_boundary_pts_guess = csdl.Variable()
+x_k = mesh_C_boundary_pts.value
+x_k[0] = anchor_point_update[0,:2].value 
+R = np.array([[0,1],[-1,0]])
+# x_k_csdl = csdl.Variable(value = np.repeat(x_k[0,:],2,axis=0))
+xhat_k = csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
+for i in range(1,boundary_order_C.shape[0]):
+    # x_k.value = np.repeat(mesh_C_boundary_pts[i].value.reshape(1,2),2,axis=0)
+    #predictor:
+    #TODO: need to make sure we step around the boundary in a counter-clockwise manner
+    n_k = return_SDF_normal(phi_C,csdl.Variable(value = np.repeat(x_k[i-1,:].reshape(1,2),2,axis=0)))[i-1,:2].value
+    t_k = R@n_k
+    xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k+ .1*lbar*n_k).reshape(1,2),2,axis=0)
+
+    #corrector: (projection)
+    x_proj = project_to_new_boundary(phi_C,xhat_k)
+    x_k[i] = x_proj.value[0,:2] 
+
+
+
+
+print()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #===== CONSTRUCT UPDATE TO B-SPLINE COEFFICIENTS (LEFT EDGE) =========# 
