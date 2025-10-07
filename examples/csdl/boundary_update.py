@@ -11,7 +11,7 @@ recorder.start()
 
 inputs = csdl.VariableGroup()
 
-delta = -0.008
+delta = +0.18
 
 N = 4
 offset = 1
@@ -46,12 +46,13 @@ mesh_B = create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=CellType.quadrilate
 boundary_labels_B = {}
 boundary_labels_B['left'] =-tf/2 + delta
 boundary_labels_B['right'] = tf/2 + delta
-boundary_labels_B['top'] = H/2 + delta
-boundary_labels_B['bottom'] = -H/2 + delta
+boundary_labels_B['top'] = H/2 #+ delta
+boundary_labels_B['bottom'] = -H/2 #+ delta
 mesh_B.geometry.x[:, :2] -= .5      #center at 0
 mesh_B.geometry.x[:, 0] *= tw       #scale x
 mesh_B.geometry.x[:, 1] *= W        #scale y
-mesh_B.geometry.x[:,:2] += delta     #translate horizontally for test
+mesh_B.geometry.x[:,0] += delta     #translate horizontally for test
+# mesh_B.geometry.x[:,1] += delta     #translate vertically for test
 mesh_B.name = 'mesh_B'
 
 with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_B.name+".xdmf", "w") as xdmf:
@@ -239,7 +240,7 @@ class SignedDistanceFunction():
         p = csdl.expand(pts_in,(pts_in.shape[0],x_in.shape[0],2),'ik->ijk')
         d = x-p
         cross = d[:,:,0]*t[:,:,1] - d[:,:,1]*t[:,:,0]
-        eps = 1e-10 #prevent numerical blowups from dividing by the square of a very small number
+        eps = 1e-8 #prevent numerical blowups from dividing by the square of a very small number
         denom = csdl.norm(d,axes=(2,))
         return cross/(csdl.square(denom)+eps)
         
@@ -289,7 +290,7 @@ mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[boundary_order_C,:2]
 signed_distance_A = phi_A.evaluate(mesh_C_boundary_pts)
 signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
 
-phi_C = SignedDistanceIntersection([phi_A,phi_B],rho=10000)
+phi_C = SignedDistanceIntersection([phi_A,phi_B],rho=100)
     
 # signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
 signed_distance_intersection = phi_C.evaluate(mesh_C_boundary_pts)
@@ -324,13 +325,13 @@ for i in bad_bois:
 anchor_point_val = mesh_C.geometry.x[boundary_order_C[0],:2].reshape(1,2)
 anchor_point= csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
 
-def project_to_new_boundary(phi,eval_pts):
+def project_to_new_boundary(phi,eval_pts,step_size=1.0):
     signed_distance = phi.evaluate(eval_pts)
     dSDdx=csdl.derivative(signed_distance,eval_pts)
     dSDdx_norm = csdl.norm(dSDdx,axes=(1,))
     step = dSDdx/csdl.expand(dSDdx_norm,dSDdx.shape,'i->ij')
 
-    projected_pts = eval_pts - csdl.matvec(step.T(),signed_distance).reshape(eval_pts.shape[0],2)
+    projected_pts = eval_pts - step_size*csdl.matvec(step.T(),signed_distance).reshape(eval_pts.shape[0],2)
 
     return projected_pts
 
@@ -342,28 +343,38 @@ def return_SDF_normal(phi,eval_pts):
     return step
 
 #project anchorpoint:
-anchor_point_update = project_to_new_boundary(phi_C,anchor_point)
+anchor_point_update = project_to_new_boundary(phi_C,anchor_point,step_size=0.95)
 
 # mesh_C_boundary_pts_guess = csdl.Variable()
 x_k = mesh_C_boundary_pts.value
 x_k[0] = anchor_point_update[0,:2].value 
-R = np.array([[0,1],[-1,0]])
+R = np.array([[0,-1],[1,0]])
 # x_k_csdl = csdl.Variable(value = np.repeat(x_k[0,:],2,axis=0))
+xcsdl= csdl.Variable(value = np.repeat(x_k[0,:].reshape(1,2),2,axis=0))
 xhat_k = csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
 for i in range(1,boundary_order_C.shape[0]):
+
     # x_k.value = np.repeat(mesh_C_boundary_pts[i].value.reshape(1,2),2,axis=0)
     #predictor:
     #TODO: need to make sure we step around the boundary in a counter-clockwise manner
-    n_k = return_SDF_normal(phi_C,csdl.Variable(value = np.repeat(x_k[i-1,:].reshape(1,2),2,axis=0)))[i-1,:2].value
+    xcsdl.value = np.repeat(x_k[i-1,:].reshape(1,2),2,axis=0)
+    n_k = return_SDF_normal(phi_C,xcsdl)[0,:2].value
+    phi_k = phi_C.evaluate(xcsdl)[0].value
     t_k = R@n_k
-    xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k+ .1*lbar*n_k).reshape(1,2),2,axis=0)
-
+    # xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k+ lbar*n_k).reshape(1,2),2,axis=0)
+    xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k*np.tanh(1e6*phi_k)).reshape(1,2),2,axis=0)
+    # x_k[i] = xhat_k.value[0,:]
+    
     #corrector: (projection)
-    x_proj = project_to_new_boundary(phi_C,xhat_k)
+    x_proj = project_to_new_boundary(phi_C,xhat_k,step_size=0.95)
     x_k[i] = x_proj.value[0,:2] 
+    print(i,"predictor:",xhat_k.value[0,:2],"corrector:",x_k[i])
+    print("      phi_k:",phi_k,' n_k:',n_k)
+    print()
 
-
-
+#now, given the projected boundary points, solve an iterative problem to ensure
+#   that points are somewhat evenly spaced on the boundary
+#   the boundary is closed (winding number = 1)
 
 print()
 
