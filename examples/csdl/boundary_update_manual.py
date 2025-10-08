@@ -405,32 +405,6 @@ with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.x
 
 #next, re-space tangentially to ensure winding number = 1
 
-#now, run nonlinear solver to compute the boundary positions
-x_update = csdl.ImplicitVariable(name='x_update',value=x_k)
-e_k = csdl.vstack([x_update[1:,:],x_update[:1,:]]) - x_update
-n_k0 =return_SDF_normal(phi_C,csdl.vstack([x_update[0],x_update[0]]))[0,:2].value
-t_k0 = R@n_k0
-lk = csdl.norm(e_k,axes=(1,))
-
-residual_boundary = phi_C.evaluate(x_update) - 0.02
-# residual_spacing = lk-csdl.average(lk)
-residual_spacing = lk[:-1]-lk[-1]
-residual_bc = t_k0.reshape(1,2) @ (x_update[0]-anchor_point_update[0])
-
-residual_boundary.add_name('delta_level_set')
-residual_spacing.add_name('boundary_spacing')
-residual_bc.add_name('anchor_point')
-
-system_residual = csdl.concatenate([residual_boundary,
-                               residual_spacing,
-                               residual_bc])
-system_residual.add_name('boundary_respacing')
-
-solver = csdl.nonlinear_solvers.GaussSeidel('boundary_redistribution')
-solver.add_state(x_update,system_residual)
-
-solver.run()
-
 
 #COMPUTE TANGENTS BETWEEN POINTS:
 # x_k = mesh_C_boundary_pts.value
