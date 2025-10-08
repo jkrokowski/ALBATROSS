@@ -407,29 +407,75 @@ with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_2
 
 
 #COMPUTE TANGENTS BETWEEN POINTS:
-x_k = mesh_C_boundary_pts.value
-x_kp1 = np.roll(mesh_C_boundary_pts.value,-1,axis=0)
+# x_k = mesh_C_boundary_pts.value
+x_kp1 = np.roll(x_k,-1,axis=0)
 e_k = x_kp1 - x_k
-lk = np.linalg.norm(edges,axis=1)
+lk = np.linalg.norm(e_k,axis=1)
 lbar = np.average(lk)
+ehat_k = e_k/lk.reshape(40,1)
 
-edges.reshape(80,1)@edges.T.reshape(1,80)
+xcsdl = csdl.Variable(value = x_kp1)
+n_k_full = return_SDF_normal(phi_C,xcsdl).value
+#just normals at each point:
+n_k = np.zeros((x_kp1.shape[0],2))
+for i in range(x_kp1.shape[0]):
+    n_k[i,:] = n_k_full[i,2*i:2*i+2]
+t_k = (R@n_k.T).T
 
-delta_lk = lk-lbar
-
-Tx = ( -np.diag(x_k[:,0].flatten(),0)
-        + np.diag(x_kp1[:-1,0].flatten(),1 ))
-Ty = (-np.diag(x_k[:,1].flatten(),0)
-        + np.diag(x_kp1[:-1,1].flatten(),1) )
-
-Jlx = np.kron(Tx,np.array([[1,0]]))+np.kron(Ty,np.array([[0,1]]))
-
-
-b= 
-dT_equi, *_ = np.linalg.lstsq(A,lk)
-
+#this really should have the full shape, but only have jacobian entries corresponding
+#   to nodes that should move
+#   Nodes 0 and N should not move (same node due to closed loop)
+#   Row 
+A = np.zeros((x_kp1.shape[0],(x_kp1.shape[0]-1)*2))
+for i in range(1,x_kp1.shape[0]-1):
+    P_k = t_k[i,:].reshape(2,1)@t_k[i,:].reshape(1,2)
+    A[i,[i-1,i-1+(x_kp1.shape[0]-1)]] = -ehat_k[i].reshape(1,2)@P_k
+    
+    P_k = t_k[i+1,:].reshape(2,1)@t_k[i+1,:].reshape(1,2)
+    A[i,[i,i+(x_kp1.shape[0]-1)]] = ehat_k[i+1].reshape(1,2)@P_k
 
 
+#     # P_k = t_k[i,:].reshape(2,1)@t_k[i,:].reshape(1,2)
+#     A[i,[i-1,i-1+(x_kp1.shape[0]-1)]] = -ehat_k[i]
+    
+#     # P_k = t_k[i+1,:].reshape(2,1)@t_k[i+1,:].reshape(1,2)
+#     A[i,[i,i+(x_kp1.shape[0]-1)]] = ehat_k[i+1]
+# A[0,[0,(x_kp1.shape[0]-1)+1]] = -e_k[0]
+# A[x_kp1.shape[0]-1,[x_kp1.shape[0]-2,2*(x_kp1.shape[0]-1)-1]] = ehat_k[-2]
+
+# #start
+P_k = t_k[0,:].reshape(2,1)@t_k[0,:].reshape(1,2)
+A[0,[0,(x_kp1.shape[0]-1)+1]] = -ehat_k[0].reshape(1,2)@P_k
+
+#end
+P_k = t_k[-2,:].reshape(2,1)@t_k[-2,:].reshape(1,2)
+A[x_kp1.shape[0]-1,[x_kp1.shape[0]-2,2*(x_kp1.shape[0]-1)-1]] = ehat_k[-2].reshape(1,2)@P_k
+
+
+delta_lk = lbar-lk
+
+#least squares fit
+dT, *_ = np.linalg.lstsq(A,-delta_lk)
+
+#take a step in dT, then reproject to the delta level-set, then relinearize and solve again until convergence
+
+# dT = np.linalg.solve(A.T@A+1e-6*np.eye(78),A.T@delta_lk)
+
+# Tx = ( -np.diag(x_k[:,0].flatten(),0)
+#         + np.diag(x_kp1[:-1,0].flatten(),1 ))
+# Ty = (-np.diag(x_k[:,1].flatten(),0)
+#         + np.diag(x_kp1[:-1,1].flatten(),1) )
+
+# Jlx = np.kron(Tx,np.array([[1,0]]))+np.kron(Ty,np.array([[0,1]]))
+
+
+
+
+#update mortar mesh boundary nodes and output
+mesh_C.geometry.x[boundary_order_C[1:],:2] = x_k[1:] + lbar*dT.reshape(2,39).T
+
+with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_tangent_respace.xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_C)
 
 # H = np.sum(lk)*np.eye(lk.shape[0])-lbar
 # A = H@Jlx
