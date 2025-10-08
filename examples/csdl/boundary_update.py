@@ -309,6 +309,17 @@ new_mortar_mesh_pts = mesh_C_boundary_pts - csdl.matvec(step_c.T(),signed_distan
 
 # ordered_boundary_pts = mesh_C.geometry.x[boundary_order_C,:2]
 
+
+# #first compute winding number
+# lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
+# lbar = np.average(lk)
+# edges = np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value
+# edges = np.vstack([edges,edges[:20,:]])
+# winding_number = 0 
+# for i in range(edges.shape[0]-1):
+#     winding_number += np.arctan2(np.cross(edges[i,:],edges[i+1,:]),np.dot(edges[i,:],edges[i+1,:]))
+# winding_number += np.arctan2(np.cross(edges[mesh_C_boundary_pts.shape[0]-1,:],edges[0,:]),np.dot(edges[mesh_C_boundary_pts.shape[0]-1,:],edges[0,:]))
+
 lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
 # lk = csdl.norm(ordered_boundary_pts[1:,:]-ordered_boundary_pts[:-1,:],axes=(1,)).value
 
@@ -325,13 +336,14 @@ for i in bad_bois:
 anchor_point_val = mesh_C.geometry.x[boundary_order_C[0],:2].reshape(1,2)
 anchor_point= csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
 
-def project_to_new_boundary(phi,eval_pts,step_size=1.0):
+def project_to_new_boundary(phi,eval_pts,step_size=1.0,delta=0.0):
     signed_distance = phi.evaluate(eval_pts)
+    delta = csdl.Variable(value = delta*np.ones_like(signed_distance))
     dSDdx=csdl.derivative(signed_distance,eval_pts)
     dSDdx_norm = csdl.norm(dSDdx,axes=(1,))
     step = dSDdx/csdl.expand(dSDdx_norm,dSDdx.shape,'i->ij')
 
-    projected_pts = eval_pts - step_size*csdl.matvec(step.T(),signed_distance).reshape(eval_pts.shape[0],2)
+    projected_pts = eval_pts - step_size*csdl.matvec(step.T(),signed_distance-delta).reshape(eval_pts.shape[0],2)
 
     return projected_pts
 
@@ -343,7 +355,7 @@ def return_SDF_normal(phi,eval_pts):
     return step
 
 #project anchorpoint:
-anchor_point_update = project_to_new_boundary(phi_C,anchor_point,step_size=0.95)
+anchor_point_update = project_to_new_boundary(phi_C,anchor_point,delta=0.01)
 
 # mesh_C_boundary_pts_guess = csdl.Variable()
 x_k = mesh_C_boundary_pts.value
@@ -366,8 +378,9 @@ for i in range(1,boundary_order_C.shape[0]):
     # x_k[i] = xhat_k.value[0,:]
     
     #corrector: (projection)
-    x_proj = project_to_new_boundary(phi_C,xhat_k,step_size=0.95)
-    x_k[i] = x_proj.value[0,:2] 
+    x_proj = project_to_new_boundary(phi_C,xhat_k,delta=0.01)
+    x_k[i] = x_proj.value[0,:2]
+    # x_k[i] = xhat_k.value[0,:2] 
     print(i,"predictor:",xhat_k.value[0,:2],"corrector:",x_k[i])
     print("      phi_k:",phi_k,' n_k:',n_k)
     print()
@@ -376,6 +389,50 @@ for i in range(1,boundary_order_C.shape[0]):
 #   that points are somewhat evenly spaced on the boundary
 #   the boundary is closed (winding number = 1)
 
+#update mortar mesh boundary nodes and output
+mesh_C.geometry.x[boundary_order_C,:2] = x_k
+
+with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_2x.xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_C)
+
+# #first compute winding number
+# edges = np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value
+# lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
+# lbar = np.average(lbar)
+# winding_number = 0 
+# for i in range(mesh_C_boundary_pts.shape[0]-1):
+#     winding_number += np.arctan2(np.cross(edges[i,:],edges[i+1,:]),np.dot(edges[i,:],edges[i+1,:]))
+
+#next, re-space tangentially to ensure winding number = 1
+
+
+#COMPUTE TANGENTS BETWEEN POINTS:
+x_k = mesh_C_boundary_pts.value
+x_kp1 = np.roll(mesh_C_boundary_pts.value,-1,axis=0)
+e_k = x_kp1 - x_k
+lk = np.linalg.norm(edges,axis=1)
+lbar = np.average(lk)
+
+edges.reshape(80,1)@edges.T.reshape(1,80)
+
+delta_lk = lk-lbar
+
+Tx = ( -np.diag(x_k[:,0].flatten(),0)
+        + np.diag(x_kp1[:-1,0].flatten(),1 ))
+Ty = (-np.diag(x_k[:,1].flatten(),0)
+        + np.diag(x_kp1[:-1,1].flatten(),1) )
+
+Jlx = np.kron(Tx,np.array([[1,0]]))+np.kron(Ty,np.array([[0,1]]))
+
+
+b= 
+dT_equi, *_ = np.linalg.lstsq(A,lk)
+
+
+
+
+# H = np.sum(lk)*np.eye(lk.shape[0])-lbar
+# A = H@Jlx
 print()
 
 
