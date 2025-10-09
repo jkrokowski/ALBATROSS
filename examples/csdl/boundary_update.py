@@ -347,10 +347,12 @@ def project_to_new_boundary(phi,eval_pts,step_size=1.0,delta=0.0):
 
     return projected_pts
 
-def return_SDF_normal(phi,eval_pts):
+def return_SDF_normal(phi,eval_pts,independence=False):
     signed_distance = phi.evaluate(eval_pts)
     dSDdx=csdl.derivative(signed_distance,eval_pts)
     dSDdx_norm = csdl.norm(dSDdx,axes=(1,))
+    if independence:
+        dSDdx = dSDdx.reshape(40*40,2)[list(np.arange(40)*40+np.arange(40)),:].value
     step = dSDdx/csdl.expand(dSDdx_norm,dSDdx.shape,'i->ij')
     return step
 
@@ -397,7 +399,7 @@ with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.x
 
 # #first compute winding number
 # edges = np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value
-# lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
+lk_ = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
 # lbar = np.average(lbar)
 # winding_number = 0 
 # for i in range(mesh_C_boundary_pts.shape[0]-1):
@@ -406,16 +408,27 @@ with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.x
 #next, re-space tangentially to ensure winding number = 1
 
 #now, run nonlinear solver to compute the boundary positions
-x_update = csdl.ImplicitVariable(name='x_update',value=x_k)
+lbar_init = np.average(np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1))
+state = csdl.ImplicitVariable(name='x_update',value=np.concatenate([x_k.flatten(),[lbar_init]]))
+x_update = state[:-1].reshape(x_k.shape)
+lbar = state[-1]
+# x_update = csdl.ImplicitVariable(name='x_update',value=x_k)
 e_k = csdl.vstack([x_update[1:,:],x_update[:1,:]]) - x_update
-n_k0 =return_SDF_normal(phi_C,csdl.vstack([x_update[0],x_update[0]]))[0,:2].value
-t_k0 = R@n_k0
+# n_k0 = return_SDF_normal(phi_C,csdl.vstack([x_update[0],x_update[0]]))[0,:2]
+# t_k0 = R@n_k0
+# l_bar = csdl.ImplicitVariable(name = 'l_bar',value=csdl.average(lk).value)
+n_k = return_SDF_normal(phi_C,x_update,independence=True)
+t_k = n_k @ R
 lk = csdl.norm(e_k,axes=(1,))
 
+#numpy version:
+# np.linalg.norm(np.einsum('ij,ik,ik->ij', t_k.value, t_k.value, e_k.value),axis=1)
+l_perp = csdl.norm(csdl.einsum(t_k, t_k, e_k,action='ij,ik,ik->ij'),axes=(1,))
 residual_boundary = phi_C.evaluate(x_update) - 0.02
 # residual_spacing = lk-csdl.average(lk)
-residual_spacing = lk[:-1]-lk[-1]
-residual_bc = t_k0.reshape(1,2) @ (x_update[0]-anchor_point_update[0])
+residual_spacing = l_perp-lbar
+# residual_edge = lbar - csdl.average(lk)
+residual_bc = t_k[0,:].reshape(1,2) @ (x_update[0]-anchor_point_update[0])
 
 residual_boundary.add_name('delta_level_set')
 residual_spacing.add_name('boundary_spacing')
@@ -426,8 +439,11 @@ system_residual = csdl.concatenate([residual_boundary,
                                residual_bc])
 system_residual.add_name('boundary_respacing')
 
-solver = csdl.nonlinear_solvers.GaussSeidel('boundary_redistribution')
-solver.add_state(x_update,system_residual)
+# solver = csdl.nonlinear_solvers.GaussSeidel('boundary_redistribution')
+# state = csdl.concatenate([x_flatty,lbar])
+solver = csdl.nonlinear_solvers.Newton('boundary_redistribution')
+# solver.add_state(x_flatty,system_residual)
+solver.add_state(state,system_residual)
 
 solver.run()
 
