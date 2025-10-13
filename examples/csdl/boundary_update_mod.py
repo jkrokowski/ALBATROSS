@@ -58,7 +58,7 @@ mesh_B.name = 'mesh_B'
 with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_B.name+".xdmf", "w") as xdmf:
     xdmf.write_mesh(mesh_B)
 
-mesh_C = create_unit_square(MPI.COMM_WORLD, 8, 8,cell_type=CellType.quadrilateral)
+mesh_C = create_unit_square(MPI.COMM_WORLD, 10, 10,cell_type=CellType.quadrilateral)
 boundary_labels_C = {}
 boundary_labels_C['left'] =-tf/2
 boundary_labels_C['right'] = tf/2
@@ -183,7 +183,7 @@ class SignedDistanceFunction():
         # W = csdl.Variable(shape=eval_pts.shape)
         for spline in list(self.boundary_splines.values()):
             #compute squared distance for each point to each spline
-            proj_eval_pts = spline.evaluate(spline.project(eval_pts)).reshape(eval_pts.shape)
+            proj_eval_pts = spline.evaluate(spline.project(eval_pts))
             distance_eval = proj_eval_pts-eval_pts
             d_list.append(csdl.norm(distance_eval,axes=(1,)))
 
@@ -260,6 +260,29 @@ phi_A = SignedDistanceFunction(mesh_A,boundary_splines_A,rho=100000)
 
 phi_B = SignedDistanceFunction(mesh_B,boundary_splines_B,rho=100000)
 
+
+#Points should be   A: INSIDE, OUTSIDE, OUTSIDE, OUTSIDE, INSIDE
+#                   B: INSIDE, INSIDE, OUTSIDE, OUTSIDE, OUTSIDE
+eval_pts = csdl.Variable(value= np.array([  [0.0,   0.45],
+                                            [0.0,   0.0],
+                                            [.1,    0.52],
+                                            [-.51,  0.45],
+                                            [0.25,  0.48]]))
+
+signed_distance_A = phi_A.evaluate(eval_pts)
+signed_distance_B = phi_B.evaluate(eval_pts)
+
+signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
+
+dphindx = csdl.derivative(signed_distance_intersection,eval_pts)
+
+#seems to work great!
+# in order to update mortar mesh boundary nodes, use:
+dphindx_norm = csdl.norm(dphindx,axes=(1,))
+step = dphindx/csdl.expand(dphindx_norm,dphindx.shape,'i->ij')
+new_eval_pts = eval_pts - csdl.matvec(step.T(),signed_distance_intersection).reshape(eval_pts.shape[0],2)
+
+
 #test with mesh C boundary points:
 # mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['boundary'],:2])
 mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[boundary_order_C,:2])
@@ -268,12 +291,8 @@ signed_distance_A = phi_A.evaluate(mesh_C_boundary_pts)
 signed_distance_B = phi_B.evaluate(mesh_C_boundary_pts)
 
 phi_C = SignedDistanceIntersection([phi_A,phi_B],rho=100)
-
-#test for a single evaluation pt:
-phi_C.evaluate(mesh_C_boundary_pts[0].reshape(1,2))
-
-
-# This is the naive projection
+    
+# signed_distance_intersection = csdl.maximum(signed_distance_A,signed_distance_B,rho=100000)
 signed_distance_intersection = phi_C.evaluate(mesh_C_boundary_pts)
 #use derivative of SDF w.r.t. boundary nodes to compute new boundary node points
 dphindxc = csdl.derivative(signed_distance_intersection,mesh_C_boundary_pts)
@@ -288,18 +307,30 @@ new_mortar_mesh_pts = mesh_C_boundary_pts - csdl.matvec(step_c.T(),signed_distan
 # with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_smooth.xdmf", "w") as xdmf:
 #     xdmf.write_mesh(mesh_C)
 
+# ordered_boundary_pts = mesh_C.geometry.x[boundary_order_C,:2]
 
+
+# #first compute winding number
 # lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
+# lbar = np.average(lk)
+# edges = np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value
+# edges = np.vstack([edges,edges[:20,:]])
+# winding_number = 0 
+# for i in range(edges.shape[0]-1):
+#     winding_number += np.arctan2(np.cross(edges[i,:],edges[i+1,:]),np.dot(edges[i,:],edges[i+1,:]))
+# winding_number += np.arctan2(np.cross(edges[mesh_C_boundary_pts.shape[0]-1,:],edges[0,:]),np.dot(edges[mesh_C_boundary_pts.shape[0]-1,:],edges[0,:]))
+
+lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
 # lk = csdl.norm(ordered_boundary_pts[1:,:]-ordered_boundary_pts[:-1,:],axes=(1,)).value
 
-# lbar = np.average(lk)
-# bad_bois = np.where(lk<lbar)[0]
+lbar = np.average(lk)
+bad_bois = np.where(lk<lbar)[0]
 
-# phi_C_new = phi_C.evaluate(new_mortar_mesh_pts)
+phi_C_new = phi_C.evaluate(new_mortar_mesh_pts)
 
-# dphindxc_new = csdl.derivative(phi_C_new,new_mortar_mesh_pts)
-# for i in bad_bois:
-#     dphindxc_new[i,:].value.reshape(40,2)[i,:]
+dphindxc_new = csdl.derivative(phi_C_new,new_mortar_mesh_pts)
+for i in bad_bois:
+    dphindxc_new[i,:].value.reshape(40,2)[i,:]
 
 #csdl has some stuff where shapes are flattened, so easier to just duplicate the point to force the shapes to behave
 anchor_point_val = mesh_C.geometry.x[boundary_order_C[0],:2].reshape(1,2)
@@ -316,47 +347,26 @@ def project_to_new_boundary(phi,eval_pts,step_size=1.0,delta=0.0):
 
     return projected_pts
 
-def return_SDF_normal(phi,eval_pts,independence=False):
+def return_SDF_normal(phi,eval_pts):
     signed_distance = phi.evaluate(eval_pts)
     dSDdx=csdl.derivative(signed_distance,eval_pts)
     dSDdx_norm = csdl.norm(dSDdx,axes=(1,))
-    if independence:
-        size = signed_distance.shape[0]
-        dSDdx = dSDdx.reshape(size**2,2)[list(np.arange((size))*size+np.arange(size)),:]
     step = dSDdx/csdl.expand(dSDdx_norm,dSDdx.shape,'i->ij')
     return step
 
 #project anchorpoint:
 anchor_point_update = project_to_new_boundary(phi_C,anchor_point,delta=0.02)
 
-
-#TODO: update to pure CSDL
 # mesh_C_boundary_pts_guess = csdl.Variable()
-x_k = mesh_C_boundary_pts
-# x_k[0] = anchor_point_update[0,:2].value 
+x_k = mesh_C_boundary_pts.value
+x_k[0] = anchor_point_update[0,:2].value 
 R = np.array([[0,-1],[1,0]])
 # x_k_csdl = csdl.Variable(value = np.repeat(x_k[0,:],2,axis=0))
-# xcsdl= csdl.Variable(value = np.repeat(x_k[0,:].reshape(1,2),2,axis=0))
-# xhat_k = csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
-
-#project "anchor point" to a delta level set
-delta = 0.02
-x_k = x_k.set(csdl.slice[0:1,:2],project_to_new_boundary(phi_C,anchor_point,delta=0.02))
-lk = csdl.norm(x_k[1:,:]-x_k[:-1,:],axes=(1,))
-n_k = return_SDF_normal(phi_C,x_k[0])
-
-for ind in csdl.frange(1,boundary_order_C.shape[0]):
-    n_k = x_k[ind-1]
-    x_k[ind] 
-
-    x_k = x_k.set(csdl.slice([ind],value))
-    xi
-    x1 = csdl.slice
-    x_k = csdl.concatenate([x0,xi,x1])
-
-
+xcsdl= csdl.Variable(value = np.repeat(x_k[0,:].reshape(1,2),2,axis=0))
+xhat_k = csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
 for i in range(1,boundary_order_C.shape[0]):
 
+    # x_k.value = np.repeat(mesh_C_boundary_pts[i].value.reshape(1,2),2,axis=0)
     #predictor:
     #TODO: need to make sure we step around the boundary in a counter-clockwise manner
     xcsdl.value = np.repeat(x_k[i-1,:].reshape(1,2),2,axis=0)
@@ -382,52 +392,30 @@ for i in range(1,boundary_order_C.shape[0]):
 #update mortar mesh boundary nodes and output
 mesh_C.geometry.x[boundary_order_C,:2] = x_k
 
-with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.xdmf", "w") as xdmf:
+with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_2x.xdmf", "w") as xdmf:
     xdmf.write_mesh(mesh_C)
 
 # #first compute winding number
 # edges = np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value
-lk_ = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
+# lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
 # lbar = np.average(lbar)
 # winding_number = 0 
 # for i in range(mesh_C_boundary_pts.shape[0]-1):
 #     winding_number += np.arctan2(np.cross(edges[i,:],edges[i+1,:]),np.dot(edges[i,:],edges[i+1,:]))
 
 #next, re-space tangentially to ensure winding number = 1
-
 #now, run nonlinear solver to compute the boundary positions
-#slack variable version:
-# lbar_init = np.average(np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1))
-# state = csdl.ImplicitVariable(name='x_update',value=np.concatenate([x_k.flatten(),[lbar_init]]))
-# x_update = state[:-1].reshape(x_k.shape)
-# lbar = state[-1]
-
+# x_update = csdl.ImplicitVariable(name='x_update',value=x_k)
 x_flatty = csdl.ImplicitVariable(name='x_update',value=x_k.flatten())
-x_update = x_flatty.reshape(x_k.shape)
+x_update = x_flatty.reshape(40,2)
 e_k = csdl.vstack([x_update[1:,:],x_update[:1,:]]) - x_update
-
-n_k = return_SDF_normal(phi_C,csdl.vstack([x_update[0],x_update[0]]))[0,:2]
-t_k = R @n_k
-# n_k = return_SDF_normal(phi_C,csdl.vstack([x_update[0],x_update[0]]),independence=True)
-# n_k = return_SDF_normal(phi_C,x_update,independence=True)
-# n_k = return_SDF_normal(phi_C,x_update)
-# t_k = n_k @ R
+n_k0 =return_SDF_normal(phi_C,csdl.vstack([x_update[0],x_update[0]]))[0,:2]
+t_k0 = R@n_k0
 lk = csdl.norm(e_k,axes=(1,))
 
-#numpy version:
-# np.linalg.norm(np.einsum('ij,ik,ik->ij', t_k.value, t_k.value, e_k.value),axis=1)
-# l_perp = csdl.norm(csdl.einsum(t_k, t_k, e_k,action='ij,ik,ik->ij'),axes=(1,))
-# l_perp = csdl.einsum( t_k, e_k,action='ij,ij->i')
-level_set_value = 0.02
-residual_boundary = phi_C.evaluate(x_update) -level_set_value
-# residual_spacing =e_k l_perp-csdl.average(l_perp)
-# residual_spacing = l_perp[1:]-l_perp[0]
-# residual_spacing = l_perp[0]-l_perp[1:]
-# residual_spacing = l_perp-lbar
-# residual_edge = lbar - csdl.average(lk)
-residual_spacing = lk[1:]-lk[0]
-# residual_bc = t_k[0].reshape(1,2) @ (x_update[0]-anchor_point_update[0])
-residual_bc = t_k.reshape(1,2) @ (x_update[0]-anchor_point_update[0])
+residual_boundary = phi_C.evaluate(x_update) - 0.02
+residual_spacing = lk[:-1]-lk[-1]
+residual_bc = t_k0.reshape(1,2) @ (x_update[0]-anchor_point_update[0])
 
 residual_boundary.add_name('delta_level_set')
 residual_spacing.add_name('boundary_spacing')
@@ -438,13 +426,10 @@ system_residual = csdl.concatenate([residual_boundary,
                                residual_bc])
 system_residual.add_name('boundary_respacing')
 
-# solver = csdl.nonlinear_solvers.GaussSeidel('boundary_redistribution',max_iter=1,tolerance=1e-3)
-solver = csdl.nonlinear_solvers.Newton('boundary_redistribution',max_iter=1,tolerance=1e-3)
+solver = csdl.nonlinear_solvers.GaussSeidel('boundary_redistribution',max_iter=10,tolerance=1e-3)
 solver.add_state(x_flatty,system_residual)
-# solver.add_state(state,system_residual)
 
 solver.run()
-
 
 #COMPUTE TANGENTS BETWEEN POINTS:
 # x_k = mesh_C_boundary_pts.value
@@ -462,8 +447,10 @@ for i in range(x_kp1.shape[0]):
     n_k[i,:] = n_k_full[i,2*i:2*i+2]
 t_k = (R@n_k.T).T
 
-#only have jacobian entries corresponding to nodes that should move
+#this really should have the full shape, but only have jacobian entries corresponding
+#   to nodes that should move
 #   Nodes 0 and N should not move (same node due to closed loop)
+#   Row 
 A = np.zeros((x_kp1.shape[0],(x_kp1.shape[0]-1)*2))
 for i in range(1,x_kp1.shape[0]-1):
     P_k = t_k[i,:].reshape(2,1)@t_k[i,:].reshape(1,2)
@@ -472,9 +459,18 @@ for i in range(1,x_kp1.shape[0]-1):
     P_k = t_k[i+1,:].reshape(2,1)@t_k[i+1,:].reshape(1,2)
     A[i,[i,i+(x_kp1.shape[0]-1)]] = ehat_k[i+1].reshape(1,2)@P_k
 
-#start
+
+#     # P_k = t_k[i,:].reshape(2,1)@t_k[i,:].reshape(1,2)
+#     A[i,[i-1,i-1+(x_kp1.shape[0]-1)]] = -ehat_k[i]
+    
+#     # P_k = t_k[i+1,:].reshape(2,1)@t_k[i+1,:].reshape(1,2)
+#     A[i,[i,i+(x_kp1.shape[0]-1)]] = ehat_k[i+1]
+# A[0,[0,(x_kp1.shape[0]-1)+1]] = -e_k[0]
+# A[x_kp1.shape[0]-1,[x_kp1.shape[0]-2,2*(x_kp1.shape[0]-1)-1]] = ehat_k[-2]
+
+# #start
 P_k = t_k[0,:].reshape(2,1)@t_k[0,:].reshape(1,2)
-A[0,[0,(x_kp1.shape[0]-1)]] = ehat_k[0].reshape(1,2)@P_k
+A[0,[0,(x_kp1.shape[0]-1)+1]] = -ehat_k[0].reshape(1,2)@P_k
 
 #end
 P_k = t_k[-2,:].reshape(2,1)@t_k[-2,:].reshape(1,2)
@@ -487,113 +483,27 @@ delta_lk = lbar-lk
 dT, *_ = np.linalg.lstsq(A,-delta_lk)
 
 #take a step in dT, then reproject to the delta level-set, then relinearize and solve again until convergence
-# dT = np.linalg.solve(A.T@A+1e-6*np.eye(78),-A.T@delta_lk)
 
-x_respace = x_k[1:] + 0.025*dT.reshape(2,39).T
+# dT = np.linalg.solve(A.T@A+1e-6*np.eye(78),A.T@delta_lk)
+
+# Tx = ( -np.diag(x_k[:,0].flatten(),0)
+#         + np.diag(x_kp1[:-1,0].flatten(),1 ))
+# Ty = (-np.diag(x_k[:,1].flatten(),0)
+#         + np.diag(x_kp1[:-1,1].flatten(),1) )
+
+# Jlx = np.kron(Tx,np.array([[1,0]]))+np.kron(Ty,np.array([[0,1]]))
+
+
+
 
 #update mortar mesh boundary nodes and output
-mesh_C.geometry.x[boundary_order_C[1:],:2] = x_respace
+mesh_C.geometry.x[boundary_order_C[1:],:2] = x_k[1:] + lbar*dT.reshape(2,39).T
 
 with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_tangent_respace.xdmf", "w") as xdmf:
     xdmf.write_mesh(mesh_C)
 
-x_respace_csdl = csdl.Variable(value=x_respace)
-x_reproject = project_to_new_boundary(phi_C,x_respace_csdl,delta=0.02)
-
-
-#update mortar mesh boundary nodes and output
-mesh_C.geometry.x[boundary_order_C[1:],:2] = x_reproject.value
-
-with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_reproject.xdmf", "w") as xdmf:
-    xdmf.write_mesh(mesh_C)
-
-
-#####
-# check residual
-x_k = np.vstack([mesh_C.geometry.x[boundary_order_C[0],:2],x_reproject.value])
-x_kp1 = np.roll(x_k,-1,axis=0)
-e_k = x_kp1 - x_k
-lk = np.linalg.norm(e_k,axis=1)
-lbar = np.average(lk)
-delta_lk =lbar-lk
-res=np.linalg.norm(delta_lk)
-print('residual norm:',res)
-####
-
-#COMPUTE TANGENTS BETWEEN POINTS:
-# x_k = mesh_C_boundary_pts.value
-x_k = np.vstack([mesh_C.geometry.x[boundary_order_C[0],:2],x_reproject.value])
-x_kp1 = np.roll(x_k,-1,axis=0)
-e_k = x_kp1 - x_k
-lk = np.linalg.norm(e_k,axis=1)
-lbar = np.average(lk)
-ehat_k = e_k/lk.reshape(40,1)
-
-xcsdl = csdl.Variable(value = x_kp1)
-n_k_full = return_SDF_normal(phi_C,xcsdl).value
-#just normals at each point:
-n_k = np.zeros((x_kp1.shape[0],2))
-for i in range(x_kp1.shape[0]):
-    n_k[i,:] = n_k_full[i,2*i:2*i+2]
-t_k = (R@n_k.T).T
-
-#only have jacobian entries corresponding to nodes that should move
-#   Nodes 0 and N should not move (same node due to closed loop)
-A = np.zeros((x_kp1.shape[0],(x_kp1.shape[0]-1)*2))
-for i in range(1,x_kp1.shape[0]-1):
-    P_k = t_k[i,:].reshape(2,1)@t_k[i,:].reshape(1,2)
-    A[i,[i-1,i-1+(x_kp1.shape[0]-1)]] = -ehat_k[i].reshape(1,2)@P_k
-    
-    P_k = t_k[i+1,:].reshape(2,1)@t_k[i+1,:].reshape(1,2)
-    A[i,[i,i+(x_kp1.shape[0]-1)]] = ehat_k[i+1].reshape(1,2)@P_k
-
-#start
-P_k = t_k[0,:].reshape(2,1)@t_k[0,:].reshape(1,2)
-A[0,[0,(x_kp1.shape[0]-1)]] = ehat_k[0].reshape(1,2)@P_k
-
-#end
-P_k = t_k[-2,:].reshape(2,1)@t_k[-2,:].reshape(1,2)
-A[x_kp1.shape[0]-1,[x_kp1.shape[0]-2,2*(x_kp1.shape[0]-1)-1]] = ehat_k[-2].reshape(1,2)@P_k
-
-
-delta_lk = lbar-lk
-
-#least squares fit
-# dT, *_ = np.linalg.lstsq(A,-delta_lk)
-
-#take a step in dT, then reproject to the delta level-set, then relinearize and solve again until convergence
-# dT = np.linalg.solve(A.T@A+1e-4*np.eye(78),A.T@delta_lk)
-
-x_respace = x_k[1:] + 0.025*dT.reshape(2,39).T
-
-#update mortar mesh boundary nodes and output
-mesh_C.geometry.x[boundary_order_C[1:],:2] = x_respace
-
-with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_tangent_respace2.xdmf", "w") as xdmf:
-    xdmf.write_mesh(mesh_C)
-
-x_respace_csdl = csdl.Variable(value=x_respace)
-x_reproject = project_to_new_boundary(phi_C,x_respace_csdl,delta=0.02)
-
-
-#update mortar mesh boundary nodes and output
-mesh_C.geometry.x[boundary_order_C[1:],:2] = x_reproject.value
-
-with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_reproject2.xdmf", "w") as xdmf:
-    xdmf.write_mesh(mesh_C)
-
-#####
-# check residual
-x_k = np.vstack([mesh_C.geometry.x[boundary_order_C[0],:2],x_reproject.value])
-x_kp1 = np.roll(x_k,-1,axis=0)
-e_k = x_kp1 - x_k
-lk = np.linalg.norm(e_k,axis=1)
-lbar = np.average(lk)
-delta_lk =lbar-lk
-res=np.linalg.norm(delta_lk)
-print('residual norm:',res)
-####
-
+# H = np.sum(lk)*np.eye(lk.shape[0])-lbar
+# A = H@Jlx
 print()
 
 
@@ -614,3 +524,130 @@ print()
 
 
 
+
+
+
+
+#===== CONSTRUCT UPDATE TO B-SPLINE COEFFICIENTS (LEFT EDGE) =========# 
+
+parametric_coords = np.array([(i,) for i in np.linspace(0,1,node_labels_C['left'].shape[0])])
+# spline_space = lfs.BSplineSpace(1,(3,),(5,)) #TODO: update with the orginal spline space from the spline construction
+# spline_coeffs = spline_space.fit(values = new_mortar_mesh_pts,parametric_coordinates= parametric_coords)
+# physical_coords = boundary_splines_C['left'].evaluate(parametric_coords)
+basis_mat = boundary_splines_C['left'].space.compute_basis_matrix(parametric_coords).toarray()
+physical_points = basis_mat@boundary_splines_C['left'].coefficients.value
+
+mesh_C_left_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['left'],:2])
+
+#equivalent expressions:
+#boundary_splines_C['left'].evaluate(parametric_coords) == mesh_C_left_boundary_pts
+# phi_k = phi_C.evaluate(mesh_C_left_boundary_pts)
+mesh_C_left_boundary_pts_from_spline=boundary_splines_C['left'].evaluate(parametric_coords)
+phi_k = phi_C.evaluate(mesh_C_left_boundary_pts_from_spline)
+
+grad_phi_k  = csdl.derivative(phi_k,mesh_C_left_boundary_pts_from_spline)
+#construct "duplicated" basis matrix
+Nxy = np.kron(basis_mat,np.eye((2)))
+
+A = grad_phi_k@Nxy
+Anp = A.value
+
+dP,_,_,_ =np.linalg.lstsq(Anp,-phi_k.value)
+
+
+#===== CONSTRUCT UPDATE TO B-SPLINE COEFFICIENTS (TOP EDGE) =========# 
+parametric_coords = np.array([(i,) for i in np.linspace(0,1,node_labels_C['top'].shape[0])])
+# spline_space = lfs.BSplineSpace(1,(3,),(5,)) #TODO: update with the orginal spline space from the spline construction
+# spline_coeffs = spline_space.fit(values = new_mortar_mesh_pts,parametric_coordinates= parametric_coords)
+# physical_coords = boundary_splines_C['top'].evaluate(parametric_coords)
+basis_mat = boundary_splines_C['top'].space.compute_basis_matrix(parametric_coords).toarray()
+physical_points = basis_mat@boundary_splines_C['top'].coefficients.value
+
+mesh_C_top_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['top'],:2])
+
+#equivalent expressions:
+#boundary_splines_C['top'].evaluate(parametric_coords) == mesh_C_top_boundary_pts
+# phi_k = phi_C.evaluate(mesh_C_top_boundary_pts)
+Nprime = boundary_splines_C['top'].space.compute_basis_matrix(parametric_coords,parametric_derivative_orders =(1)).toarray()
+Nprimexy = np.kron(Nprime,np.eye((2)))
+
+# weird check of the iterative approach:
+for i in range(5):
+    mesh_C_top_boundary_pts_from_spline = boundary_splines_C['top'].evaluate(parametric_coords)
+    phi_k = phi_C.evaluate(mesh_C_top_boundary_pts_from_spline)
+
+    grad_phi_k  = csdl.derivative(phi_k,mesh_C_top_boundary_pts_from_spline)
+    #construct "duplicated" basis matrix
+
+    A = grad_phi_k@Nxy
+    Anp = A.value
+    alpha = 1
+    dP,_,_,_ =np.linalg.lstsq(Anp,-phi_k.value)
+
+    boundary_splines_C['top'].coefficients.value += alpha*dP.reshape(5,2)
+
+    #"Turning" enforcement
+    tangents = boundary_splines_C['top'].evaluate(parametric_coords,parametric_derivative_orders =(1))
+    normals_k = grad_phi_k.value.reshape(11,11,2)[np.arange(11),np.arange(11),:]
+    r_k = np.sum(tangents.value*normals_k,axis=1)
+    B =  grad_phi_k.value@Nprimexy
+    eta = 1e-3
+    alpha = .1
+    A_aug = np.vstack([Anp,np.sqrt(eta)*B])
+    b_aug = np.hstack([-alpha*phi_k.value,-np.sqrt(eta)*r_k])
+    dP_tan, *_ = np.linalg.lstsq(A_aug,b_aug)
+
+    dP_tan2, *_ = np.linalg.lstsq(B,r_k)
+
+    # boundary_splines_C['top'].coefficients.value += dP_tan.reshape(5,2)
+    
+
+    turning_val = (phi_k.value@grad_phi_k.value).reshape(11,2)@np.array([[0,-1],[1,0]])
+    #1 - 1/10
+    lk= csdl.norm(mesh_C_top_boundary_pts_from_spline[1:,:]-mesh_C_top_boundary_pts_from_spline[:-1,:],axes=(1,)).value
+    # H = np.sum(lmlbar)*np.eye(lmlbar.shape[0])-np.average(lmlbar)
+
+    Tx = ( np.hstack([-np.diag(tangents[:-1,0].flatten().value/lk,0),np.zeros((tangents[:-1,0].value.shape[0],1))])
+            + np.diag(tangents[1:,0].flatten().value/lk,1)[:-1,:] )
+    Ty = ( np.hstack([-np.diag(tangents[:-1,1].flatten().value/lk,0),np.zeros((tangents[:-1,1].value.shape[0],1))])
+            + np.diag(tangents[1:,1].flatten().value/lk,1)[:-1,:] )
+    # Tx = ( np.hstack([np.diag(-tangents[:-1,0].flatten().value,0),np.zeros((tangents[:-1,0].value.shape[0],1))])
+    #         + np.diag(tangents[1:,0].flatten().value,1)[:-1,:] )
+    # Ty = ( np.hstack([np.diag(-tangents[:-1,1].flatten().value,0),np.zeros((tangents[:-1,1].value.shape[0],1))])
+    #         + np.diag(tangents[1:,1].flatten().value,1)[:-1,:] )
+    # Tx = ( np.hstack([np.diag(-turning_val[:-1,0].flatten(),0),np.zeros((turning_val[:-1,0].shape[0],1))])
+    #         + np.diag(turning_val[1:,0].flatten(),1)[:-1,:] )
+    # Ty = ( np.hstack([np.diag(-turning_val[:-1,1].flatten(),0),np.zeros((turning_val[:-1,1].shape[0],1))])
+    #         + np.diag(turning_val[1:,1].flatten(),1)[:-1,:] )
+    # Ty = np.diag(-tangents[:-1,1].flatten().value,0)+np.diag(tangents[1:,1].flatten().value,1)[:-1,:]
+    Jlx = np.kron(Tx,np.array([[1,0]]))+np.kron(Ty,np.array([[0,1]]))
+    
+    
+    # B = H@Jlx@Nxy
+    B = Jlx@Nxy
+    # print()
+    eta = 1e-9
+    alpha = 1
+    # LHS = Anp.T@Anp #+ eta*B.T@B
+    # RHS = -alpha*Anp.T@phi_k.value #-eta*B.T@lmlbar
+    A_aug = np.vstack([Anp,np.sqrt(eta)*B])
+    b_aug = np.hstack([-alpha*phi_k.value,-np.sqrt(eta)*np.log(lk)])
+    dP_equi, *_ = np.linalg.lstsq(A_aug,b_aug)
+
+    # LHS = Anp.T@Anp #+ eta*B.T@B
+    # RHS = -alpha*Anp.T@phi_k.value #-eta*B.T@lmlbar
+    # dP_equi = np.linalg.solve(LHS,RHS)
+    
+    # boundary_splines_C['top'].coefficients.value += dP_equi.reshape(5,2)
+    # new_mortar_mesh_pts = basis_mat@(boundary_splines_C['top'].coefficients.value + dP_equi.reshape(5,2))
+
+    # boundary_splines_C['top'].coefficients.value += dP.reshape(5,2)
+    new_mortar_mesh_pts = boundary_splines_C['top'].evaluate(parametric_coords).value
+
+    #update mortar mesh boundary nodes and output
+    mesh_C.geometry.x[node_labels_C['top'],:2] = new_mortar_mesh_pts
+
+    with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_step_"+str(i)+"_boundary_update.xdmf", "w") as xdmf:
+        xdmf.write_mesh(mesh_C)
+
+print()
