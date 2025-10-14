@@ -180,7 +180,7 @@ class SignedDistanceFunction():
     def evaluate(self,eval_pts):
         d_list = []
         w_list = []
-        # W = csdl.Variable(shape=eval_pts.shape)
+
         for spline in list(self.boundary_splines.values()):
             #compute squared distance for each point to each spline
             proj_eval_pts = spline.evaluate(spline.project(eval_pts)).reshape(eval_pts.shape)
@@ -193,11 +193,6 @@ class SignedDistanceFunction():
 
         D = csdl.minimum(csdl.vstack(d_list),rho=self.rho,axes=(0,))
         W = csdl.sum(csdl.vstack(w_list),axes=(0,))
-
-        # #compute winding number for each evaluation point
-        # W = csdl.Variable(shape=eval_pts)
-        # for spline in self.boundary_splines:
-        #     W += self._winding_number_for_spline_segment(eval_pts)
 
         #get sign from winding number
         sign = -csdl.tanh(100*(csdl.absolute(W)-0.5))
@@ -212,20 +207,14 @@ class SignedDistanceFunction():
         x_t = spline.evaluate(t).reshape(num_parametric,2)
         tangents = spline.evaluate(t,parametric_derivative_orders =(1)).reshape(num_parametric,2)
         h = 1/(num_parametric-1) #interval length is in parametric space so 1-0 = 1 for numerator
-        # w = csdl.Variable(shape=(eval_pts.shape[0],))
-        # function_values = csdl.Variable(shape=(eval_pts.shape[0],num_parametric))
+        
+        #evaluate winding kernel
         fxn_values = self._winding_kernel(x_t,eval_pts,tangents) #input parametric point vals & eval pts , output (i,j) shaped fxn values
-        # for i in csdl.frange(eval_pts.shape[0]):
-            #TODO: replace this with a vectorized function evaluation:
-            # for j in csdl.frange(x_t.shape[0]):
-            # fxn_values = self._winding_kernel(x_t,eval_pts,tangents)
-            # w[i] = h * (0.5*function_values[i,0] 
-            #             + csdl.sum(function_values[i,1:-1])
-            #             + 0.5*function_values[i,-1]      )
+        
+        #use trapezoidal rule to integrate and find winding number
         w = (h/(2*np.pi)) * (0.5*fxn_values[:,0] 
                         + csdl.sum(fxn_values[:,1:-1],axes=(1,))
                         + 0.5*fxn_values[:,-1]      )
-
 
         return w
 
@@ -261,7 +250,6 @@ phi_A = SignedDistanceFunction(mesh_A,boundary_splines_A,rho=100000)
 phi_B = SignedDistanceFunction(mesh_B,boundary_splines_B,rho=100000)
 
 #test with mesh C boundary points:
-# mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[node_labels_C['boundary'],:2])
 mesh_C_boundary_pts = csdl.Variable(value=mesh_C.geometry.x[boundary_order_C,:2])
 
 signed_distance_A = phi_A.evaluate(mesh_C_boundary_pts)
@@ -288,23 +276,6 @@ new_mortar_mesh_pts = mesh_C_boundary_pts - csdl.matvec(step_c.T(),signed_distan
 # with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update_smooth.xdmf", "w") as xdmf:
 #     xdmf.write_mesh(mesh_C)
 
-
-# lk = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
-# lk = csdl.norm(ordered_boundary_pts[1:,:]-ordered_boundary_pts[:-1,:],axes=(1,)).value
-
-# lbar = np.average(lk)
-# bad_bois = np.where(lk<lbar)[0]
-
-# phi_C_new = phi_C.evaluate(new_mortar_mesh_pts)
-
-# dphindxc_new = csdl.derivative(phi_C_new,new_mortar_mesh_pts)
-# for i in bad_bois:
-#     dphindxc_new[i,:].value.reshape(40,2)[i,:]
-
-#csdl has some stuff where shapes are flattened, so easier to just duplicate the point to force the shapes to behave
-anchor_point_val = mesh_C.geometry.x[boundary_order_C[0],:2].reshape(1,2)
-anchor_point= csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
-
 def project_to_new_boundary(phi,eval_pts,step_size=1.0,delta=0.0):
     signed_distance = phi.evaluate(eval_pts)
     delta = csdl.Variable(value = delta*np.ones_like(signed_distance))
@@ -326,58 +297,27 @@ def return_SDF_normal(phi,eval_pts,independence=False):
     step = dSDdx/csdl.expand(dSDdx_norm,dSDdx.shape,'i->ij')
     return step
 
-#project anchorpoint:
-anchor_point_update = project_to_new_boundary(phi_C,anchor_point,delta=0.02)
-
-
-#TODO: update to pure CSDL
-# mesh_C_boundary_pts_guess = csdl.Variable()
-x_k = mesh_C_boundary_pts
-# x_k[0] = anchor_point_update[0,:2].value 
+anchor_point= csdl.Variable(value = mesh_C.geometry.x[boundary_order_C[0],:2].reshape(1,2))
+x_k = csdl.Variable(value=mesh_C.geometry.x[boundary_order_C,:2])
 R = np.array([[0,-1],[1,0]])
-# x_k_csdl = csdl.Variable(value = np.repeat(x_k[0,:],2,axis=0))
-# xcsdl= csdl.Variable(value = np.repeat(x_k[0,:].reshape(1,2),2,axis=0))
-# xhat_k = csdl.Variable(value = np.repeat(anchor_point_val,2,axis=0))
-
-#project "anchor point" to a delta level set
 delta = 0.02
-x_k = x_k.set(csdl.slice[0:1,:2],project_to_new_boundary(phi_C,anchor_point,delta=0.02))
 lk = csdl.norm(x_k[1:,:]-x_k[:-1,:],axes=(1,))
-n_k = return_SDF_normal(phi_C,x_k[0])
+lbar = csdl.average(lk)
+x_k = x_k.set(csdl.slice[0:1,:2],project_to_new_boundary(phi_C,anchor_point,delta=delta))
+#TODO: seems like the .project() and .evaluate() for the b-splines in the SDFs are likely suspect
+#       as a result, the effect of any change in the projected points is not propogated. 
+# for ind in csdl.frange(1,10):
+# for ind in csdl.frange(1,x_k.shape[0]):
+for ind in range(1,x_k.shape[0]):
+    n_k = return_SDF_normal(phi_C,x_k[ind-1].reshape(1,2))
+    t_k = n_k@R.T 
 
-for ind in csdl.frange(1,boundary_order_C.shape[0]):
-    n_k = x_k[ind-1]
-    x_k[ind] 
-
-    x_k = x_k.set(csdl.slice([ind],value))
-    xi
-    x1 = csdl.slice
-    x_k = csdl.concatenate([x0,xi,x1])
-
-
-for i in range(1,boundary_order_C.shape[0]):
-
-    #predictor:
-    #TODO: need to make sure we step around the boundary in a counter-clockwise manner
-    xcsdl.value = np.repeat(x_k[i-1,:].reshape(1,2),2,axis=0)
-    n_k = return_SDF_normal(phi_C,xcsdl)[0,:2].value
-    phi_k = phi_C.evaluate(xcsdl)[0].value
-    t_k = R@n_k
-    # xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k+ lbar*n_k).reshape(1,2),2,axis=0)
-    xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k*np.tanh(1e6*phi_k)).reshape(1,2),2,axis=0)
-    # x_k[i] = xhat_k.value[0,:]
+    #predictor (take a step in the tangent direction)
+    xhat_k = (x_k[ind-1].reshape(1,2) + lbar * t_k) #may need sign correction?
     
-    #corrector: (projection)
-    x_proj = project_to_new_boundary(phi_C,xhat_k,delta=0.02)
-    x_k[i] = x_proj.value[0,:2]
-    # x_k[i] = xhat_k.value[0,:2] 
-    print(i,"predictor:",xhat_k.value[0,:2],"corrector:",x_k[i])
-    print("      phi_k:",phi_k,' n_k:',n_k)
-    print()
-
-#now, given the projected boundary points, solve an iterative problem to ensure
-#   that points are somewhat evenly spaced on the boundary
-#   the boundary is closed (winding number = 1)
+    #corrector (project back to boundary)
+    x_proj = project_to_new_boundary(phi_C,xhat_k,delta=delta).reshape(2)
+    x_k = x_k.set(csdl.slice[ind],x_proj)
 
 #update mortar mesh boundary nodes and output
 mesh_C.geometry.x[boundary_order_C,:2] = x_k
@@ -385,22 +325,8 @@ mesh_C.geometry.x[boundary_order_C,:2] = x_k
 with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_C.name+"_boundary_update.xdmf", "w") as xdmf:
     xdmf.write_mesh(mesh_C)
 
-# #first compute winding number
-# edges = np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value
 lk_ = np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1)
-# lbar = np.average(lbar)
-# winding_number = 0 
-# for i in range(mesh_C_boundary_pts.shape[0]-1):
-#     winding_number += np.arctan2(np.cross(edges[i,:],edges[i+1,:]),np.dot(edges[i,:],edges[i+1,:]))
 
-#next, re-space tangentially to ensure winding number = 1
-
-#now, run nonlinear solver to compute the boundary positions
-#slack variable version:
-# lbar_init = np.average(np.linalg.norm(np.roll(mesh_C_boundary_pts.value,-1,axis=0)-mesh_C_boundary_pts.value,axis=1))
-# state = csdl.ImplicitVariable(name='x_update',value=np.concatenate([x_k.flatten(),[lbar_init]]))
-# x_update = state[:-1].reshape(x_k.shape)
-# lbar = state[-1]
 
 x_flatty = csdl.ImplicitVariable(name='x_update',value=x_k.flatten())
 x_update = x_flatty.reshape(x_k.shape)

@@ -58,7 +58,7 @@ mesh_B.name = 'mesh_B'
 with XDMFFile(MPI.COMM_WORLD, "output/sdf_test_"+mesh_B.name+".xdmf", "w") as xdmf:
     xdmf.write_mesh(mesh_B)
 
-mesh_C = create_unit_square(MPI.COMM_WORLD, 10, 10,cell_type=CellType.quadrilateral)
+mesh_C = create_unit_square(MPI.COMM_WORLD, 8, 8,cell_type=CellType.quadrilateral)
 boundary_labels_C = {}
 boundary_labels_C['left'] =-tf/2
 boundary_labels_C['right'] = tf/2
@@ -329,8 +329,8 @@ bad_bois = np.where(lk<lbar)[0]
 phi_C_new = phi_C.evaluate(new_mortar_mesh_pts)
 
 dphindxc_new = csdl.derivative(phi_C_new,new_mortar_mesh_pts)
-for i in bad_bois:
-    dphindxc_new[i,:].value.reshape(40,2)[i,:]
+# for i in bad_bois:
+#     dphindxc_new[i,:].value.reshape(40,2)[i,:]
 
 #csdl has some stuff where shapes are flattened, so easier to just duplicate the point to force the shapes to behave
 anchor_point_val = mesh_C.geometry.x[boundary_order_C[0],:2].reshape(1,2)
@@ -374,7 +374,8 @@ for i in range(1,boundary_order_C.shape[0]):
     phi_k = phi_C.evaluate(xcsdl)[0].value
     t_k = R@n_k
     # xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k+ lbar*n_k).reshape(1,2),2,axis=0)
-    xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k*np.tanh(1e6*phi_k)).reshape(1,2),2,axis=0)
+    # xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k*np.tanh(1e6*phi_k)).reshape(1,2),2,axis=0)
+    xhat_k.value = np.repeat((x_k[i-1] + lbar * t_k).reshape(1,2),2,axis=0)
     # x_k[i] = xhat_k.value[0,:]
     
     #corrector: (projection)
