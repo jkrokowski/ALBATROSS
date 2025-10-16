@@ -17,7 +17,7 @@ maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
 #=================== mesh construction ==================#
-N = 4
+N = 2
 offset = 1
 
 h_to_f = 10
@@ -31,21 +31,28 @@ W = 1
 tf = 1/h_to_f
 tw = 1/w_to_w
 
-mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
-mesh_0.geometry.x[:, :2] -= .5
-mesh_0.geometry.x[:, 1] *= tf
-mesh_0.geometry.x[:, 0] *= W
-mesh_0.geometry.x[:, 1] += H/2 - tf/2
-mesh_0.name = 'f'
+mesh_A = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
+mesh_A.geometry.x[:, :2] -= .5
+mesh_A.geometry.x[:, 1] *= tf
+mesh_A.geometry.x[:, 0] *= W
+mesh_A.geometry.x[:, 1] += H/2 - tf/2
+mesh_A.name = 'f'
+filename_A = 'nonmatching_flange'
+# domain.name = filename
+with XDMFFile(MPI.COMM_WORLD, "output/"+filename_A+".xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_A)
 
-mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.quadrilateral)
-mesh_1.geometry.x[:, :2] -= .5
-mesh_1.geometry.x[:, 0] *= tw
-mesh_1.geometry.x[:, 1] *= W
-mesh_1.name = 'w'
-
+mesh_B = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.quadrilateral)
+mesh_B.geometry.x[:, :2] -= .5
+mesh_B.geometry.x[:, 0] *= tw
+mesh_B.geometry.x[:, 1] *= W
+mesh_B.name = 'w'
+filename_B = 'nonmatching_web'
+with XDMFFile(MPI.COMM_WORLD, "output/"+filename_B+".xdmf", "w") as xdmf:
+    xdmf.write_mesh(mesh_B)
+    
 #================= initialize individual cross-sections ===========#
-meshes= [mesh_0,mesh_1]
+meshes= [mesh_A,mesh_B]
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -58,36 +65,94 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
 TXS_nm.plot_meshes()
 
-#get boundary orderings
-xy=domain.geometry.x[xs.boundary_nodes,0:2]
-xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
+filename_C = 'mortar_mesh'
+with XDMFFile(MPI.COMM_WORLD, "output/"+filename_C+".xdmf", "w") as xdmf:
+    xdmf.write_mesh(TXS_nm.collisions[(0,1)].mortar_mesh.msh)
+
+#get boundary orderings for mesh A
+xy_A=mesh_A.geometry.x[XSs[0].boundary_nodes,0:2]
+xy_A_interior = mesh_A.geometry.x[XSs[0].interior_nodes,0:2]
+
+#get boundary orderings for mesh B
+xy_B=mesh_B.geometry.x[XSs[1].boundary_nodes,0:2]
+xy_B_interior = mesh_B.geometry.x[XSs[1].interior_nodes,0:2]
+
+#get boundary orderings for mortar mesh
+xy_C= TXS_nm.collisions[(0,1)].mortar_mesh.msh.geometry.x[TXS_nm.collisions[(0,1)].mortar_mesh.boundary_nodes,0:2]
+xy_C_interior = TXS_nm.collisions[(0,1)].mortar_mesh.msh.geometry.x[TXS_nm.collisions[(0,1)].mortar_mesh.interior_nodes,0:2]
 
 recorder = csdl.Recorder(inline=True)
 recorder.start()
 
-#create interior node variable
-xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
-xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-xy.set_as_design_variable(lower=-1,upper=1,scaler=100)
+#create csdl variables
+xy_A_interior = csdl.Variable(value=xy_A_interior,shape=xy_A_interior.shape,name='xy_interior_A')
+xy_A = csdl.Variable(value=xy_A,shape=xy_A.shape,name='xy_A')
+# xy_A.set_as_design_variable(lower=-1,upper=1,scaler=100)
+
+xy_B_interior = csdl.Variable(value=xy_B_interior,shape=xy_B_interior.shape,name='xy_interior_B')
+xy_B = csdl.Variable(value=xy_B,shape=xy_B.shape,name='xy_B')
+# xy_B.set_as_design_variable(lower=-1,upper=1,scaler=100)
+
+xy_C_interior = csdl.Variable(value=xy_C_interior,shape=xy_C_interior.shape,name='xy_interior_C')
+xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
+
+#web translation parameter
+dx_w = csdl.Variable(value=0.15)
+dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
+
 
 #=====mesh motion=======#
-inputs_mm = csdl.VariableGroup()
-inputs_mm.xy = xy
-inputs_mm.xy_interior = xy_interior
-meshSmoothing = ALBATROSS.csdl_utils.EllipticSmoothing(domain,
-                                                       xs.boundary_nodes,
-                                                       xs.interior_nodes,
-                                                       filename=filename)
-outputs_mm = meshSmoothing.evaluate(inputs_mm)
+inputs_mm_A = csdl.VariableGroup()
+inputs_mm_A.xy = xy_A
+inputs_mm_A.xy_interior = xy_A_interior
+meshSmoothing_A = ALBATROSS.csdl_utils.EllipticSmoothing(mesh_A,
+                                                       XSs[0].boundary_nodes,
+                                                       XSs[0].interior_nodes,
+                                                       filename=filename_A)
+outputs_mm_A = meshSmoothing_A.evaluate(inputs_mm_A)
+
+#massively simplified "mesh motion"
+xy_B = xy_B + csdl.expand(csdl.concatenate([dx_w,0]),xy_B.shape,action='j->ij')
+
+inputs_mm_B = csdl.VariableGroup()
+inputs_mm_B.xy = xy_B
+inputs_mm_B.xy_interior = xy_B_interior
+meshSmoothing_B = ALBATROSS.csdl_utils.EllipticSmoothing(mesh_B,
+                                                       XSs[1].boundary_nodes,
+                                                       XSs[1].interior_nodes,
+                                                       filename=filename_B)
+outputs_mm_B = meshSmoothing_B.evaluate(inputs_mm_B)
+
+
+
+#===== mortar mesh update computation =======#
+#mortar mesh is moved identically to the web motion:
+xy_C = xy_C + csdl.expand(csdl.concatenate([dx_w,0]),xy_C.shape,action='j->ij')
+
+mortar_mesh = TXS_nm.collisions[(0,1)].mortar_mesh 
+filename_C = 'mortar_mesh'
+
+inputs_mm_C = csdl.VariableGroup()
+inputs_mm_C.xy = xy_C
+inputs_mm_C.xy_interior = xy_C_interior
+meshSmoothing_C = ALBATROSS.csdl_utils.EllipticSmoothing(mortar_mesh.msh,
+                                                       mortar_mesh.boundary_nodes,
+                                                       mortar_mesh.interior_nodes,
+                                                       filename=filename_C)
+outputs_mm_C = meshSmoothing_C.evaluate(inputs_mm_C)
+
 
 #===== warping function computation =======#
+#we have to construct a single operation for the coupled warping function computation:
 inputs_w = csdl.VariableGroup()
-inputs_w.xy = inputs_mm.xy
-inputs_w.xy_interior = outputs_mm.xy_interior
+inputs_w.xy_A = inputs_mm_A.xy
+inputs_w.xy_A_interior = outputs_mm_A.xy_interior
+inputs_w.xy_B = inputs_mm_B.xy
+inputs_w.xy_B_interior = outputs_mm_B.xy_interior
+inputs_w.xy_C = inputs_mm_C.xy
+inputs_w.xy_C_interior = outputs_mm_C.xy_interior
 
-warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
-                        boundary_nodes=xs.boundary_nodes,
-                        interior_nodes=xs.interior_nodes)
+warping_model = ALBATROSS.csdl_utils.WarpingFunctionStateCoupled(xs=TXS_nm)
 
 outputs_w = warping_model.evaluate(inputs_w)
 

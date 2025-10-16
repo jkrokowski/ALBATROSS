@@ -54,7 +54,7 @@ mesh_A = TXS_nm.XSs[0].msh
 mesh_B = TXS_nm.XSs[1].msh
 
 TXS_nm.get_xs_stiffness_matrix()
-mesh_C = TXS_nm.collisions[(0,1)].msh
+mesh_C = TXS_nm.collisions[(0,1)].mortar_mesh.msh
 
 TXS_nm.plot_warping_fxns()
 K = TXS_nm.K

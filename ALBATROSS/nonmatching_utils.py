@@ -10,6 +10,7 @@ from shapely.geometry import Polygon,LineString, Point, MultiLineString
 from shapely.ops import polygonize, unary_union
 import gmsh
 from dolfinx.io import gmshio
+from ALBATROSS.utils import order_boundary_nodes
 
 
 class Collision:
@@ -64,6 +65,34 @@ class Region:
  
     def add_plotting_info(self,plotting_dict): 
         self.plotting = plotting_dict
+
+class MortarMesh:
+    '''An object containing the mesh and other information used to couple two overlapping meshes'''
+    def __init__(self,msh):
+        self.msh = msh
+        self.degree = 1
+        self.tdim = 2
+
+        #add mesh node labels:
+        self.VX = fem.functionspace(self.msh,("CG",self.degree,(self.tdim,)))
+
+        #label nodes and provide dofs to xy mapping:
+        self.all_nodes = mesh.locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
+        self.boundary_nodes = mesh.locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        self.interior_nodes = self.all_nodes[~np.isin(self.all_nodes, self.boundary_nodes)]
+        self.dofs_x_boundary = fem.locate_dofs_topological(self.VX.sub(0),0,self.boundary_nodes)
+        self.dofs_y_boundary = fem.locate_dofs_topological(self.VX.sub(1),0,self.boundary_nodes)
+        self.dofs_x_interior = fem.locate_dofs_topological(self.VX.sub(0),0,self.interior_nodes)
+        self.dofs_y_interior = fem.locate_dofs_topological(self.VX.sub(1),0,self.interior_nodes)
+        self.dofs_boundary = np.sort(np.concatenate([self.dofs_x_boundary,self.dofs_y_boundary]))
+        self.dofs_interior = np.sort(np.concatenate([self.dofs_x_interior,self.dofs_y_interior]))
+    
+        #order the boundary using a nearest neighbor search:
+        self.boundary_ordering = order_boundary_nodes(self.msh.geometry.x[self.boundary_nodes,0:2])
+        self.ordered_nodes = self.boundary_nodes[self.boundary_ordering]
+        self.inverse_boundary_ordering = np.argsort(self.boundary_ordering)
+
+
 
 class CoupledProblem:
     '''solve a coupled problem with non matching, overlapping meshes'''

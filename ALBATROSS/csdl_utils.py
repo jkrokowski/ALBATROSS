@@ -371,64 +371,115 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         # derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
         #                                                  inputs['xy'].flatten().shape[0]))
 
-# class OversetMeshManager(csdl.CustomExplicitOperation):
-#     """
-#     Manages mesh connectivity and interpolation weights for overlapping meshes
-#     during optimization iterations.
-#     """
+class WarpingFunctionStateCoupled(csdl.experimental.CustomImplicitOperation):
+    '''
+    inputs: nodal positions of cross-sectional meshes (both overlapping and mortarmesh)
     
-#     def initialize(self):
-#         # Design variables that affect mesh positions/shapes
-#         self.add_input('design_vars', shape=(n_design_vars,))
-        
-#         # Current mesh geometry states
-#         self.add_input('mesh_A_coords', shape=(n_nodes_A, 2))
-#         self.add_input('mesh_B_coords', shape=(n_nodes_B, 2))
-        
-#         # Outputs
-#         self.add_output('connectivity_changed', shape=(1,))  # Boolean flag
-#         self.add_output('interpolation_weights', shape=(n_interp_weights,))
-#         self.add_output('mortar_mesh_coords', shape=(n_mortar_nodes, 2))
-#         self.add_output('collision_matrix', shape=(n_elements_A, n_elements_B))
-        
-#         # Cached states for comparison
-#         self.previous_connectivity = None
-#         self.previous_design_vars = None
-#         self.tolerance = 1e-6  # Connectivity change threshold
+    '''
+    def __init__(self,xs):
+        super().__init__()
+        #TODO: 
+        #this is a coupled cross-section problem:
+        self.xs = xs
+
+    def evaluate(self,inputs: csdl.VariableGroup):
+        # assign method inputs to input dictionary
+        #TODO: this is rigidly fixed to two overlapping meshes, one intersection; make more general
+        self.declare_input('xy_A',inputs.xy_A)
+        self.declare_input('xy_A_interior',inputs.xy_A_interior)
+        self.declare_input('xy_B',inputs.xy_B)
+        self.declare_input('xy_B_interior',inputs.xy_B_interior)
+        self.declare_input('xy_C',inputs.xy_C)
+        self.declare_input('xy_C_interior',inputs.xy_C_interior)
+
+        # construct output of the model
+        outputs = csdl.VariableGroup()
+        outputs.w_A = self.create_output('w_A', (self.xs.XSs[0].V.dofmap.index_map.size_global,6))
+        outputs.w_B = self.create_output('w_B', (self.xs.XSs[1].V.dofmap.index_map.size_global,6))
+        outputs.lmbda = self.create_output('lmbda', (self.xs.XSs[0].LM.value_size,6))
+
+        return outputs
     
-#     def compute(self, inputs, outputs):
-#         design_vars = inputs['design_vars']
-#         mesh_A = inputs['mesh_A_coords']
-#         mesh_B = inputs['mesh_B_coords']
+    def solve_residual_equations(self, inputs, outputs):
+        print("solve residual equations:")
+        #update boundary nodes:
+        self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].boundary_nodes,0:2]=inputs['xy_A']
+        self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].boundary_nodes,0:2]=inputs['xy_B']
+        self.xs.collisions[(0,1)].mortar_mesh.msh.geometry.x[self.xs.collisions[(0,1)].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
         
-#         # 1. Check if significant geometry change occurred
-#         connectivity_changed = self._check_connectivity_change(design_vars, mesh_A, mesh_B)
+        #update interior nodes
+        self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].interior_nodes,0:2]=inputs['xy_A_interior']
+        self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].interior_nodes,0:2]=inputs['xy_B_interior']
+        self.xs.collisions[(0,1)].mortar_mesh.msh.geometry.x[self.xs.collisions[(0,1)].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
+       
+        #compute warping functions
+        self.xs._get_warping_functions()
         
-#         if connectivity_changed:
-#             # 2a. Rebuild collision detection and mortar mesh
-#             collision_matrix = self._detect_collisions(mesh_A, mesh_B)
-#             mortar_coords = self._construct_mortar_mesh(mesh_A, mesh_B, collision_matrix)
-#             interp_weights = self._compute_interpolation_weights(mesh_A, mesh_B, mortar_coords)
+        outputs['w_A'] = np.vstack([self.xs.XSs[0].warping_functions[i].x.array for i in range(6)]).T
+        outputs['w_B'] = np.vstack([self.xs.XSs[1].warping_functions[i].x.array for i in range(6)]).T
+        outputs['lmbda'] = np.vstack([self.xs.XSs[0].lmbdas[i].x.array for i in range(6)]).T
+    
+    def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
+        # print("apply_inverse_jacobian:")
+        #TODO: do we need to update the inputs, etc (eg. does the mesh update need to happen here?)
+        xy = inputs['xy']
+        xy_interior = inputs['xy_interior']
+        w = outputs['w']
+        lmbda = outputs['lmbda']
+
+        # for mode = rev:
+        # d_outputs --> d_residuals
+    
+        if mode == 'rev':    
+            # compute d_residuals = (dr_du^-1)*d_outputs
+
+            # dr_du is simply the finite element stiffness matrix in this case
+            # these are just the A00, A01, and A10 blocks of the assembled stiffness matrix
+            # we can leverage the already existing ksp solver and compute the multMatTranspose() using petsc,
+            # then we output these two terms to numpy matrices
+            d_residuals['w'],d_residuals['lmbda'] = self.xs.apply_inverse_jacobian(d_outputs['w'],d_outputs['lmbda'])
+            # #which does this under the hood: 
+            #     d_outputs_petsc = stack(d_outputs['w'],d_outputs['lmbda'])
+            #     self.xs.solver.solveTranspose(d_outputs_petsc,d_residuals_petsc)
+            #     d_residuals_numpy = convert_petsc_to_numpy(d_residuals_petsc)
+            #====
+            # d_residuals['w'] =  d_residuals_numpy[w_slice]
+            # d_residuals['lmbda']  = d_residuals_numpy[lmbda_slice]
+
+            # d_residuals['w'] = drw_dw_inv @ d_outputs['w'] + drw_dl_inv @ d_outputs['lmbda']
+            # d_residuals['lmbda'] = drl_dl_inv @ d_outputs['lmbda'] # + drl_dw_inv @ d_outputs['w'] <-- this term is = 
+
+
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
+        # print("compute vector-jacobian product:")
+        xy = inputs['xy']
+        xy_interior = inputs['xy_interior']
+        w = outputs['w']
+        lmbda = outputs['lmbda']
+
+        # for mode = rev
+        # d_residuals --> d_inputs
+        if mode == 'rev':
+            # compute d_input = (dr_dinput)*d_residuals
+            #TODO: can also just return d_inputs as a numpy matrix here and prevent the memory overhead of converting to numpy,etc
+            # dRwdx,dRldx = self.xs.compute_dRdx() #return numpy matrices 
+
+            # d_inputs = dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']
+
+            # d_inputs['xy'] = d_inputs['boundary']
+            # d_inputs['xy_interior'] = d_inputs['interior']
+
+            dRdx_dr = self.xs.compute_VJP(d_residuals['w'],d_residuals['lmbda'])
+
+            #TODO: map to boundary or interior nodes
+            d_inputs['xy'] = np.vstack([dRdx_dr[self.xs.dofs_x_boundary],
+                                        dRdx_dr[self.xs.dofs_y_boundary]]).T
+            d_inputs['xy_interior'] = np.vstack([dRdx_dr[self.xs.dofs_x_interior],
+                                                 dRdx_dr[self.xs.dofs_y_interior]]).T
             
-#             # Cache current state
-#             self._cache_current_state(design_vars, collision_matrix)
-#         else:
-#             # 2b. Only update interpolation weights (linear update)
-#             collision_matrix = self.previous_connectivity
-#             mortar_coords = self._update_mortar_positions(design_vars)
-#             interp_weights = self._update_interpolation_weights(mesh_A, mesh_B, mortar_coords)
-        
-#         outputs['connectivity_changed'] = connectivity_changed
-#         outputs['interpolation_weights'] = interp_weights
-#         outputs['mortar_mesh_coords'] = mortar_coords
-#         outputs['collision_matrix'] = collision_matrix
-    
-#     def compute_derivatives(self, inputs, derivatives):
-#         # Only provide derivatives for smooth (non-connectivity-changing) updates
-#         if not self.connectivity_changed:
-#             # Compute derivatives of interpolation weights w.r.t. design variables
-#             derivatives['interpolation_weights', 'design_vars'] = self._compute_weight_derivatives()
-#             derivatives['mortar_mesh_coords', 'design_vars'] = self._compute_mortar_derivatives()
+            # d_inputs['xy'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda'] )['boundary']
+            # d_inputs['xy_interior'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']) ['interior']
+
 
 class BeamModel(csdl.CustomExplicitOperation):
     '''

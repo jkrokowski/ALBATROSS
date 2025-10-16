@@ -21,7 +21,7 @@ from dolfinx.cpp.la.petsc import get_local_vectors
 
 from ALBATROSS.material import getMatConstitutiveIsotropic
 from ALBATROSS.utils import plot_xdmf_mesh,get_vtx_to_dofs,sparseify,order_boundary_nodes
-from ALBATROSS.nonmatching_utils import (Region,Separation,Collision,
+from ALBATROSS.nonmatching_utils import (Region,Separation,Collision,MortarMesh,
                                          get_bbtrees,get_collision_celltags,
                                          get_overlap_boundary_facets,
                                          compute_union_polygon,
@@ -172,8 +172,6 @@ class CrossSection:
         self._solve_system() 
 
     def get_xs_stiffness_matrix(self):
-               
-        
         if self.verbose:
             print('Computing warping solution....')
         self._get_warping_functions()
@@ -1822,8 +1820,8 @@ class CoupledCrossSection:
         #compute collisions between all meshes
         self._find_overlap()
 
-        # #construct mortar meshes
-        # self._construct_mortar_meshes()
+        #construct mortar meshes
+        self._construct_mortar_meshes()
 
     def _set_penalty_values(self):
         h_avg_list = []
@@ -1836,8 +1834,8 @@ class CoupledCrossSection:
         self.nu_t = 1
         return
     
-    def get_xs_stiffness_matrix(self):
-        #construct the background mesh and assemble the penalty term mass matrices
+    def _get_warping_functions(self):
+        #construct assemble the penalty term mass matrices
         self._construct_coupling()
 
         #construct each region's system
@@ -1855,6 +1853,9 @@ class CoupledCrossSection:
 
         #solve for the warping functions
         self._solve_coupled_system()
+    
+    def get_xs_stiffness_matrix(self):
+        self._get_warping_functions()
         
         #map elastic solutions to construct warping functions
         self._compute_xs_stiffness_matrix()
@@ -2020,8 +2021,8 @@ class CoupledCrossSection:
         self.separations = separations
         self.adjacency = adjacency
     
-    
-    def _construct_coupling(self):
+
+    def _construct_mortar_meshes(self):
         for collision in self.collisions:
             mshA = self.meshes[collision[0]]
             mshB = self.meshes[collision[1]]
@@ -2036,8 +2037,14 @@ class CoupledCrossSection:
             facet_tags_B = meshtags(mshB,mshB.topology.dim-1,bndry_facets_B,np.ones_like(bndry_facets_B))
 
             poly_C = compute_union_polygon(mshA, facet_tags_A, mshB, facet_tags_B)
-            self.collisions[collision].msh = mesh_from_polygon(poly_C)
-            mesh_C = self.collisions[collision].msh
+            mesh_C = mesh_from_polygon(poly_C)
+            self.collisions[collision].mortar_mesh = MortarMesh(mesh_C)
+
+    
+    def _construct_coupling(self):
+        for collision in self.collisions:
+            #mortar mesh has previously been constructed:
+            mesh_C = self.collisions[collision].mortar_mesh.msh
         
             #intialize functions on mortar mesh and add to collision
             Ve_C = element("CG",mesh_C.topology.cell_name(),1,shape=(3,))
