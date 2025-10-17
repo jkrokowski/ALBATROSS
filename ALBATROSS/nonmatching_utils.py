@@ -684,6 +684,9 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     '''
     V1: fxn space to be interpolated TO
     V0: fxn space to be interpolated FROM
+
+    Builds an interpolation matrix that can be used to sample a function on mesh 0 at 
+    each nodal position of mesh 1
     '''
     msh_0 = V_0.mesh
     msh_0.topology.dim
@@ -691,6 +694,7 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     x_0   = V_0.tabulate_dof_coordinates()
     x_1   = V_1.tabulate_dof_coordinates()
 
+    #===== FIND CELLS ON MESH 0 CONTAINING MESH 1 DOFS ====== #
     bb_tree         = geometry.bb_tree(msh_0, msh_0.topology.dim)
     cell_candidates = geometry.compute_collisions_points(bb_tree, x_1)
     cells           = []
@@ -704,26 +708,28 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
             cells.append(colliding_cells.links(i)[0])
             index_points.append(i)
             
+    # ====== MAP x_1 TO THE REFERENCE COORDINAT ON mesh 0 VIA THE PULL BACK ======#
     index_points_   = np.array(index_points)
     points_on_proc_ = np.array(points_on_proc, dtype=np.float64)
     cells_          = np.array(cells)
 
+    x_ref = np.zeros((len(cells_), 2))
+    for i in range(0, len(cells_)):
+        geom_dofs  = list(msh_0.geometry.dofmap[cells_[i]])
+        x_ref[i,:] = msh_0.geometry.cmap.pull_back(np.array([points_on_proc_[i,:]]), msh_0.geometry.x[geom_dofs])
+    
+    # ====== TABULATE THE LAGRANGE BASIS VALUES OF MESH 0 AT THE REFERENCE COORDINATES =====#
     ct      = cpp.mesh.to_string(msh_0.topology.cell_type)
     element = basix.create_element(basix.finite_element.string_to_family(
         "Lagrange", ct), basix.CellType[ct], V_0.ufl_element().degree, basix.LagrangeVariant.equispaced)
 
-    x_ref = np.zeros((len(cells_), 2))
-
-    for i in range(0, len(cells_)):
-        # geom_dofs  = msh_0.geometry.dofmap.links(cells_[i])
-        geom_dofs  = list(msh_0.geometry.dofmap[cells_[i]])
-        x_ref[i,:] = msh_0.geometry.cmap.pull_back(np.array([points_on_proc_[i,:]]), msh_0.geometry.x[geom_dofs])
-
+    #return the basis function values at the reference points for all points and basis function indices at the scalar component
+    #TODO: this is likely where I would modify my function to handle non-scalar spaces (e.g. last index)
     basis_matrix = element.tabulate(0, x_ref)[0,:,:,0]
+
 
     cell_dofs         = np.zeros((len(x_1), len(basis_matrix[0,:])))
     basis_matrix_full = np.zeros((len(x_1), len(basis_matrix[0,:])))
-
 
     for nn in range(0,len(cells_)):
         cell_dofs[index_points_[nn],:] = V_0.dofmap.cell_dofs(cells_[nn])
@@ -731,15 +737,12 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
 
     cell_dofs_ = cell_dofs.astype(int) ###### REDUCE HERE
 
-    # [JEF] I = np.zeros((len(x_1), len(x_0)), dtype=complex)
-    # make a petsc matrix here instead of np- 
-    # for Josh: probably more efficient ways to do this 
+    # ====== CREATE A PESTc MATRIX FROM THE TABULATED LAGRANGE BASIS VALUES ===== #
     I = PETSc.Mat().create(comm=MPI.COMM_WORLD)
     I.setSizes((len(x_1), len(x_0)))
     I.setUp()
     for i in range(0,len(x_1)):
         for j in range(0,len(basis_matrix[0,:])):
-            # [JEF] I[i,cell_dofs_[i,j]] = basis_matrix_full[i,j]
             I.setValue(i,cell_dofs_[i,j],basis_matrix_full[i,j])
 
     return I

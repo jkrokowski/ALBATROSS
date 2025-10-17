@@ -945,24 +945,20 @@ class CrossSection:
         #set up input vector sizes
         d_residuals_w_vec_size = d_residuals_w.shape[0]
         d_residuals_w_vec = PETSc.Vec().createSeq(d_residuals_w_vec_size, comm=PETSc.COMM_SELF)
-        # print(d_residuals_w_vec_size)
-        # print(d_residuals_w_vec.getSize())
+        
         d_residuals_lmbda_vec_size = d_residuals_lmbda.shape[0]
         d_residuals_lmbda_vec = PETSc.Vec().createSeq(d_residuals_lmbda_vec_size, comm=PETSc.COMM_SELF)
-        # print(d_residuals_lmbda_vec_size)
-        # print(d_residuals_lmbda_vec.getSize())
+        
         #set up output vector sizes
         d_inputs_vec_size = self.VX.dofmap.index_map_bs*self.VX.dofmap.index_map.size_global
         d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
-        # print(d_inputs_vec_size)
-        # print(d_inputs_vec.getSize())
-
+        
         dRdx_dr = np.zeros(d_inputs_vec_size)
-        # print(dRdx_dr.shape)
-        #TODO: could speed up here by not creating and destroying these two matrices every time?
+        
+        #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
         for idx in range(d_residuals_w.shape[1]):
             dRwdx = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
-            # print(dRwdx.getSize())
+            
             d_residuals_w_vec.array = d_residuals_w[:,idx]
             dRwdx.multTranspose(d_residuals_w_vec,d_inputs_vec) #perform vec-mat product
             dRdx_dr += d_inputs_vec.array
@@ -2142,8 +2138,6 @@ class CoupledCrossSection:
         pc.setType("lu")
         pc.setFactorSolverType("mumps")
         
-
-
         return
 
 

@@ -384,7 +384,7 @@ class WarpingFunctionStateCoupled(csdl.experimental.CustomImplicitOperation):
 
     def evaluate(self,inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
-        #TODO: this is rigidly fixed to two overlapping meshes, one intersection; make more general
+        #TODO: this is rigidly fixed to two overlapping meshes & one intersection; make more general
         self.declare_input('xy_A',inputs.xy_A)
         self.declare_input('xy_A_interior',inputs.xy_A_interior)
         self.declare_input('xy_B',inputs.xy_B)
@@ -421,16 +421,14 @@ class WarpingFunctionStateCoupled(csdl.experimental.CustomImplicitOperation):
     
     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
         # print("apply_inverse_jacobian:")
-        #TODO: do we need to update the inputs, etc (eg. does the mesh update need to happen here?)
         xy = inputs['xy']
         xy_interior = inputs['xy_interior']
         w = outputs['w']
         lmbda = outputs['lmbda']
 
-        # for mode = rev:
-        # d_outputs --> d_residuals
     
         if mode == 'rev':    
+            # d_outputs --> d_residuals
             # compute d_residuals = (dr_du^-1)*d_outputs
 
             # dr_du is simply the finite element stiffness matrix in this case
