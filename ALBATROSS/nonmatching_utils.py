@@ -708,7 +708,7 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
             cells.append(colliding_cells.links(i)[0])
             index_points.append(i)
             
-    # ====== MAP x_1 TO THE REFERENCE COORDINAT ON mesh 0 VIA THE PULL BACK ======#
+    # ====== MAP x_1 COORDINATES TO THE mesh 0 COORDINATE VIA THE PULL BACK ======#
     index_points_   = np.array(index_points)
     points_on_proc_ = np.array(points_on_proc, dtype=np.float64)
     cells_          = np.array(cells)
@@ -726,7 +726,6 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     #return the basis function values at the reference points for all points and basis function indices at the scalar component
     #TODO: this is likely where I would modify my function to handle non-scalar spaces (e.g. last index)
     basis_matrix = element.tabulate(0, x_ref)[0,:,:,0]
-
 
     cell_dofs         = np.zeros((len(x_1), len(basis_matrix[0,:])))
     basis_matrix_full = np.zeros((len(x_1), len(basis_matrix[0,:])))

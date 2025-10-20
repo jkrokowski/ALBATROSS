@@ -2181,7 +2181,7 @@ class CoupledCrossSection:
 
             #solve the linear systesm
             self.solver.solve(b, xh)
-            # xh.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+            # xh.ghostUpdd_residuals_lmbdaate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
             #get the local vectors:
             x_local = []
@@ -2234,6 +2234,132 @@ class CoupledCrossSection:
 
         return
     
+
+    def compute_VJP(self, d_residuals_w_a, d_residuals_w_b, d_residuals_w_c, d_residuals_lmbda):
+        '''
+        INPUTS:
+        d_residual_w_a shape : num_dofs_a x 6
+        d_residual_w_b shape : num_dofs_a x 6
+        d_residual_w_c shape : num_dofs_a x 6
+        d_residual_l shape : num_lms x 6
+
+        OUTPUTS:
+        dRdxa_dr = num_nodes_a
+        dRdxb_dr = num_nodes_b
+        dRdxc_dr = num_nodes_c
+        '''
+        #set up input vector sizes
+        d_residuals_w_a_vec_size = d_residuals_w_a.shape[0]
+        d_residuals_w_a_vec = PETSc.Vec().createSeq(d_residuals_w_a_vec_size, comm=PETSc.COMM_SELF)
+
+        d_residuals_w_b_vec_size = d_residuals_w_b.shape[0]
+        d_residuals_w_b_vec = PETSc.Vec().createSeq(d_residuals_w_b_vec_size, comm=PETSc.COMM_SELF)
+
+        d_residuals_w_c_vec_size = d_residuals_w_c.shape[0]
+        d_residuals_w_c_vec = PETSc.Vec().createSeq(d_residuals_w_c_vec_size, comm=PETSc.COMM_SELF)
+        
+        d_residuals_lmbda_vec_size = d_residuals_lmbda.shape[0]
+        d_residuals_lmbda_vec = PETSc.Vec().createSeq(d_residuals_lmbda_vec_size, comm=PETSc.COMM_SELF)
+        
+        #set up output vector sizes
+        d_inputs_a_vec_size = self.XSs[0].VX.dofmap.index_map_bs*self.XSs[0].VX.dofmap.index_map.size_global
+        d_inputs_a_vec = PETSc.Vec().createSeq(d_inputs_a_vec_size, comm=PETSc.COMM_SELF)
+
+        d_inputs_b_vec_size = self.XSs[1].VX.dofmap.index_map_bs*self.XSs[1].VX.dofmap.index_map.size_global
+        d_inputs_b_vec = PETSc.Vec().createSeq(d_inputs_b_vec_size, comm=PETSc.COMM_SELF)
+
+        d_inputs_c_vec_size = self.collisions[(0,1)].mortar_mesh.VX.dofmap.index_map_bs*self.collisions[(0,1)].mortar_mesh.VX.dofmap.index_map.size_global
+        d_inputs_c_vec = PETSc.Vec().createSeq(d_inputs_c_vec_size, comm=PETSc.COMM_SELF)
+        
+        dRdxa_dr = np.zeros(d_inputs_a_vec_size)
+        dRdxb_dr = np.zeros(d_inputs_b_vec_size)
+        dRdxc_dr = np.zeros(d_inputs_c_vec_size)
+        
+        #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
+        #TODO: self._compute_spatial_partials_penalty_term() needs to be implemented
+        #TODO: need to store residual forms for each individual mesh region (this is done in the ._solve_system() method for the uncoupled case)
+        for idx in range(d_residuals_w_a.shape[1]):
+            #====== dRadx_dr =======#
+            dRwadxa = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
+            dRwbdxa = self._compute_spatial_partials_penalty_term(of=coupled_residual_b,wrt=x_a)
+            dRwcdxa = self._compute_spatial_partials_penalty_term(of=coupled_residual_c,wrt=x_a)
+            
+            #"uncoupled" portion over the foreground mesh
+            d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
+            dRwadxa.multTranspose(d_residuals_w_a_vec,d_inputs_a_vec) #perform vec-mat product
+            dRdxa_dr += d_inputs_a_vec.array
+            
+            dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
+            d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
+            dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_a_vec) #perform vec-mat product
+            dRdxa_dr += d_inputs_a_vec.array
+
+            #coupled portion:
+            d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
+            dRwbdxa.multTranspose(d_residuals_w_b_vec,d_inputs_a_vec) #perform vec-mat product
+            dRdxa_dr += d_inputs_a_vec.array
+
+            d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
+            dRwcdxa.multTranspose(d_residuals_w_c_vec,d_inputs_a_vec) #perform vec-mat product
+            dRdxa_dr += d_inputs_a_vec.array
+
+
+            #====== dRbdx_dr =======#
+            dRwadxb = self._compute_spatial_partials_penalty_term(of=coupled_residual_a,wrt=x_b)
+            dRwbdxb = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
+            dRwcdxb = self._compute_spatial_partials_penalty_term(of=coupled_residual_c,wrt=x_b)
+            
+            #"uncoupled" portion over the foreground mesh
+            d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
+            dRwbdxb.multTranspose(d_residuals_w_b_vec,d_inputs_b_vec) #perform vec-mat product
+            dRdxb_dr += d_inputs_b_vec.array
+            
+            dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
+            d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
+            dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_b_vec) #perform vec-mat product
+            dRdxb_dr += d_inputs_b_vec.array
+
+            #coupled portion:
+            d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
+            dRwadxb.multTranspose(d_residuals_w_b_vec,d_inputs_b_vec) #perform vec-mat product
+            dRdxb_dr += d_inputs_b_vec.array
+
+            d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
+            dRwcdxb.multTranspose(d_residuals_w_c_vec,d_inputs_b_vec) #perform vec-mat product
+            dRdxb_dr += d_inputs_b_vec.array
+            
+            #====== dRcdx_dr =======#
+            dRwadxc = self._compute_spatial_partials_penalty_term(of=coupled_residual_a,wrt=x_c)
+            dRwbdxc = self._compute_spatial_partials_penalty_term(of=coupled_residual_b,wrt=x_c)
+            dRwcdxc = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
+
+            #"uncoupled" portion over the mortar mesh
+            d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
+            dRwcdxc.multTranspose(d_residuals_w_c_vec,d_inputs_c_vec) #perform vec-mat product
+            dRdxc_dr += d_inputs_c_vec.array
+            
+            dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
+            d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
+            dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_c_vec) #perform vec-mat product
+            dRdxc_dr += d_inputs_c_vec.array
+
+            #coupled portion:
+            d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
+            dRwadxc.multTranspose(d_residuals_w_b_vec,d_inputs_c_vec) #perform vec-mat product
+            dRdxc_dr += d_inputs_c_vec.array
+
+            d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
+            dRwbdxc.multTranspose(d_residuals_w_b_vec,d_inputs_c_vec) #perform vec-mat product
+            dRdxc_dr += d_inputs_c_vec.array
+
+
+        return dRdx_dr
+
+
+
+
+
+
 
     # def _build_penalty_vector(self,region_i,collision_ij):
     #     '''

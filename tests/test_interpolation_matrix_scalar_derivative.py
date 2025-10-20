@@ -1,6 +1,7 @@
 import numpy as np
-from dolfinx import mesh, fem, geometry, plot
+from dolfinx import mesh, fem, geometry, plot, cpp
 from mpi4py import MPI
+import basix
 from petsc4py import PETSc
 import pyvista
 from ALBATROSS.nonmatching_utils import celltags_to_dofs,get_bbtrees,get_interpolation_matrix,get_collision_celltags
@@ -38,8 +39,10 @@ def get_overlapping_cells(target_mesh,source_mesh):
 
 def test_interpolation_matrix():
     # Create two overlapping meshes
-    source_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0, 0], [1, 1]], [10, 10], mesh.CellType.triangle)
-    target_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0.5, 0.5], [1.5, 1.5]], [8,8], mesh.CellType.triangle)
+    N_source = 3
+    N_target = 4
+    source_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0, 0], [1, 1]], [N_source, N_source], mesh.CellType.triangle)
+    target_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0.5, 0.5], [1.5, 1.5]], [N_target ,N_target], mesh.CellType.triangle)
     
     # Define function spaces
     source_space = fem.functionspace(source_mesh, ("CG", 1))
@@ -98,6 +101,18 @@ def test_interpolation_matrix():
     print(f"Interpolation error (w/o hanging dofs): {interpolation_error}")
 
     plot_meshes(source_mesh,target_mesh)
+
+    #
+    # dP = grad_phi \dot Ja_inv 
+    
+    ct      = cpp.mesh.to_string(source_mesh.topology.cell_type)
+    element = basix.create_element(basix.finite_element.string_to_family(
+        "Lagrange", ct), basix.CellType[ct], source_mesh.ufl_element().degree, basix.LagrangeVariant.equispaced)
+
+    #return the basis function values at the reference points for all points and basis function indices at the scalar component
+    #TODO: this is likely where I would modify my function to handle non-scalar spaces (e.g. last index)
+    # basis_matrix = element.tabulate(0, x_ref)[0,:,:,0]
+    # grad_phi = 
 
 if __name__ == "__main__":
     test_interpolation_matrix()
