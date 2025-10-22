@@ -846,7 +846,121 @@ def get_interpolation_matrix(V_1,V_0,mixed=False):
         return M01_expanded
     else:
         return M01
+
+def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from nonmatching meshes
+    '''
+    V1: fxn space to be interpolated TO
+    V0: fxn space to be interpolated FROM
+
+    Builds an interpolation matrix that can be used to sample a function on mesh 0 at 
+    each nodal position of mesh 1
+    '''
+    msh_0 = V_0.mesh
+    msh_0.topology.dim
+    msh_1 = V_1.mesh
+    x_0   = V_0.tabulate_dof_coordinates()
+    x_1   = V_1.tabulate_dof_coordinates()
+
+    #===== FIND CELLS ON MESH 0 CONTAINING MESH 1 DOFS ====== #
+    bb_tree         = geometry.bb_tree(msh_0, msh_0.topology.dim)
+    cell_candidates = geometry.compute_collisions_points(bb_tree, x_1)
+    cells           = []
+    points_on_proc  = []
+    index_points    = []
+    colliding_cells = geometry.compute_colliding_cells(msh_0, cell_candidates, x_1)
+
+    for i, point in enumerate(x_1):
+        if len(colliding_cells.links(i))>0:
+            points_on_proc.append(point)
+            cells.append(colliding_cells.links(i)[0])
+            index_points.append(i)
+            
+    # ====== MAP x_1 COORDINATES TO THE mesh 0 COORDINATE VIA THE PULL BACK ======#
+    #points_on_proc_ are the mesh 1 points to pullback to mesh 0 reference coordinates
+    #index_points correspond to the mesh 1 dof (used to construct interp mat later)
+    #cells_ are the cells on which the mesh 1 points (points_on_proc_) are indicident to
+    index_points_   = np.array(index_points)
+    points_on_proc_ = np.array(points_on_proc, dtype=np.float64) 
+    cells_          = np.array(cells)
+
+    x0_ref = np.zeros((len(cells_), 2))
+    for i in range(0, len(cells_)):
+        geom_dofs  = list(msh_0.geometry.dofmap[cells_[i]])
+        x0_ref[i,:] = msh_0.geometry.cmap.pull_back(np.array([points_on_proc_[i,:]]), msh_0.geometry.x[geom_dofs])
     
+    # ====== TABULATE THE LAGRANGE BASIS VALUES OF MESH 0 AT THE REFERENCE COORDINATES =====#
+    ct      = cpp.mesh.to_string(msh_0.topology.cell_type)
+    deg_geom = 1
+    deg_field = 1
+
+    bas_geom = basix.create_element(family=basix.finite_element.string_to_family("Lagrange", ct),
+                                    celltype=basix.CellType[ct], 
+                                    degree=deg_geom,
+                                    lagrange_variant=basix.LagrangeVariant.equispaced
+    )
+
+    bas_field = basix.create_element(family=basix.finite_element.string_to_family("Lagrange", ct),
+                                    celltype=basix.CellType[ct], 
+                                    degree=deg_field,
+                                    lagrange_variant=basix.LagrangeVariant.equispaced
+    )
+
+    #tabulate the geometry basis functions and geometry basis function derivatives:
+    bas_geom_tab =  bas_geom.tabulate(1, x0_ref)
+    Nxy_0 = bas_geom_tab[0,:,:,0]
+    dNgeom_dxy = bas_geom_tab[1:,:,:,0]
+    dphi_dxy = bas_field.tabulate(1, x0_ref)[1:,:,:,0]
+
+    #compute local geometry sensitivity on mesh 0 at the physical locations of the mesh 1 points using the pulled back coords:
+    for i in range(len(cells_)):
+        #get the dofs of mesh 0 cells:
+        geom_dofs  = list(msh_0.geometry.dofmap[cells_[i]])
+        #get the mesh 0 nodal coordinates for the cell:
+        X0 = msh_0.geometry.x[geom_dofs]
+        #use the derivative of the geometry basis functions and the nodal coordinates to construct the cellwise Jacobian:
+        J0 = dNgeom_dxy[:,i,:]@X0[:,:2]
+        #invert to map from the reference domain back to physical space
+        invJ0 = np.linalg.inv(J0)
+
+        #construct local geometric sensitivity operator from field basis function derivatives and geometry inverse jacobian
+        B0 = dphi_dxy[:,i,:].T@invJ0
+
+        #find reference coordinate of the mesh nodes
+        xA00_ref = msh_0.geometry.cmap.pull_back(X0, msh_0.geometry.x[geom_dofs])
+
+        #tabulate the basis function values at these mesh 0 nodes (different than the reference coords of the mesh 1 nodes)
+        NxA00 = bas_geom.tabulate(0, xA00_ref)[0,:,:,0]
+        
+        #use geometry basis functions to relate the local geometric sensitivity of the interpolation operator to the mesh coordinates
+        dP0dX0 = - B0.T @ NxA00 #this is the interpolation operator design sensitivity to the mesh0 nodes
+        dP0dX1 = B0.T @ Nxy_0[i] #this is the interpolation operator design sensitivity to the mesh1 node?
+        
+
+
+        print()
+
+    cell_dofs         = np.zeros((len(x_1), len(basis_matrix[0,:])))
+    basis_matrix_full = np.zeros((len(x_1), len(basis_matrix[0,:])))
+
+    for nn in range(0,len(cells_)):
+        cell_dofs[index_points_[nn],:] = V_0.dofmap.cell_dofs(cells_[nn])
+        basis_matrix_full[index_points_[nn],:] = basis_matrix[nn,:]
+
+    cell_dofs_ = cell_dofs.astype(int) ###### REDUCE HERE
+
+    # ====== CREATE A PESTc MATRIX FROM THE TABULATED LAGRANGE BASIS VALUES ===== #
+    I = PETSc.Mat().create(comm=MPI.COMM_WORLD)
+    I.setSizes((len(x_1), len(x_0)))
+    I.setUp()
+    for i in range(0,len(x_1)):
+        for j in range(0,len(basis_matrix[0,:])):
+            I.setValue(i,cell_dofs_[i,j],basis_matrix_full[i,j])
+
+    return I
+
+
+
+
 def get_nn_interpolation_matrix(pts1,pts2):
     '''return a nearest-neighbor interpolation matrix from pts1 to pts2'''
     interpolation_matrix = np.zeros((pts2.shape[0],pts1.shape[0]))

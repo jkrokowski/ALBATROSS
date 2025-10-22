@@ -4,7 +4,7 @@ from mpi4py import MPI
 import basix
 from petsc4py import PETSc
 import pyvista
-from ALBATROSS.nonmatching_utils import celltags_to_dofs,get_bbtrees,get_interpolation_matrix,get_collision_celltags
+from ALBATROSS.nonmatching_utils import celltags_to_dofs,get_bbtrees,get_interpolation_matrix,get_collision_celltags,derivative_of_interpolation_matrix_nonmatching_meshes
 
 def plot_meshes(source_mesh, target_mesh):
     """Plot the source and target meshes to visualize their overlap using PyVista."""
@@ -39,11 +39,13 @@ def get_overlapping_cells(target_mesh,source_mesh):
 
 def test_interpolation_matrix():
     # Create two overlapping meshes
-    N_source = 3
-    N_target = 4
-    source_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0, 0], [1, 1]], [N_source, N_source], mesh.CellType.triangle)
-    target_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0.5, 0.5], [1.5, 1.5]], [N_target ,N_target], mesh.CellType.triangle)
+    N_source = 2
+    N_target = 2
+    source_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0, 0], [1, 1]], [N_source, N_source], mesh.CellType.quadrilateral)
+    target_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0.25, 0.25], [1.5, 1.5]], [N_target ,N_target], mesh.CellType.quadrilateral)
     
+    plot_meshes(source_mesh,target_mesh)
+
     # Define function spaces
     source_space = fem.functionspace(source_mesh, ("CG", 1))
     target_space = fem.functionspace(target_mesh, ("CG", 1))
@@ -54,7 +56,8 @@ def test_interpolation_matrix():
 
     # Construct interpolation matrix (replace with your implementation)
     interpolation_matrix = get_interpolation_matrix(target_space, source_space)
-
+    interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,source_space)
+    
     # Verify the matrix type
     assert isinstance(interpolation_matrix, PETSc.Mat), "Interpolation matrix must be a PETSc matrix."
 
