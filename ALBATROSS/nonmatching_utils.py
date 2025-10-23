@@ -907,36 +907,51 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function s
 
     #tabulate the geometry basis functions and geometry basis function derivatives:
     bas_geom_tab =  bas_geom.tabulate(1, x0_ref)
-    Nxy_0 = bas_geom_tab[0,:,:,0]
+    basis_matrix = bas_geom_tab[0,:,:,0]
     dNgeom_dxy = bas_geom_tab[1:,:,:,0]
     dphi_dxy = bas_field.tabulate(1, x0_ref)[1:,:,:,0]
 
     #compute local geometry sensitivity on mesh 0 at the physical locations of the mesh 1 points using the pulled back coords:
     for i in range(len(cells_)):
+
         #get the dofs of mesh 0 cells:
         geom_dofs  = list(msh_0.geometry.dofmap[cells_[i]])
+
         #get the mesh 0 nodal coordinates for the cell:
         X0 = msh_0.geometry.x[geom_dofs]
+
         #use the derivative of the geometry basis functions and the nodal coordinates to construct the cellwise Jacobian:
         J0 = dNgeom_dxy[:,i,:]@X0[:,:2]
         #invert to map from the reference domain back to physical space
         invJ0 = np.linalg.inv(J0)
-
         #construct local geometric sensitivity operator from field basis function derivatives and geometry inverse jacobian
         B0 = dphi_dxy[:,i,:].T@invJ0
 
-        #find reference coordinate of the mesh nodes
+        #find reference coordinate of the mesh 0 nodes
         xA00_ref = msh_0.geometry.cmap.pull_back(X0, msh_0.geometry.x[geom_dofs])
-
+        
         #tabulate the basis function values at these mesh 0 nodes (different than the reference coords of the mesh 1 nodes)
-        NxA00 = bas_geom.tabulate(0, xA00_ref)[0,:,:,0]
+        N0 = bas_geom.tabulate(0, x0_ref)[0,:,:,0]
+        
+        #find reference coordinate of the mesh 1 nodes
+        xC00_ref = msh_1.geometry.cmap.pull_back(np.array([points_on_proc_[i,:]]), msh_1.geometry.x[index_points_])
+        
+        #tabulate the basis function values at these mesh 0 nodes (different than the reference coords of the mesh 1 nodes)
+        N1 = bas_geom.tabulate(0, xC00_ref)[0,:,:,0]
         
         #use geometry basis functions to relate the local geometric sensitivity of the interpolation operator to the mesh coordinates
-        dP0dX0 = - B0.T @ NxA00 #this is the interpolation operator design sensitivity to the mesh0 nodes
-        dP0dX1 = B0.T @ Nxy_0[i] #this is the interpolation operator design sensitivity to the mesh1 node?
-        
-
-
+        # dP0dX0 = - B0.T @ NxA00 #this is the interpolation operator design sensitivity to the mesh0 nodes
+        # dP0dX1 = B0.T @ NxC00 #this is the interpolation operator design sensitivity to the mesh1 node?
+        # dP0dX0 = -dphi_dxy[:,i,:] @ N0.T
+        # dP0dX1 = dphi_dxy[:,i,:] @ N1.T
+        dP0dX0 = -B0.T * basis_matrix[i] #this is the interpolation operator design sensitivity to the mesh0 nodes
+        dP0dX1 = B0.T * basis_matrix[i] #this is the interpolation operator design sensitivity to the mesh1 node?
+        print("cell ",i)
+        print("dofs: ", geom_dofs)
+        print("dPdX0:")
+        print(dP0dX0)
+        print("dPdX1:")
+        print(dP0dX1)
         print()
 
     cell_dofs         = np.zeros((len(x_1), len(basis_matrix[0,:])))

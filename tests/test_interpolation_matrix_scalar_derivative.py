@@ -5,6 +5,7 @@ import basix
 from petsc4py import PETSc
 import pyvista
 from ALBATROSS.nonmatching_utils import celltags_to_dofs,get_bbtrees,get_interpolation_matrix,get_collision_celltags,derivative_of_interpolation_matrix_nonmatching_meshes
+from ALBATROSS.petsc_utils import convert_petsc_to_numpy
 
 def plot_meshes(source_mesh, target_mesh):
     """Plot the source and target meshes to visualize their overlap using PyVista."""
@@ -57,6 +58,12 @@ def test_interpolation_matrix():
     # Construct interpolation matrix (replace with your implementation)
     interpolation_matrix = get_interpolation_matrix(target_space, source_space)
     interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,source_space)
+    dx= 0.0001
+    source_mesh.geometry.x[1,0] += dx
+    # target_mesh.geometry.x[0,0] += dx
+    interpolation_matrix_dx = get_interpolation_matrix(target_space, source_space)
+
+    dIdx = (convert_petsc_to_numpy(interpolation_matrix_dx)-convert_petsc_to_numpy(interpolation_matrix))/dx
     
     # Verify the matrix type
     assert isinstance(interpolation_matrix, PETSc.Mat), "Interpolation matrix must be a PETSc matrix."
