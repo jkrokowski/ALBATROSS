@@ -45,7 +45,7 @@ def test_interpolation_matrix():
     source_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0, 0], [1, 1]], [N_source, N_source], mesh.CellType.quadrilateral)
     target_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0.25, 0.25], [1.5, 1.5]], [N_target ,N_target], mesh.CellType.quadrilateral)
     
-    plot_meshes(source_mesh,target_mesh)
+    # plot_meshes(source_mesh,target_mesh)
 
     # Define function spaces
     source_space = fem.functionspace(source_mesh, ("CG", 1))
@@ -59,8 +59,8 @@ def test_interpolation_matrix():
     interpolation_matrix = get_interpolation_matrix(target_space, source_space)
     interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,source_space)
     dx= 0.0001
-    source_mesh.geometry.x[1,0] += dx
-    # target_mesh.geometry.x[0,0] += dx
+    # source_mesh.geometry.x[8,0] += dx
+    target_mesh.geometry.x[3,0] += dx
     interpolation_matrix_dx = get_interpolation_matrix(target_space, source_space)
 
     dIdx = (convert_petsc_to_numpy(interpolation_matrix_dx)-convert_petsc_to_numpy(interpolation_matrix))/dx

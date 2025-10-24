@@ -925,8 +925,9 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function s
         #invert to map from the reference domain back to physical space
         invJ0 = np.linalg.inv(J0)
         #construct local geometric sensitivity operator from field basis function derivatives and geometry inverse jacobian
-        B0 = dphi_dxy[:,i,:].T@invJ0
-
+        # B0 = dphi_dxy[:,i,:].T@invJ0
+        B0 = (invJ0@dphi_dxy[:,i,:]).T
+        
         #find reference coordinate of the mesh 0 nodes
         xA00_ref = msh_0.geometry.cmap.pull_back(X0, msh_0.geometry.x[geom_dofs])
         
@@ -945,7 +946,7 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function s
         # dP0dX0 = -dphi_dxy[:,i,:] @ N0.T
         # dP0dX1 = dphi_dxy[:,i,:] @ N1.T
         dP0dX0 = -B0.T * basis_matrix[i] #this is the interpolation operator design sensitivity to the mesh0 nodes
-        dP0dX1 = B0.T * basis_matrix[i] #this is the interpolation operator design sensitivity to the mesh1 node?
+        dP0dX1 = B0.T #this is the interpolation operator design sensitivity to the mesh1 node?
         print("cell ",i)
         print("dofs: ", geom_dofs)
         print("dPdX0:")
