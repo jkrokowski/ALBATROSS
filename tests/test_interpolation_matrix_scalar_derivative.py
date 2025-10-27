@@ -57,14 +57,23 @@ def test_interpolation_matrix():
 
     # Construct interpolation matrix (replace with your implementation)
     interpolation_matrix = get_interpolation_matrix(target_space, source_space)
-    interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,source_space)
+    interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,source_space,wrt='FROM' \
+    '')
+    interpolation_matrix_derivative.assemble()
+    dIdx = convert_petsc_to_numpy(interpolation_matrix_derivative)
+    
     dx= 0.0001
-    # source_mesh.geometry.x[8,0] += dx
-    target_mesh.geometry.x[3,0] += dx
+    dof = 6
+    source_mesh.geometry.x[dof,0] += dx
+    # target_mesh.geometry.x[dof,0] += dx
     interpolation_matrix_dx = get_interpolation_matrix(target_space, source_space)
 
-    dIdx = (convert_petsc_to_numpy(interpolation_matrix_dx)-convert_petsc_to_numpy(interpolation_matrix))/dx
+    dIdx_fd = (convert_petsc_to_numpy(interpolation_matrix_dx)-convert_petsc_to_numpy(interpolation_matrix))/dx
     
+
+    print('row ',dof,':')
+    print('dIdx:',dIdx[dof,:])
+    print('dIdx finite difference:',dIdx_fd[dof,:])
     # Verify the matrix type
     assert isinstance(interpolation_matrix, PETSc.Mat), "Interpolation matrix must be a PETSc matrix."
 
