@@ -1831,7 +1831,7 @@ class CoupledCrossSection:
         return
     
     def _get_warping_functions(self):
-        #construct assemble the penalty term mass matrices
+        #construct the penalty term mass matrices
         self._construct_coupling()
 
         #construct each region's system

@@ -142,7 +142,28 @@ meshSmoothing_C = ALBATROSS.csdl_utils.EllipticSmoothing(mortar_mesh.msh,
 outputs_mm_C = meshSmoothing_C.evaluate(inputs_mm_C)
 
 
+#======= construct coupled system =========#
+#get interpolation matrices
+inputs_interp = csdl.VariableGroup()
+inputs_interp.xy_A = xy_A
+inputs_interp.xy_A_interior = xy_A_interior
+
+nonmatchingdata = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm)
+
+outputs_interp = nonmatchingdata.evaluate(inputs_interp)
+P_A = outputs_interp.P_A
+P_B = outputs_interp.P_B
+
+#get mortar mesh assembled matrices
+
+
+
+
 #===== warping function computation =======#
+
+
+
+
 #we have to construct a single operation for the coupled warping function computation:
 inputs_w = csdl.VariableGroup()
 inputs_w.xy_A = inputs_mm_A.xy

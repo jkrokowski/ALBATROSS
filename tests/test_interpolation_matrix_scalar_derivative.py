@@ -63,7 +63,8 @@ def test_interpolation_matrix():
     dIdx = convert_petsc_to_numpy(interpolation_matrix_derivative)
     
     dx= 0.0001
-    dof = 6
+    ndof = 2
+    dof = [1,3]
     source_mesh.geometry.x[dof,0] += dx
     # target_mesh.geometry.x[dof,0] += dx
     interpolation_matrix_dx = get_interpolation_matrix(target_space, source_space)
