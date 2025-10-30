@@ -458,10 +458,54 @@ class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
 
 
 
+class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
+    '''
+    '''
+    def __init__(self,xs,mesh_id=None,boundary_nodes=None,interior_nodes=None):
+        super().__init__()
+        self.xs = xs
+        self.mesh_id = mesh_id
+
+        if boundary_nodes is not None:
+            self.boundary_nodes = boundary_nodes
+
+        if interior_nodes is not None:
+            self.interior_nodes = interior_nodes
+
+    def evaluate(self,inputs: csdl.VariableGroup):
+        self.declare_input('xy',inputs.xy)
+        self.declare_input('xy_interior',inputs.xy_interior)
+        
+        outputs = csdl.VariableGroup()
+        outputs.K = self.create_output('K',self.xs.system_size[self.mesh_id][self.mesh_id])
+        outputs.K.name = 'foreground_stiffness_matrix_'+str(self.mesh_id)
+        outputs.C = self.create_output('C',self.xs.system_size[self.mesh_id][-1])
+        outputs.C.name = 'foreground_constraint_matrix_'+str(self.mesh_id)
+
+        return outputs
+
+    def compute(self,inputs,outputs):
+        #update boundary nodes:
+        if self.boundary_nodes is not None: 
+            self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+
+        #update interior nodes
+        if self.interior_nodes is not None: 
+            self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+        else: 
+            self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+        
+        self.xs._
+
+    def compute_jacvec_product(self, inputs, outputs, derivatives, d_inputs, d_outputs, mode):
+        
+        return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)
+    
+
+
 class WarpingFunctionStateCoupled(csdl.experimental.CustomImplicitOperation):
     '''
     inputs: nodal positions of cross-sectional meshes (both overlapping and mortarmesh)
-    
     '''
     def __init__(self,xs):
         super().__init__()

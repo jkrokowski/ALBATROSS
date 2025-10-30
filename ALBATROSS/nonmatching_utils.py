@@ -355,7 +355,7 @@ def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
     loop_id = 1
     surface_tags = []
 
-    def estimate_mesh_resolution(poly, elements_across=30):
+    def estimate_mesh_resolution(poly, elements_across=10):
         """Estimate a good GMSH mesh resolution based on geometry size."""
         xmin, ymin = np.array(poly.exterior.coords[:-1]).min(axis=0)
         xmax, ymax = np.array(poly.exterior.coords[:-1]).max(axis=0)
