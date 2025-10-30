@@ -107,7 +107,7 @@ class CrossSection:
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
         self.VX = functionspace(self.msh,("CG",self.degree,(self.tdim,)))
-        self.dX = Argument(self.VX,0) #direction for spatial derivative
+        self.dX = Argument(self.VX,2) #direction for spatial derivative
         self.n = FacetNormal(self.msh)
 
         
@@ -368,10 +368,10 @@ class CrossSection:
             # + Tbreve
         
         #construct residual
-        full_eq_set = eq1+eq2+eq3+eq4
+        self.F00 = eq1+eq2+eq3+eq4
 
         #get the stiffness matrix form:
-        a00 = ufl.derivative(full_eq_set,self.u,self.du)
+        a00 = ufl.derivative(self.F00,self.u,self.du)
 
         if return_form is False:
             self.a00 = a00
@@ -390,12 +390,17 @@ class CrossSection:
         if lmbda is None:
             lmbda = self.lmbda
         #main system block
+        F00 = self.F00
         a00 = self.a00
+
         
         #construct constraint forms
-        a01 = ufl.derivative(self._construct_constraint_form(lmbda,self.v),self.lmbda,self.dlmbda)
-        a10 = ufl.derivative(self._construct_constraint_form(self.mu,u),self.u,self.du)
+        F01 = self._construct_constraint_form(lmbda,self.v)
+        F10 = self._construct_constraint_form(self.mu,u)
+        a01 = ufl.derivative(F01,self.lmbda,self.dlmbda)
+        a10 = ufl.derivative(F10,self.u,self.du)
 
+        F =  [[F00,F01],[F10,None]]
         a = [[a00, a01], [a10, None]]
 
         #construct RHS form vector with no body force (e.g. unchanged for each mode)
@@ -413,11 +418,26 @@ class CrossSection:
         #since we have different RHS's, return the list of L1's i
         L = [L0,L1_list]
 
+        self.F = F
         self.a_form = a
         self.L_form = L
 
         # return a,L
+    def _assemble_block(self,block=[0,0]):
+        '''
+        return the assembled petsc mat
+        '''
+        mat = fem.petsc.assemble_matrix(fem.form(self.a_form[block[0]][block[1]]))
+        mat.assemble()
+        
+        return mat
     
+    
+    def _return_rhs_vec(self,vec_num=0):
+        petsc_vec = fem.petsc.assemble_vector(fem.form(self.L_form[1][vec_num]))
+        return petsc_vec.array
+    
+
     def _set_up_solver(self):
 
         #assemble matrix and vector
@@ -479,15 +499,13 @@ class CrossSection:
             # a10_form = self._construct_constraint_form(self.mu,uh)
 
             #main system residual
-            residual0 = self.a_form[0][0] + self.a_form[0][1] - L0
+            residual0 = self.F[0][0] + self.F[0][1] - L0
             # residual00 = a00_form + a01_form - L0 
             #lagrange multiplier system residual
             # residual1 = a10_form - L1
-            residual1 = self.a_form[1][0] - L1
+            residual1 = self.F[1][0] - L1
 
             self.residuals.append((residual0,residual1))
-
-            # print(f'lagrange multipliers for mode{idx_k}:{x_local[1]}')
 
 
     def _compute_xs_stiffness_matrix(self):             
@@ -1829,6 +1847,10 @@ class CoupledCrossSection:
         #construct mortar mesh functionspace and fxns:
         self._construct_mortar_mesh_fxns()
 
+        #prepare the system sizes information:
+        self._get_system_sizes()
+
+
     def _set_penalty_values(self):
         h_avg_list = []
         for XS in self.XSs:
@@ -1845,7 +1867,7 @@ class CoupledCrossSection:
         #construct each region's system
         self._construct_system_forms()
         self._organize_system_forms()
-        self._get_system_sizes()
+        # self._get_system_sizes()
         self._get_system_matrices()
         self._get_system_vectors()
 
@@ -2071,6 +2093,9 @@ class CoupledCrossSection:
             # uC = self.collisions[collision].u
             # vC = self.collisions[collision].v
             # dx_C = self.collisions[collision].dx
+
+            self.collisions[collision].mortar_mesh.size = VC.dofmap.index_map.size_global * VC.dofmap.index_map_bs
+
 
     def _construct_interpolation_operators(self):
         for collision in self.collisions:

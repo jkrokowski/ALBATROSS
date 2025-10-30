@@ -166,7 +166,10 @@ inputs_B = csdl.VariableGroup()
 inputs_B.xy = xy_B
 inputs_B.xy_interior = xy_B_interior
 
-conformal_problem_B = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,mesh=1)
+conformal_problem_B = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
+                                                                        mesh_id=1,
+                                                                        boundary_nodes=XSs[1].boundary_nodes,
+                                                                        interior_nodes=XSs[1].interior_nodes)
 
 outputs_B = conformal_problem_B.evaluate(inputs_B)
 
@@ -177,42 +180,56 @@ F_B = csdl.Variable(value=np.zeros(K_B.shape[0]))
 
 #get interpolation matrices
 inputs_interp_A = csdl.VariableGroup()
-inputs_interp_A.xy_A = xy_A
-inputs_interp_A.xy_A_interior = xy_A_interior
-inputs_interp_A.xy_C = xy_C
-inputs_interp_A.xy_C_interior = xy_C_interior
+inputs_interp_A.xy_foreground = xy_A
+inputs_interp_A.xy_interior_foreground = xy_A_interior
+inputs_interp_A.xy_mortar = xy_C
+inputs_interp_A.xy_interior_mortar = xy_C_interior
 
-nonmatchingdata_A = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,mesh=0,collision=(0,1))
+nonmatchingdata_A = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
+                                                                        mesh_id=0,
+                                                                        collision=(0,1),
+                                                                        foreground_boundary = XSs[0].boundary_nodes,
+                                                                        foreground_interior = XSs[0].interior_nodes,
+                                                                        mortar_boundary = mortar_mesh.boundary_nodes,
+                                                                        mortar_interior = mortar_mesh.interior_nodes)
 
 outputs_interp_A = nonmatchingdata_A.evaluate(inputs_interp_A)
 
-P_A = outputs_interp_A.P_A
+P_A = outputs_interp_A.P
 
 inputs_interp_B = csdl.VariableGroup()
-inputs_interp_B.xy_A = xy_B
-inputs_interp_B.xy_A_interior = xy_B_interior
-inputs_interp_B.xy_C = xy_C
-inputs_interp_B.xy_C_interior = xy_C_interior
+inputs_interp_B.xy_foreground = xy_B
+inputs_interp_B.xy_interior_foreground = xy_B_interior
+inputs_interp_B.xy_mortar = xy_C
+inputs_interp_B.xy_interior_mortar = xy_C_interior
 
-nonmatchingdata_B = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,mesh=1,collision=(0,1))
+nonmatchingdata_B = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
+                                                                        mesh_id=1,
+                                                                        collision=(0,1),
+                                                                        foreground_boundary = XSs[1].boundary_nodes,
+                                                                        foreground_interior = XSs[1].interior_nodes,
+                                                                        mortar_boundary = mortar_mesh.boundary_nodes,
+                                                                        mortar_interior = mortar_mesh.interior_nodes)
 
 outputs_interp_B = nonmatchingdata_B.evaluate(inputs_interp_B)
 
-P_B = outputs_interp_B.P_B
+P_B = outputs_interp_B.P
 
 #get mortar mesh coupling matrices
 inputs_C = csdl.VariableGroup()
-inputs_C.xy_C = xy_C
-inputs_C.xy_C_interior = xy_C_interior
+inputs_C.xy = xy_C
+inputs_C.xy_interior = xy_C_interior
 
-coupling_terms = ALBATROSS.csdl_utils.CrossSectionCouplingComponents(xs=TXS_nm)
+coupling_terms = ALBATROSS.csdl_utils.CrossSectionCouplingComponents(xs=TXS_nm,
+                                                                     collision=(0,1),
+                                                                     boundary_nodes=mortar_mesh.boundary_nodes,
+                                                                     interior_nodes=mortar_mesh.interior_nodes)
 
 outputs_C = coupling_terms.evaluate(inputs_C)
 
-M_C = outputs_C.M_C
-S_C = outputs_C.S_C
+M_C = outputs_C.MC
+S_C = outputs_C.SC
 # F_C = outputs_C.F_C
-
 
 #===== warping function computation =======#
 #blocked system:
@@ -223,17 +240,21 @@ A11 = K_B + P_B.T() @ (M_C + S_C) @ P_B
 
 A22 = csdl.Variable(value=np.zeros((C_A.shape[0],C_A.shape[0])))
 
-A = csdl.concatenate([[A00,A01,C_A.T()],
+A = csdl.blockmat([[A00,A01,C_A.T()],
                       [A10,A11,C_B.T()],
-                      [C_A,C_B,]])
+                      [C_A,C_B,A22]])
 
-warping_solutions = csdl.Variable(shape=(n_W,6))
+# warping_solutions = csdl.Variable(shape=(n_W,6))
+# solution_list = []
 
-for i in range(6):
-    F_C = _ #set to vector of 0s where 
-    b = csdl.concatenate([[F_A],[F_B],[F_C]])
 
-    warping_solution[:,6] = csdl.solve_linear(A,b)
+
+F_C = csdl.Variable(value=TXS_nm.XSs[0]._return_rhs_vec(0)) #set to vector of 0s where 
+b = csdl.concatenate((F_A,F_B,F_C))
+
+solution = csdl.solve_linear(A,b)
+
+# solution_list.append(csdl.solve_linear(A,b))
 
 
 

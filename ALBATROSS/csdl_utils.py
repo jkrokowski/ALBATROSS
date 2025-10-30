@@ -373,60 +373,67 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
 
 class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
     '''
+    return the interpolation matrix that maps the dofs from mesh = mesh_id to 
+    the mortar mesh corresponding to collision = collsion
+
+
     '''
-    def __init__(self,xs,boundary_nodes=None,interior_nodes=None,check_partials='False'):
+    def __init__(self,xs,
+                    mesh_id=0,
+                    collision=(0,1),
+                    foreground_boundary = None,
+                    foreground_interior = None,
+                    mortar_boundary = None,
+                    mortar_interior = None):
         super().__init__()
         self.xs = xs
-        self.check_partials =check_partials
+        self.mesh_id = mesh_id
+        self.collision = collision
 
-        if boundary_nodes is not None:
-            self.boundary_nodes = boundary_nodes
-
-        if interior_nodes is not None:
-            self.interior_nodes = interior_nodes
-
+        self.foreground_boundary = foreground_boundary
+        self.foreground_interior = foreground_interior
+        self.mortar_boundary = mortar_boundary
+        self.mortar_interior = mortar_interior
 
     def evaluate(self,inputs: csdl.VariableGroup):
-        # assign method inputs to input dictionary
-        if self.check_partials != 'w':
-            self.declare_input('xy',inputs.xy)
-            self.declare_input('xy_interior',inputs.xy_interior)
-        if self.check_partials != 'x':
-            self.declare_input('w',inputs.w)
-            self.declare_input('lmbda',inputs.lmbda)
-        
+        self.declare_input('xy_foreground',inputs.xy_foreground)
+        self.declare_input('xy_interior_foreground',inputs.xy_interior_foreground)
+        self.declare_input('xy_mortar',inputs.xy_mortar)
+        self.declare_input('xy_interior_mortar',inputs.xy_interior_mortar)
+
         # construct output of the model
         outputs = csdl.VariableGroup()
-        outputs.K = self.create_output('K', (6,6))
-        outputs.K.name = 'beam stiffness matrix'
-        outputs.A = self.create_output('A',(1,))
-        outputs.A.name = 'beam xs area'
+        outputs.P = self.create_output('P', (self.xs.collisions[self.collision].mortar_mesh.size,
+                                             self.xs.system_sizes[self.mesh_id][self.mesh_id][0]))
+        outputs.P.name = 'interpolation_matrix'+str(self.mesh_id)
 
         return outputs
     
     def compute(self, inputs, outputs):
         print('compute beam matrix from warping function state')
-        if self.check_partials != 'w':
-            #update boundary nodes:
-            if self.boundary_nodes is not None: 
-                self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
-
-            #update interior nodes
-            if self.interior_nodes is not None: 
-                self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-            else: 
-                self.xs.msh.geometry.x[:,0:2]=inputs['xy']
-
-        if self.check_partials != 'x':
-            for i in range(6):
-                self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
-                self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+        #update foreground mesh:
+        #update boundary nodes:
+        self.xs.XSs[self.mesh_id].msh.geometry.x[self.foreground_boundary,0:2]=inputs['xy_foreground']
+        #update interior nodes
+        self.xs.XSs[self.mesh_id].msh.geometry.x[self.foreground_interior,0:2]=inputs['xy_interior_foreground']
         
-        # self.xs.plot_mesh()
-        self.xs._compute_xs_stiffness_matrix()
+        #update foreground mesh:
+        #update boundary nodes:
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.mortar_boundary,0:2]=inputs['xy_mortar']
+        #update interior nodes
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.mortar_interior,0:2]=inputs['xy_interior_mortar']
 
-        outputs['K'] = self.xs.K
-        outputs['A'] = self.xs.A
+        #get the interpolation matrix:
+        #TODO: this loops over each collision and reconstruct the interpolation matrix each time, 
+        #       this can be made more efficient
+        self.xs._construct_interpolation_operators()
+
+        if self.collision.index(self.mesh_id) == 0:
+            P_petsc = self.xs.collisions[self.collision].PA
+        elif self.collision.index(self.mesh_id) == 1:
+            P_petsc = self.xs.collisions[self.collision].PB
+
+        outputs['P'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(P_petsc)
     
     def compute_derivatives(self, inputs, outputs, derivatives):
         print('compute beam matrix derivatives...')
@@ -465,40 +472,84 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         super().__init__()
         self.xs = xs
         self.mesh_id = mesh_id
-
-        if boundary_nodes is not None:
-            self.boundary_nodes = boundary_nodes
-
-        if interior_nodes is not None:
-            self.interior_nodes = interior_nodes
+        self.boundary_nodes = boundary_nodes
+        self.interior_nodes = interior_nodes
 
     def evaluate(self,inputs: csdl.VariableGroup):
         self.declare_input('xy',inputs.xy)
         self.declare_input('xy_interior',inputs.xy_interior)
         
         outputs = csdl.VariableGroup()
-        outputs.K = self.create_output('K',self.xs.system_size[self.mesh_id][self.mesh_id])
+        outputs.K = self.create_output('K',self.xs.system_sizes[self.mesh_id][self.mesh_id])
         outputs.K.name = 'foreground_stiffness_matrix_'+str(self.mesh_id)
-        outputs.C = self.create_output('C',self.xs.system_size[self.mesh_id][-1])
+        outputs.C = self.create_output('C',self.xs.system_sizes[-1][self.mesh_id])
         outputs.C.name = 'foreground_constraint_matrix_'+str(self.mesh_id)
 
         return outputs
 
     def compute(self,inputs,outputs):
         #update boundary nodes:
-        if self.boundary_nodes is not None: 
-            self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        self.xs.XSs[self.mesh_id].msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
 
         #update interior nodes
-        if self.interior_nodes is not None: 
-            self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        else: 
-            self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+        self.xs.XSs[self.mesh_id].msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+
+        #construct forms for uncoupled problem
+        self.xs.XSs[self.mesh_id]._construct_xs_form()
+        self.xs.XSs[self.mesh_id]._construct_KKT_forms()
+
+        K_petsc = self.xs.XSs[self.mesh_id]._assemble_block([0,0])
+        C_petsc = self.xs.XSs[self.mesh_id]._assemble_block([1,0])
         
-        self.xs._
+        outputs['K'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(K_petsc)
+        outputs['C'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(C_petsc)
 
     def compute_jacvec_product(self, inputs, outputs, derivatives, d_inputs, d_outputs, mode):
+        #TODO: needs to be implemented
+        return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)
+
+
+class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
+    '''
+    '''
+    def __init__(self,xs,collision=None,boundary_nodes=None,interior_nodes=None):
+        super().__init__()
+        self.xs = xs
+        self.collision = collision
+        self.boundary_nodes = boundary_nodes
+        self.interior_nodes = interior_nodes
+
+    def evaluate(self,inputs: csdl.VariableGroup):
+        self.declare_input('xy',inputs.xy)
+        self.declare_input('xy_interior',inputs.xy_interior)
         
+        outputs = csdl.VariableGroup()
+        size_c = self.xs.collisions[self.collision].mortar_mesh.size
+        outputs.MC = self.create_output('MC',(size_c,size_c))
+        outputs.MC.name = 'mass_coupling_matrix'+str(self.collision[0])+str(self.collision[1])
+        outputs.SC = self.create_output('SC',(size_c,size_c))
+        outputs.SC.name = 'boundary_coupling_matrix'+str(self.collision[0])+str(self.collision[1])
+
+        return outputs
+
+    def compute(self,inputs,outputs):
+        #update boundary nodes:
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+
+        #update interior nodes
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+
+        #construct forms for uncoupled problem
+        self.xs._construct_coupling_terms()
+
+        MC_petsc = self.xs.collisions[self.collision].MC
+        SC_petsc = self.xs.collisions[self.collision].S_C
+                
+        outputs['MC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(MC_petsc)
+        outputs['SC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(SC_petsc)
+
+    def compute_jacvec_product(self, inputs, outputs, derivatives, d_inputs, d_outputs, mode):
+        #TODO: needs to be implemented
         return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)
     
 
