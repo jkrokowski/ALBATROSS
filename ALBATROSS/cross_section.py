@@ -2539,7 +2539,7 @@ class CoupledCrossSection:
             # self.S += self.XSs[i].S
             # self.K += self.XSs[i].K
         
-        self.K = self.K1.T @ np.linalg.inv(self.K2) @ self.K1
+        self.K = self.K1 @ np.linalg.inv(self.K2) @ self.K1.T
            
 
     def get_overlap_area(self):

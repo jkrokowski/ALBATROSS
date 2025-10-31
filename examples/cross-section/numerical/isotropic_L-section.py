@@ -4,10 +4,10 @@ import ALBATROSS
 import numpy as np
 
 #create mesh
-N = 3
+N = 2
 H = 1
-W= 1.2
-tfh = 0.2
+W= 1
+tfh = 0.1
 tfw = 0.1
 
 dims = [H,W,tfh,tfw]

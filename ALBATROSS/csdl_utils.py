@@ -558,6 +558,7 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         super().__init__()
         self.xs = xs
         self.check_partials =check_partials
+        self.collision = collision
 
 
     def evaluate(self,inputs: csdl.VariableGroup):
@@ -576,35 +577,37 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         outputs = csdl.VariableGroup()
         outputs.K = self.create_output('K', (6,6))
         outputs.K.name = 'beam stiffness matrix'
-        outputs.A = self.create_output('A',(1,))
-        outputs.A.name = 'beam xs area'
+        # outputs.A = self.create_output('A',(1,))
+        # outputs.A.name = 'beam xs area'
 
         return outputs
     
     def compute(self, inputs, outputs):
         print('compute beam matrix from warping function state')
-        #UPDATE FOREGROUND MESHES:
-        self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].boundary_nodes,0:2]=inputs['xy_A']
-        self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].interior_nodes,0:2]=inputs['xy_A_interior']
+        #UPDATE FOREGROUND MESHES GEOMETRY:
+        self.xs.XSs[self.collision[0]].msh.geometry.x[self.xs.XSs[self.collision[0]].boundary_nodes,0:2]=inputs['xy_A']
+        self.xs.XSs[self.collision[0]].msh.geometry.x[self.xs.XSs[self.collision[0]].interior_nodes,0:2]=inputs['xy_A_interior']
         
-        self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].boundary_nodes,0:2]=inputs['xy_B']
-        self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].interior_nodes,0:2]=inputs['xy_B_interior']
+        self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].boundary_nodes,0:2]=inputs['xy_B']
+        self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].interior_nodes,0:2]=inputs['xy_B_interior']
 
-        #UPDATE MORTAR MESH:
-        self.xs.collision[self.collision].mortar_mesh.msh.geometry.x[self.xs.collision[self.collision].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
-        self.xs.collision[self.collision].mortar_mesh.msh.geometry.x[self.collision[self.collision].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
+        #UPDATE MORTAR MESH GEOMETRY:
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
 
+        #UPDATE WARPING FUNCTIONS:
         for i in range(6):
             self.xs.XSs[self.collision[0]].warping_functions[i].x.array[:] = inputs['w_A'][:,i]
-            self.xs.XSs[self.collsion[1]].warping_functions[i].x.array[:] = inputs['w_B'][:,i]
             self.xs.XSs[self.collision[0]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+            
+            self.xs.XSs[self.collision[1]].warping_functions[i].x.array[:] = inputs['w_B'][:,i]
             self.xs.XSs[self.collision[1]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
         
         # self.xs.plot_mesh()
         self.xs._compute_xs_stiffness_matrix()
 
         outputs['K'] = self.xs.K
-        outputs['A'] = self.xs.A
+        # outputs['A'] = self.xs.A
     
     def compute_derivatives(self, inputs, outputs, derivatives):
         print('compute beam matrix derivatives...')

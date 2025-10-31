@@ -8,7 +8,7 @@ default_scalar_type = PETSc.ScalarType
 
 
 #=================== mesh construction ==================#
-N = 4
+N = 2
 offset = 1
 
 h_to_f = 10
@@ -33,6 +33,7 @@ mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= W
+mesh_1.geometry.x[:,0] += -0.45
 mesh_1.name = 'w'
 
 #================= initialize individual cross-sections ===========#
@@ -46,7 +47,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1)
 TXS_nm.plot_meshes()
 
 #identify meshes:

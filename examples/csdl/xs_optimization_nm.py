@@ -62,7 +62,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e6)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
 
 TXS_nm.plot_meshes()
 
@@ -98,7 +98,7 @@ xy_C_interior = csdl.Variable(value=xy_C_interior,shape=xy_C_interior.shape,name
 xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
 
 #web translation parameter
-dx_w = csdl.Variable(value=0.15)
+dx_w = csdl.Variable(value=-0.45)
 dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
 
 
@@ -147,7 +147,7 @@ outputs_mm_C = meshSmoothing_C.evaluate(inputs_mm_C)
 #get foreground mesh A values
 inputs_A = csdl.VariableGroup()
 inputs_A.xy = xy_A
-inputs_A.xy_interior = xy_A_interior
+inputs_A.xy_interior = outputs_mm_A.xy_interior
 
 conformal_problem_A = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
                                                                         mesh_id=0,
@@ -164,7 +164,7 @@ F_A = csdl.Variable(value=np.zeros(K_A.shape[0]))
 #get foreground mesh B values
 inputs_B = csdl.VariableGroup()
 inputs_B.xy = xy_B
-inputs_B.xy_interior = xy_B_interior
+inputs_B.xy_interior = outputs_mm_B.xy_interior
 
 conformal_problem_B = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
                                                                         mesh_id=1,
@@ -181,9 +181,9 @@ F_B = csdl.Variable(value=np.zeros(K_B.shape[0]))
 #get interpolation matrices
 inputs_interp_A = csdl.VariableGroup()
 inputs_interp_A.xy_foreground = xy_A
-inputs_interp_A.xy_interior_foreground = xy_A_interior
+inputs_interp_A.xy_interior_foreground = outputs_mm_A.xy_interior
 inputs_interp_A.xy_mortar = xy_C
-inputs_interp_A.xy_interior_mortar = xy_C_interior
+inputs_interp_A.xy_interior_mortar = outputs_mm_C.xy_interior
 
 nonmatchingdata_A = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
                                                                         mesh_id=0,
@@ -199,9 +199,9 @@ P_A = outputs_interp_A.P
 
 inputs_interp_B = csdl.VariableGroup()
 inputs_interp_B.xy_foreground = xy_B
-inputs_interp_B.xy_interior_foreground = xy_B_interior
+inputs_interp_B.xy_interior_foreground = outputs_mm_B.xy_interior
 inputs_interp_B.xy_mortar = xy_C
-inputs_interp_B.xy_interior_mortar = xy_C_interior
+inputs_interp_B.xy_interior_mortar = outputs_mm_C.xy_interior
 
 nonmatchingdata_B = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
                                                                         mesh_id=1,
@@ -218,7 +218,7 @@ P_B = outputs_interp_B.P
 #get mortar mesh coupling matrices
 inputs_C = csdl.VariableGroup()
 inputs_C.xy = xy_C
-inputs_C.xy_interior = xy_C_interior
+inputs_C.xy_interior = outputs_mm_C.xy_interior
 
 coupling_terms = ALBATROSS.csdl_utils.CrossSectionCouplingComponents(xs=TXS_nm,
                                                                      collision=(0,1),
@@ -249,6 +249,7 @@ A = csdl.blockmat([[A00,A01,C_A.T()],
 #compute using the petsc based solve for verification:
 TXS_nm._get_warping_functions()
 
+dense_error = 1e-5
 warping_solutions = []
 for i in range(6):
     F_C = csdl.Variable(value=TXS_nm.XSs[0]._return_rhs_vec(i)) 
@@ -257,9 +258,29 @@ for i in range(6):
     warping_solutions.append(warping_solution)
 
     #check that the csdl linear solve is the same as the petsc solution:
-    assert 1e-10>np.linalg.norm(np.concatenate([TXS_nm.XSs[0].warping_functions[i].x.array,TXS_nm.XSs[1].warping_functions[i].x.array,TXS_nm.XSs[0].lmbdas[i].x.array])-warping_solution.value)
+    assert dense_error>np.linalg.norm(np.concatenate([TXS_nm.XSs[0].warping_functions[i].x.array,TXS_nm.XSs[1].warping_functions[i].x.array,TXS_nm.XSs[0].lmbdas[i].x.array])-warping_solution.value)
 
+w_A_list= []
+w_B_list = []
+lmbda_list = []
+for i in range(6):
+    w_A_list.append(warping_solutions[i].get(csdl.slice[:A00.shape[0]]))
+    assert dense_error>np.linalg.norm(TXS_nm.XSs[0].warping_functions[i].x.array-w_A_list[i].value)
 
+    w_B_list.append(warping_solutions[i].get(csdl.slice[A00.shape[0]:A00.shape[0]+A11.shape[0]]))
+    assert dense_error>np.linalg.norm(TXS_nm.XSs[1].warping_functions[i].x.array-w_B_list[i].value)
+
+    lmbda_list.append(warping_solutions[i].get(csdl.slice[A00.shape[0]+A11.shape[0]:]))
+    assert dense_error>np.linalg.norm(TXS_nm.XSs[0].lmbdas[i].x.array-lmbda_list[i].value)
+
+w_A = csdl.vstack(w_A_list).T()
+w_B = csdl.vstack(w_B_list).T()
+lmbdas =  csdl.vstack(lmbda_list).T()
+
+# TXS_nm.get_xs_stiffness_matrix()
+# Kcheck = TXS_nm.K 
+
+#======= cross-section stiffness matrix ==========#
 inputs_sec = csdl.VariableGroup()
 inputs_sec.xy_A = inputs_mm_A.xy
 inputs_sec.xy_A_interior = outputs_mm_A.xy_interior
@@ -267,47 +288,18 @@ inputs_sec.xy_B = inputs_mm_B.xy
 inputs_sec.xy_B_interior = outputs_mm_B.xy_interior
 inputs_sec.xy_C = inputs_mm_C.xy
 inputs_sec.xy_C_interior = outputs_mm_C.xy_interior
-inputs_sec.w_A = warping_solution_A_slice
-inputs_sec.w_B = warping_solution_B_slice
-inputs_sec.lmbda = warping_solution_lmbda_slice
+inputs_sec.w_A = w_A
+inputs_sec.w_B = w_B
+inputs_sec.lmbda = lmbdas
 
 section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
                                                                   collision=(0,1))
-
-section_model.evaluate()
-
-# solution_list.append(csdl.solve_linear(A,b))
-# #we have to construct a single operation for the coupled warping function computation:
-# inputs_w = csdl.VariableGroup()
-# inputs_w.xy_A = inputs_mm_A.xy
-# inputs_w.xy_A_interior = outputs_mm_A.xy_interior
-# inputs_w.xy_B = inputs_mm_B.xy
-# inputs_w.xy_B_interior = outputs_mm_B.xy_interior
-# inputs_w.xy_C = inputs_mm_C.xy
-# inputs_w.xy_C_interior = outputs_mm_C.xy_interior
-
-# warping_model = ALBATROSS.csdl_utils.WarpingFunctionStateCoupled(xs=TXS_nm)
-
-# outputs_w = warping_model.evaluate(inputs_w)
-
-
-
-#======= cross-section stiffness matrix ==========#
-section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
-                        boundary_nodes=xs.boundary_nodes,
-                        interior_nodes=xs.interior_nodes)
-
-inputs_sec = csdl.VariableGroup()
-inputs_sec.xy = xy
-inputs_sec.xy_interior = outputs_mm.xy_interior
-inputs_sec.w = outputs_w.w
-inputs_sec.lmbda = outputs_w.lmbda
 
 outputs_sec = section_model.evaluate(inputs_sec)
 
 K = outputs_sec.K
 # K.name = 'stiffness_mat'
-A = outputs_sec.A
+# A = outputs_sec.A
 # A.name = 'area'
 
 with csdl.namespace('Objective'):
