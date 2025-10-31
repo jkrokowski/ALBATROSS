@@ -553,6 +553,101 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)
     
 
+class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
+    def __init__(self,xs,collision=(0,1),check_partials='False'):
+        super().__init__()
+        self.xs = xs
+        self.check_partials =check_partials
+
+
+    def evaluate(self,inputs: csdl.VariableGroup):
+        # assign method inputs to input dictionary
+        self.declare_input('xy_A',inputs.xy_A)
+        self.declare_input('xy_A_interior',inputs.xy_A_interior)
+        self.declare_input('xy_B',inputs.xy_B)
+        self.declare_input('xy_B_interior',inputs.xy_B_interior)
+        self.declare_input('xy_C',inputs.xy_C)
+        self.declare_input('xy_C_interior',inputs.xy_C_interior)
+        self.declare_input('w_A',inputs.w_A)
+        self.declare_input('w_B',inputs.w_B)
+        self.declare_input('lmbda',inputs.lmbda)
+        
+        # construct output of the model
+        outputs = csdl.VariableGroup()
+        outputs.K = self.create_output('K', (6,6))
+        outputs.K.name = 'beam stiffness matrix'
+        outputs.A = self.create_output('A',(1,))
+        outputs.A.name = 'beam xs area'
+
+        return outputs
+    
+    def compute(self, inputs, outputs):
+        print('compute beam matrix from warping function state')
+        #UPDATE FOREGROUND MESHES:
+        self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].boundary_nodes,0:2]=inputs['xy_A']
+        self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].interior_nodes,0:2]=inputs['xy_A_interior']
+        
+        self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].boundary_nodes,0:2]=inputs['xy_B']
+        self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].interior_nodes,0:2]=inputs['xy_B_interior']
+
+        #UPDATE MORTAR MESH:
+        self.xs.collision[self.collision].mortar_mesh.msh.geometry.x[self.xs.collision[self.collision].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
+        self.xs.collision[self.collision].mortar_mesh.msh.geometry.x[self.collision[self.collision].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
+
+        for i in range(6):
+            self.xs.XSs[self.collision[0]].warping_functions[i].x.array[:] = inputs['w_A'][:,i]
+            self.xs.XSs[self.collsion[1]].warping_functions[i].x.array[:] = inputs['w_B'][:,i]
+            self.xs.XSs[self.collision[0]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+            self.xs.XSs[self.collision[1]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+        
+        # self.xs.plot_mesh()
+        self.xs._compute_xs_stiffness_matrix()
+
+        outputs['K'] = self.xs.K
+        outputs['A'] = self.xs.A
+    
+    def compute_derivatives(self, inputs, outputs, derivatives):
+        print('compute beam matrix derivatives...')
+        #update boundary nodes:
+        # if self.boundary_nodes is not None: 
+        #     self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        
+        # #update interior nodes
+        # if self.interior_nodes is not None: 
+        #     self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+        # else: 
+        #     self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+        
+        # for i in range(6):
+        #     self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
+        #     self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+        
+        # self.xs._compute_xs_stiffness_matrix()
+        if self.check_partials != 'w':                
+            pKpx = self.xs.compute_pKpx()
+            derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
+            derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
+        
+        if self.check_partials != 'x':
+            pKpw = self.xs.compute_pKpw()
+            pKpl = self.xs.compute_pKpl()
+            derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
+            derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
+
+
+        # print('input vals:')
+        # print(inputs['xy'])
+        # print('mesh coords:')
+        # print(self.xs.msh.geometry.x[:,0:2])
+        
+        #declare derivatives
+        
+        # derivatives['K', 'xy'] = pKpx[:,np.concatenate([self.xs.dofs_x_boundary,self.xs.dofs_y_boundary])]
+        # derivatives['K', 'xy'] = np.hstack([pKpx[:,self.xs.dofs_x_boundary],
+        #                                 pKpx[:,self.xs.dofs_y_boundary]]) #return (36 x num_boundary_nodes*2)
+        # derivatives['K', 'xy_interior'] = np.hstack([pKpx[:,self.xs.dofs_x_interior],
+        #                                 pKpx[:,self.xs.dofs_y_interior]]) #return (36 x num_interior_nodes*2)
+
 
 class WarpingFunctionStateCoupled(csdl.experimental.CustomImplicitOperation):
     '''

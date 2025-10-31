@@ -355,7 +355,7 @@ def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
     loop_id = 1
     surface_tags = []
 
-    def estimate_mesh_resolution(poly, elements_across=10):
+    def estimate_mesh_resolution(poly, elements_across=30):
         """Estimate a good GMSH mesh resolution based on geometry size."""
         xmin, ymin = np.array(poly.exterior.coords[:-1]).min(axis=0)
         xmax, ymax = np.array(poly.exterior.coords[:-1]).max(axis=0)
@@ -727,33 +727,22 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     #TODO: this is likely where I would modify my function to handle non-scalar spaces (e.g. last index)
     basis_matrix = element.tabulate(0, x_ref)[0,:,:,0]
 
-    # cell_dofs         = np.zeros((len(x_1), len(basis_matrix[0,:])))
-    # basis_matrix_full = np.zeros((len(x_1), len(basis_matrix[0,:])))
+    cell_dofs         = np.zeros((len(x_1), len(basis_matrix[0,:])))
+    basis_matrix_full = np.zeros((len(x_1), len(basis_matrix[0,:])))
 
-    # for nn in range(0,len(cells_)):
-    #     cell_dofs[index_points_[nn],:] = V_0.dofmap.cell_dofs(cells_[nn])
-    #     basis_matrix_full[index_points_[nn],:] = basis_matrix[nn,:]
+    for nn in range(0,len(cells_)):
+        cell_dofs[index_points_[nn],:] = V_0.dofmap.cell_dofs(cells_[nn])
+        basis_matrix_full[index_points_[nn],:] = basis_matrix[nn,:]
 
-    # cell_dofs_ = cell_dofs.astype(int) ###### REDUCE HERE
+    cell_dofs_ = cell_dofs.astype(int) ###### REDUCE HERE
 
     # ====== CREATE A PESTc MATRIX FROM THE TABULATED LAGRANGE BASIS VALUES ===== #
-    # I = PETSc.Mat().create(comm=MPI.COMM_WORLD)
-    # I.setSizes((len(x_1), len(x_0)))
-    # I.setUp()
-    # for i in range(0,len(x_1)):
-    #     for j in range(0,len(basis_matrix[0,:])):
-    #         I.setValue(i,cell_dofs_[i,j],basis_matrix_full[i,j])
-
-    #loop over the colliding cells only (saves dofs not in the overlap section 
-    #   vs the previous code which builds these big matrices then maps them to the right index)
     I = PETSc.Mat().create(comm=MPI.COMM_WORLD)
     I.setSizes((len(x_1), len(x_0)))
     I.setUp()
-    for i in range(0,len(cells)):
-        cell_dofs = V_0.dofmap.cell_dofs(cells_[i])
+    for i in range(0,len(x_1)):
         for j in range(0,len(basis_matrix[0,:])):
-            I.setValue(index_points[i],cell_dofs[j],basis_matrix[i,j])
-
+            I.setValue(i,cell_dofs_[i,j],basis_matrix_full[i,j])
 
     return I
 
@@ -862,8 +851,9 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): #
     '''
     V1: fxn space to be interpolated TO
     V0: fxn space to be interpolated FROM
-    wrt: flag that specifies whether target or source dofs are dependent variable
-    
+    wrt: flag that specifies whether derivatives should be computed w.r.t. source or target mesh
+    adjoint: vector 
+
     Builds an interpolation matrix that can be used to sample a function on mesh 0 at 
     each nodal position of mesh 1
     '''
@@ -1001,7 +991,6 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): #
                     dIdxy.setValue(i,cell_dofs_[i,k],deriv_vals[i,j,k,0])
                     #set y derivative values:
                     dIdxy.setValue(i+nx1,cell_dofs_[i,k],deriv_vals[i,j,k,1])
-                    # print()
             if wrt == "TO":
                 dIdxy.setValue(i,cell_dofs_[i,j],deriv_vals[i,j,0])
                 #set y derivative values:

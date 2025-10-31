@@ -62,7 +62,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e4)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e6)
 
 TXS_nm.plot_meshes()
 
@@ -244,20 +244,39 @@ A = csdl.blockmat([[A00,A01,C_A.T()],
                       [A10,A11,C_B.T()],
                       [C_A,C_B,A22]])
 
-# warping_solutions = csdl.Variable(shape=(n_W,6))
-# solution_list = []
+# warping_solutions = csdl.Variable(shape=(A.shape[0],6))
+
+#compute using the petsc based solve for verification:
+TXS_nm._get_warping_functions()
+
+warping_solutions = []
+for i in range(6):
+    F_C = csdl.Variable(value=TXS_nm.XSs[0]._return_rhs_vec(i)) 
+    b = csdl.concatenate((F_A,F_B,F_C))
+    warping_solution=csdl.solve_linear(A,b)
+    warping_solutions.append(warping_solution)
+
+    #check that the csdl linear solve is the same as the petsc solution:
+    assert 1e-10>np.linalg.norm(np.concatenate([TXS_nm.XSs[0].warping_functions[i].x.array,TXS_nm.XSs[1].warping_functions[i].x.array,TXS_nm.XSs[0].lmbdas[i].x.array])-warping_solution.value)
 
 
+inputs_sec = csdl.VariableGroup()
+inputs_sec.xy_A = inputs_mm_A.xy
+inputs_sec.xy_A_interior = outputs_mm_A.xy_interior
+inputs_sec.xy_B = inputs_mm_B.xy
+inputs_sec.xy_B_interior = outputs_mm_B.xy_interior
+inputs_sec.xy_C = inputs_mm_C.xy
+inputs_sec.xy_C_interior = outputs_mm_C.xy_interior
+inputs_sec.w_A = warping_solution_A_slice
+inputs_sec.w_B = warping_solution_B_slice
+inputs_sec.lmbda = warping_solution_lmbda_slice
 
-F_C = csdl.Variable(value=TXS_nm.XSs[0]._return_rhs_vec(0)) #set to vector of 0s where 
-b = csdl.concatenate((F_A,F_B,F_C))
+section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
+                                                                  collision=(0,1))
 
-solution = csdl.solve_linear(A,b)
+section_model.evaluate()
 
 # solution_list.append(csdl.solve_linear(A,b))
-
-
-
 # #we have to construct a single operation for the coupled warping function computation:
 # inputs_w = csdl.VariableGroup()
 # inputs_w.xy_A = inputs_mm_A.xy
