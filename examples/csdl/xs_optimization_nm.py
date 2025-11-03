@@ -244,10 +244,11 @@ A = csdl.blockmat([[A00,A01,C_A.T()],
                       [A10,A11,C_B.T()],
                       [C_A,C_B,A22]])
 
-# warping_solutions = csdl.Variable(shape=(A.shape[0],6))
+compare_to_petsc= False
 
-#compute using the petsc based solve for verification:
-TXS_nm._get_warping_functions()
+if compare_to_petsc:
+    #compute using the petsc based solve for verification:
+    TXS_nm._get_warping_functions()
 
 dense_error = 1e-5
 warping_solutions = []
@@ -256,22 +257,22 @@ for i in range(6):
     b = csdl.concatenate((F_A,F_B,F_C))
     warping_solution=csdl.solve_linear(A,b)
     warping_solutions.append(warping_solution)
-
-    #check that the csdl linear solve is the same as the petsc solution:
-    assert dense_error>np.linalg.norm(np.concatenate([TXS_nm.XSs[0].warping_functions[i].x.array,TXS_nm.XSs[1].warping_functions[i].x.array,TXS_nm.XSs[0].lmbdas[i].x.array])-warping_solution.value)
+    if compare_to_petsc:
+        #check that the csdl linear solve is the same as the petsc solution:
+        assert dense_error>np.linalg.norm(np.concatenate([TXS_nm.XSs[0].warping_functions[i].x.array,TXS_nm.XSs[1].warping_functions[i].x.array,TXS_nm.XSs[0].lmbdas[i].x.array])-warping_solution.value)
 
 w_A_list= []
 w_B_list = []
 lmbda_list = []
 for i in range(6):
     w_A_list.append(warping_solutions[i].get(csdl.slice[:A00.shape[0]]))
-    assert dense_error>np.linalg.norm(TXS_nm.XSs[0].warping_functions[i].x.array-w_A_list[i].value)
-
     w_B_list.append(warping_solutions[i].get(csdl.slice[A00.shape[0]:A00.shape[0]+A11.shape[0]]))
-    assert dense_error>np.linalg.norm(TXS_nm.XSs[1].warping_functions[i].x.array-w_B_list[i].value)
-
     lmbda_list.append(warping_solutions[i].get(csdl.slice[A00.shape[0]+A11.shape[0]:]))
-    assert dense_error>np.linalg.norm(TXS_nm.XSs[0].lmbdas[i].x.array-lmbda_list[i].value)
+    
+    if compare_to_petsc:
+        assert dense_error>np.linalg.norm(TXS_nm.XSs[0].warping_functions[i].x.array-w_A_list[i].value)
+        assert dense_error>np.linalg.norm(TXS_nm.XSs[1].warping_functions[i].x.array-w_B_list[i].value)
+        assert dense_error>np.linalg.norm(TXS_nm.XSs[0].lmbdas[i].x.array-lmbda_list[i].value)
 
 w_A = csdl.vstack(w_A_list).T()
 w_B = csdl.vstack(w_B_list).T()

@@ -164,6 +164,9 @@ class CrossSection:
         if self.verbose:
             print('Constructing Constraints....')   
         self._construct_KKT_forms()
+
+        # #set up warping functions:
+        # self._set_up_warping_functions()
         
         #set up KSP solver
         if self.verbose:
@@ -219,10 +222,15 @@ class CrossSection:
         self.mu = TestFunction(self.LM)
         self.dlmbda = TrialFunction(self.LM)
 
-
         #get maps from block vectors ---> warping function & lagrange multiplier vectors
         self.maps = [(self.V.dofmap.index_map, self.V.dofmap.index_map_bs), (self.LM.dofmap.index_map, self.LM.dofmap.index_map_bs)]
         
+        #set up the warping functions:
+        self.warping_functions = []
+        self.lmbdas = []
+        for i in range(6):
+            self.warping_functions.append(self.u.copy())
+            self.lmbdas.append(self.lmbda.copy())
 
     def _apply_rotation(self,C,alpha,beta,gamma):
         #indices
@@ -423,6 +431,14 @@ class CrossSection:
         self.L_form = L
 
         # return a,L
+
+    # def _set_up_warping_functions(self):
+    #     self.warping_functions = []
+    #     self.lmbdas = []
+    #     for i in range(6):
+    #         self.warping_functions.append(self.u.copy())
+    #         self.lmbdas.append(self.lmbda.copy())
+
     def _assemble_block(self,block=[0,0]):
         '''
         return the assembled petsc mat
@@ -458,8 +474,8 @@ class CrossSection:
 
     def _solve_system(self):
         # self.solution_vectors= []
-        self.warping_functions = []
-        self.lmbdas = []
+        # self.warping_functions = []
+        # self.lmbdas = []
         self.residuals = []
         for idx_k,L1 in enumerate(self.L_form[1]):
             #construct RHS form blocks
@@ -487,8 +503,10 @@ class CrossSection:
             self.lmbda.x.scatter_forward()
 
             #save copies of the warping function state
-            self.warping_functions.append(self.u.copy())
-            self.lmbdas.append(self.lmbda.copy())
+            # self.warping_functions.append(self.u.copy())
+            # self.lmbdas.append(self.lmbda.copy())
+            self.warping_functions[idx_k].x.array[:] = self.u.x.array
+            self.lmbdas[idx_k].x.array[:] = self.lmbda.x.array
 
             # TODO TODO TODO: need to clean up the residual assembly to allow for proper sensitivity computation
             # #TODO: currently, need to do this because we are using a ufl.TrialFunction() in the residual construction
@@ -981,6 +999,7 @@ class CrossSection:
         dRdx_dr = np.zeros(d_inputs_vec_size)
         
         #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
+        # this is actually pretty straightfoward using UFL when you get around to it
         for idx in range(d_residuals_w.shape[1]):
             dRwdx = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
             
@@ -994,6 +1013,14 @@ class CrossSection:
             dRdx_dr += d_inputs_vec.array
 
         return dRdx_dr
+    
+    def _compute_vjp_component_spatial(self,form,d_output):
+        
+        dFdx = ufl.derivative(form,self.x,self.dX)
+
+        
+
+        return dFdx_dx
 
 
 
