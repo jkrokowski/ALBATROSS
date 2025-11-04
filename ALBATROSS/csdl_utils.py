@@ -519,15 +519,21 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         print("getting derivatives!")
 
         #return the two vectors for the 
-        pKpxT_dK = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[0][0],d_outputs['K'],self.xs.XSs[self.mesh_id].V)
+        pKpxT_dK = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[0][0],
+                                                                            d_outputs['K'],
+                                                                            self.xs.XSs[self.mesh_id].V)
         #TODO: this needs to have the proper functions (not square, so test != trial function)
-        pCpxT_dC = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[1][0],d_outputs['C'],self.xs.XSs[self.mesh_id].LM)
+        pCpxT_dC = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[1][0],
+                                                                            d_outputs['C'],
+                                                                            test_space = self.xs.XSs[self.mesh_id].LM,
+                                                                            trial_space = self.xs.XSs[self.mesh_id].V)
 
+        d_inputs_full = pKpxT_dK + pCpxT_dC
 
-        d_inputs['xy'] = np.vstack([dRdx_dr[self.xs.dofs_x_boundary],
-                                        dRdx_dr[self.xs.dofs_y_boundary]]).T
-        d_inputs['xy_interior'] = np.vstack([dRdx_dr[self.xs.dofs_x_interior],
-                                                 dRdx_dr[self.xs.dofs_y_interior]]).T
+        d_inputs['xy'] = np.vstack([d_inputs_full[self.xs.XSs[self.mesh_id].dofs_x_boundary],
+                                        d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_boundary]]).T
+        d_inputs['xy_interior'] = np.vstack([d_inputs_full[self.xs.XSs[self.mesh_id].dofs_x_interior],
+                                                 d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_interior]]).T
         
          
         # return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)

@@ -1014,7 +1014,7 @@ class CrossSection:
 
         return dRdx_dr
     
-    def _compute_vjp_component_spatial(self,form,d_output,fxn_space):
+    def _compute_vjp_component_spatial(self,form,d_output,test_space ,trial_space = None):
         
         # dFdx = ufl.derivative(form,self.x,self.dX)
 
@@ -1032,8 +1032,11 @@ class CrossSection:
         d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
         
-        u_j = fem.Function(fxn_space)
-        v_j = fem.Function(fxn_space)
+        if trial_space==None:
+            trial_space=test_space
+            
+        u_j = fem.Function(trial_space)
+        v_j = fem.Function(test_space)
         for j in range(d_output.shape[0]):                  # loop over trial index
             u_j.x.array[:] = 0.0
             u_j.x.array[j] = 1.0                

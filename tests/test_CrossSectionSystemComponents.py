@@ -20,8 +20,8 @@ maybe this needs to be "fixed" by the mesh smoothing?
 N = 2
 offset = 1
 
-h_to_f = 10
-w_to_w = 10
+h_to_f = 6
+w_to_w = 6
 
 m1,n1 = N*h_to_f,N
 m2,n2 = N,N*w_to_w+offset
@@ -64,7 +64,7 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 #================= initialize coupled cross-section ===========#
 TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
 
-TXS_nm.plot_meshes()
+# TXS_nm.plot_meshes()
 
 filename_C = 'mortar_mesh'
 with XDMFFile(MPI.COMM_WORLD, "output/"+filename_C+".xdmf", "w") as xdmf:
@@ -146,8 +146,10 @@ outputs_mm_C = meshSmoothing_C.evaluate(inputs_mm_C)
 #======= construct coupled system =========#
 #get foreground mesh A values
 inputs_A = csdl.VariableGroup()
-input_slice = xy_A[4,1:5]
-inputs_A.xy = xy_A.set(csdl.slice[4,1:5],input_slice)
+#limited test slice:
+input_slice = xy_A[4,0]
+inputs_A.xy = xy_A.set(csdl.slice[4,0],input_slice)
+#uncomment for 
 # inputs_A.xy = xy_A
 inputs_A.xy_interior = outputs_mm_A.xy_interior
 
@@ -170,8 +172,8 @@ sim.run()
 
 # dKdx = csdl.derivative(K_A,inputs_A.xy)
 
-dK00dx00 = csdl.derivative(K_A[1:4,2],input_slice)
-
+dK00dx00 = csdl.derivative(K_A[3,3],input_slice)
+dK00dx00_FD = sim.compute_totals(K_A[3,3],input_slice,use_finite_difference=True)
 
 sim.compute_totals(K_A[0,0],input_slice)
 
