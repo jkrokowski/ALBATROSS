@@ -1014,13 +1014,44 @@ class CrossSection:
 
         return dRdx_dr
     
-    def _compute_vjp_component_spatial(self,form,d_output):
+    def _compute_vjp_component_spatial(self,form,d_output,fxn_space):
         
-        dFdx = ufl.derivative(form,self.x,self.dX)
+        # dFdx = ufl.derivative(form,self.x,self.dX)
 
+        # #create a function and set numpy
+        # d_output_func = fem.Function(fxn_space)
+        # d_output_func.x.array = d_output
+
+        # vec_form = ufl.action(ufl.adjoint(form),d_output_func)
+
+        # dFdx_dx = fem.petsc.assemble_vector(fem.form(vec_form))
+
+        #TODO: we can probably speed this up by being a bit more intelligent with the function values. 
+        # Really... we shouldn't need a loop here at all. 
+
+        d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
+        d_input = np.zeros(d_inputs_size)
         
+        u_j = fem.Function(fxn_space)
+        v_j = fem.Function(fxn_space)
+        for j in range(d_output.shape[0]):                  # loop over trial index
+            u_j.x.array[:] = 0.0
+            u_j.x.array[j] = 1.0                
 
-        return dFdx_dx
+            v_j.x.array[:] = d_output[:, j]     # column j = coefficients Λ_{ij}
+
+            #this only computes the scalar value, needs to be done with the spatial derivative
+            # fem.assemble_scalar(fem.form(ufl.action(ufl.action(self.a_form[0][0],u_j),v_j)))
+
+            #TODO: update to use the actual passed form and function spaces
+            #i barely understand this myself, but we start with a bilinear form, then we compute the "double-action", 
+            # this gives us a form (scalar), then we take the spatial derivative of that and add to the d_inputs vec
+
+            vec = fem.assemble_vector(fem.form(ufl.derivative(ufl.action(ufl.action(form,u_j),v_j),self.x,self.dX)))
+
+            d_input += vec.array
+
+        return d_input
 
 
 

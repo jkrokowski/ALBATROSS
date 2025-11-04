@@ -504,26 +504,32 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         outputs['K'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(K_petsc)
         outputs['C'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(C_petsc)
 
-    def compute_jacvec_product(self, inputs, outputs, derivatives, d_inputs, d_outputs, mode):
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
+        
         '''
         Derivatives of K and C w.r.t. the spatial coordinates
         in reverse mode, this is derivative of outputs w.r.t. d_inputs
         '''
-
+        # super().compute_jacvec_product()
 
         # we can do this in an entirely matrix free manner using the ufl.derivative(), 
         # then constructing a field with the d_inputs array
         # then, use ufl.action(ufl.adjoint(FORM),d_inputs_function)
         # and fem.petsc.assemble_vector()
+        print("getting derivatives!")
 
-        pKpxT_dK = self.xs._compute_vjp_components_spatial(self.xs.F[0][0],d_outputs['K'])
-        pCpxT_dC = self.xs._compute_vjp_components_spatial(self.xs.F[1][0],d_outputs['C'])
+        #return the two vectors for the 
+        pKpxT_dK = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[0][0],d_outputs['K'],self.xs.XSs[self.mesh_id].V)
+        #TODO: this needs to have the proper functions (not square, so test != trial function)
+        pCpxT_dC = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[1][0],d_outputs['C'],self.xs.XSs[self.mesh_id].LM)
 
 
         d_inputs['xy'] = np.vstack([dRdx_dr[self.xs.dofs_x_boundary],
                                         dRdx_dr[self.xs.dofs_y_boundary]]).T
         d_inputs['xy_interior'] = np.vstack([dRdx_dr[self.xs.dofs_x_interior],
                                                  dRdx_dr[self.xs.dofs_y_interior]]).T
+        
+         
         # return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)
 
 
