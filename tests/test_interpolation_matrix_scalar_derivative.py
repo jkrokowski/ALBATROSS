@@ -57,8 +57,7 @@ def test_interpolation_matrix():
 
     # Construct interpolation matrix (replace with your implementation)
     interpolation_matrix = get_interpolation_matrix(target_space, source_space)
-    interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,source_space,wrt='FROM' \
-    '')
+    interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,source_space,wrt='FROM')
     interpolation_matrix_derivative.assemble()
     dIdx = convert_petsc_to_numpy(interpolation_matrix_derivative)
     
@@ -70,7 +69,6 @@ def test_interpolation_matrix():
     interpolation_matrix_dx = get_interpolation_matrix(target_space, source_space)
 
     dIdx_fd = (convert_petsc_to_numpy(interpolation_matrix_dx)-convert_petsc_to_numpy(interpolation_matrix))/dx
-    
 
     print('row ',dof,':')
     print('dIdx:',dIdx[dof,:])

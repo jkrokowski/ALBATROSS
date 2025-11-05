@@ -435,34 +435,17 @@ class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
 
         outputs['P'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(P_petsc)
     
-    def compute_derivatives(self, inputs, outputs, derivatives):
-        print('compute beam matrix derivatives...')
-        #update boundary nodes:
-        # if self.boundary_nodes is not None: 
-        #     self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
+        print('computing interpolation matrix derivatives...')
         
-        # #update interior nodes
-        # if self.interior_nodes is not None: 
-        #     self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        # else: 
-        #     self.xs.msh.geometry.x[:,0:2]=inputs['xy']
-        
-        # for i in range(6):
-        #     self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
-        #     self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-        
-        # self.xs._compute_xs_stiffness_matrix()
-        if self.check_partials != 'w':                
-            pKpx = self.xs.compute_pKpx()
-            derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
-            derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
-        
-        if self.check_partials != 'x':
-            pKpw = self.xs.compute_pKpw()
-            pKpl = self.xs.compute_pKpl()
-            derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
-            derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
-
+        #TODO: this is a sketch, these matrices are both unassembled and unexpanded
+        dPdx_A  = ALBATROSS.nonmatching_utils.derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
+                                                                                                    source_space,
+                                                                                                    wrt='FROM')
+    
+        dPdx_C  = ALBATROSS.nonmatching_utils.derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
+                                                                                                    source_space,
+                                                                                                    wrt='TO')
 
 
 class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
@@ -510,7 +493,6 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         Derivatives of K and C w.r.t. the spatial coordinates
         in reverse mode, this is derivative of outputs w.r.t. d_inputs
         '''
-        # super().compute_jacvec_product()
 
         # we can do this in an entirely matrix free manner using the ufl.derivative(), 
         # then constructing a field with the d_inputs array
@@ -536,8 +518,6 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
                                                  d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_interior]]).T
         
          
-        # return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)
-
 
 class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
     '''
@@ -578,10 +558,28 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         outputs['MC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(MC_petsc)
         outputs['SC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(SC_petsc)
 
-    def compute_jacvec_product(self, inputs, outputs, derivatives, d_inputs, d_outputs, mode):
-        #TODO: needs to be implemented
-        return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)
-    
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
+        
+        '''
+        Derivatives of M_C and S_C w.r.t. the spatial coordinates
+        '''
+
+        #return the two vectors for the 
+        pMCpxT_dMC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].MC_form,
+                                                                            d_outputs['MC'],
+                                                                            test_space = self.xs.collisions[self.collision].fxn_space)
+        
+        pSCpxT_dSC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].MC_form,
+                                                                            d_outputs['SC'],
+                                                                            test_space = self.xs.collisions[self.collision].fxn_space)
+
+        d_inputs_full = pMCpxT_dMC + pSCpxT_dSC
+
+        d_inputs['xy'] = np.vstack([d_inputs_full[self.xs.XSs[self.mesh_id].dofs_x_boundary],
+                                        d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_boundary]]).T
+        d_inputs['xy_interior'] = np.vstack([d_inputs_full[self.xs.XSs[self.mesh_id].dofs_x_interior],
+                                                 d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_interior]]).T
+
 
 class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
     def __init__(self,xs,collision=(0,1),check_partials='False'):
@@ -682,112 +680,113 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         # derivatives['K', 'xy_interior'] = np.hstack([pKpx[:,self.xs.dofs_x_interior],
         #                                 pKpx[:,self.xs.dofs_y_interior]]) #return (36 x num_interior_nodes*2)
 
+#TODO: this is a massive operation that requires a lot of validation of individual components, 
+# but would perfom much better than the current coupled approach where the system matrices are provided along with derivatives 
+# class WarpingFunctionStateCoupled(csdl.experimental.CustomImplicitOperation):
+#     '''
+#     inputs: nodal positions of cross-sectional meshes (both overlapping and mortarmesh)
+#     '''
+#     def __init__(self,xs):
+#         super().__init__()
+#         #TODO: 
+#         #this is a coupled cross-section problem:
+#         self.xs = xs
 
-class WarpingFunctionStateCoupled(csdl.experimental.CustomImplicitOperation):
-    '''
-    inputs: nodal positions of cross-sectional meshes (both overlapping and mortarmesh)
-    '''
-    def __init__(self,xs):
-        super().__init__()
-        #TODO: 
-        #this is a coupled cross-section problem:
-        self.xs = xs
+#     def evaluate(self,inputs: csdl.VariableGroup):
+#         # assign method inputs to input dictionary
+#         #TODO: this is rigidly fixed to two overlapping meshes & one intersection; make more general
+#         self.declare_input('xy_A',inputs.xy_A)
+#         self.declare_input('xy_A_interior',inputs.xy_A_interior)
+#         self.declare_input('xy_B',inputs.xy_B)
+#         self.declare_input('xy_B_interior',inputs.xy_B_interior)
+#         self.declare_input('xy_C',inputs.xy_C)
+#         self.declare_input('xy_C_interior',inputs.xy_C_interior)
 
-    def evaluate(self,inputs: csdl.VariableGroup):
-        # assign method inputs to input dictionary
-        #TODO: this is rigidly fixed to two overlapping meshes & one intersection; make more general
-        self.declare_input('xy_A',inputs.xy_A)
-        self.declare_input('xy_A_interior',inputs.xy_A_interior)
-        self.declare_input('xy_B',inputs.xy_B)
-        self.declare_input('xy_B_interior',inputs.xy_B_interior)
-        self.declare_input('xy_C',inputs.xy_C)
-        self.declare_input('xy_C_interior',inputs.xy_C_interior)
+#         # construct output of the model
+#         outputs = csdl.VariableGroup()
+#         outputs.w_A = self.create_output('w_A', (self.xs.XSs[0].V.dofmap.index_map.size_global,6))
+#         outputs.w_B = self.create_output('w_B', (self.xs.XSs[1].V.dofmap.index_map.size_global,6))
+#         outputs.lmbda = self.create_output('lmbda', (self.xs.XSs[0].LM.value_size,6))
 
-        # construct output of the model
-        outputs = csdl.VariableGroup()
-        outputs.w_A = self.create_output('w_A', (self.xs.XSs[0].V.dofmap.index_map.size_global,6))
-        outputs.w_B = self.create_output('w_B', (self.xs.XSs[1].V.dofmap.index_map.size_global,6))
-        outputs.lmbda = self.create_output('lmbda', (self.xs.XSs[0].LM.value_size,6))
-
-        return outputs
+#         return outputs
     
-    def solve_residual_equations(self, inputs, outputs):
-        print("solve residual equations:")
-        #update boundary nodes:
-        self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].boundary_nodes,0:2]=inputs['xy_A']
-        self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].boundary_nodes,0:2]=inputs['xy_B']
-        self.xs.collisions[(0,1)].mortar_mesh.msh.geometry.x[self.xs.collisions[(0,1)].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
+#     def solve_residual_equations(self, inputs, outputs):
+#         print("solve residual equations:")
+#         #update boundary nodes:
+#         self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].boundary_nodes,0:2]=inputs['xy_A']
+#         self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].boundary_nodes,0:2]=inputs['xy_B']
+#         self.xs.collisions[(0,1)].mortar_mesh.msh.geometry.x[self.xs.collisions[(0,1)].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
         
-        #update interior nodes
-        self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].interior_nodes,0:2]=inputs['xy_A_interior']
-        self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].interior_nodes,0:2]=inputs['xy_B_interior']
-        self.xs.collisions[(0,1)].mortar_mesh.msh.geometry.x[self.xs.collisions[(0,1)].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
+#         #update interior nodes
+#         self.xs.XSs[0].msh.geometry.x[self.xs.XSs[0].interior_nodes,0:2]=inputs['xy_A_interior']
+#         self.xs.XSs[1].msh.geometry.x[self.xs.XSs[1].interior_nodes,0:2]=inputs['xy_B_interior']
+#         self.xs.collisions[(0,1)].mortar_mesh.msh.geometry.x[self.xs.collisions[(0,1)].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
        
-        #compute warping functions
-        self.xs._get_warping_functions()
+#         #compute warping functions
+#         self.xs._get_warping_functions()
         
-        outputs['w_A'] = np.vstack([self.xs.XSs[0].warping_functions[i].x.array for i in range(6)]).T
-        outputs['w_B'] = np.vstack([self.xs.XSs[1].warping_functions[i].x.array for i in range(6)]).T
-        outputs['lmbda'] = np.vstack([self.xs.XSs[0].lmbdas[i].x.array for i in range(6)]).T
+#         outputs['w_A'] = np.vstack([self.xs.XSs[0].warping_functions[i].x.array for i in range(6)]).T
+#         outputs['w_B'] = np.vstack([self.xs.XSs[1].warping_functions[i].x.array for i in range(6)]).T
+#         outputs['lmbda'] = np.vstack([self.xs.XSs[0].lmbdas[i].x.array for i in range(6)]).T
     
-    def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
-        # print("apply_inverse_jacobian:")
-        xy = inputs['xy']
-        xy_interior = inputs['xy_interior']
-        w = outputs['w']
-        lmbda = outputs['lmbda']
+#     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
+#         # print("apply_inverse_jacobian:")
+#         xy = inputs['xy']
+#         xy_interior = inputs['xy_interior']
+#         w = outputs['w']
+#         lmbda = outputs['lmbda']
 
     
-        if mode == 'rev':    
-            # d_outputs --> d_residuals
-            # compute d_residuals = (dr_du^-1)*d_outputs
+#         if mode == 'rev':    
+#             # d_outputs --> d_residuals
+#             # compute d_residuals = (dr_du^-1)*d_outputs
 
-            # dr_du is simply the finite element stiffness matrix in this case
-            # these are just the A00, A01, and A10 blocks of the assembled stiffness matrix
-            # we can leverage the already existing ksp solver and compute the multMatTranspose() using petsc,
-            # then we output these two terms to numpy matrices
-            d_residuals['w'],d_residuals['lmbda'] = self.xs.apply_inverse_jacobian(d_outputs['w'],d_outputs['lmbda'])
-            # #which does this under the hood: 
-            #     d_outputs_petsc = stack(d_outputs['w'],d_outputs['lmbda'])
-            #     self.xs.solver.solveTranspose(d_outputs_petsc,d_residuals_petsc)
-            #     d_residuals_numpy = convert_petsc_to_numpy(d_residuals_petsc)
-            #====
-            # d_residuals['w'] =  d_residuals_numpy[w_slice]
-            # d_residuals['lmbda']  = d_residuals_numpy[lmbda_slice]
+#             # dr_du is simply the finite element stiffness matrix in this case
+#             # these are just the A00, A01, and A10 blocks of the assembled stiffness matrix
+#             # we can leverage the already existing ksp solver and compute the multMatTranspose() using petsc,
+#             # then we output these two terms to numpy matrices
+#             d_residuals['w'],d_residuals['lmbda'] = self.xs.apply_inverse_jacobian(d_outputs['w'],d_outputs['lmbda'])
+#             # #which does this under the hood: 
+#             #     d_outputs_petsc = stack(d_outputs['w'],d_outputs['lmbda'])
+#             #     self.xs.solver.solveTranspose(d_outputs_petsc,d_residuals_petsc)
+#             #     d_residuals_numpy = convert_petsc_to_numpy(d_residuals_petsc)
+#             #====
+#             # d_residuals['w'] =  d_residuals_numpy[w_slice]
+#             # d_residuals['lmbda']  = d_residuals_numpy[lmbda_slice]
 
-            # d_residuals['w'] = drw_dw_inv @ d_outputs['w'] + drw_dl_inv @ d_outputs['lmbda']
-            # d_residuals['lmbda'] = drl_dl_inv @ d_outputs['lmbda'] # + drl_dw_inv @ d_outputs['w'] <-- this term is = 
+#             # d_residuals['w'] = drw_dw_inv @ d_outputs['w'] + drw_dl_inv @ d_outputs['lmbda']
+#             # d_residuals['lmbda'] = drl_dl_inv @ d_outputs['lmbda'] # + drl_dw_inv @ d_outputs['w'] <-- this term is = 
 
 
-    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
-        # print("compute vector-jacobian product:")
-        xy = inputs['xy']
-        xy_interior = inputs['xy_interior']
-        w = outputs['w']
-        lmbda = outputs['lmbda']
+#     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
+#         # print("compute vector-jacobian product:")
+#         xy = inputs['xy']
+#         xy_interior = inputs['xy_interior']
+#         w = outputs['w']
+#         lmbda = outputs['lmbda']
 
-        # for mode = rev
-        # d_residuals --> d_inputs
-        if mode == 'rev':
-            # compute d_input = (dr_dinput)*d_residuals
-            #TODO: can also just return d_inputs as a numpy matrix here and prevent the memory overhead of converting to numpy,etc
-            # dRwdx,dRldx = self.xs.compute_dRdx() #return numpy matrices 
+#         # for mode = rev
+#         # d_residuals --> d_inputs
+#         if mode == 'rev':
+#             # compute d_input = (dr_dinput)*d_residuals
+#             #TODO: can also just return d_inputs as a numpy matrix here and prevent the memory overhead of converting to numpy,etc
+#             # dRwdx,dRldx = self.xs.compute_dRdx() #return numpy matrices 
 
-            # d_inputs = dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']
+#             # d_inputs = dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']
 
-            # d_inputs['xy'] = d_inputs['boundary']
-            # d_inputs['xy_interior'] = d_inputs['interior']
+#             # d_inputs['xy'] = d_inputs['boundary']
+#             # d_inputs['xy_interior'] = d_inputs['interior']
 
-            dRdx_dr = self.xs.compute_VJP(d_residuals['w'],d_residuals['lmbda'])
+#             dRdx_dr = self.xs.compute_VJP(d_residuals['w'],d_residuals['lmbda'])
 
-            #TODO: map to boundary or interior nodes
-            d_inputs['xy'] = np.vstack([dRdx_dr[self.xs.dofs_x_boundary],
-                                        dRdx_dr[self.xs.dofs_y_boundary]]).T
-            d_inputs['xy_interior'] = np.vstack([dRdx_dr[self.xs.dofs_x_interior],
-                                                 dRdx_dr[self.xs.dofs_y_interior]]).T
+#             #TODO: map to boundary or interior nodes
+#             d_inputs['xy'] = np.vstack([dRdx_dr[self.xs.dofs_x_boundary],
+#                                         dRdx_dr[self.xs.dofs_y_boundary]]).T
+#             d_inputs['xy_interior'] = np.vstack([dRdx_dr[self.xs.dofs_x_interior],
+#                                                  dRdx_dr[self.xs.dofs_y_interior]]).T
             
-            # d_inputs['xy'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda'] )['boundary']
-            # d_inputs['xy_interior'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']) ['interior']
+#             # d_inputs['xy'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda'] )['boundary']
+#             # d_inputs['xy_interior'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']) ['interior']
 
 
 class BeamModel(csdl.CustomExplicitOperation):

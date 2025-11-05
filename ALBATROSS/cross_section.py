@@ -1028,16 +1028,23 @@ class CrossSection:
 
         #TODO: we can probably speed this up by being a bit more intelligent with the function values. 
         # Really... we shouldn't need a loop here at all. 
+        dFormdx = ufl.derivative(form,self.x,self.dX)
+
 
         d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
         
         if trial_space==None:
             trial_space=test_space
-            
+        
         u_j = fem.Function(trial_space)
         v_j = fem.Function(test_space)
-        for j in range(d_output.shape[0]):                  # loop over trial index
+
+        form_cache = fem.form(ufl.derivative(ufl.action(ufl.action(form,u_j),v_j),self.x,self.dX))
+        
+        # for j in range(d_output.shape[0]):
+        # use the nonzero column indices only (instead of all columns regardless of value)                 
+        for j in np.nonzero(d_output)[1]:
             u_j.x.array[:] = 0.0
             u_j.x.array[j] = 1.0                
 
@@ -1050,8 +1057,9 @@ class CrossSection:
             #i barely understand this myself, but we start with a bilinear form, then we compute the "double-action", 
             # this gives us a form (scalar), then we take the spatial derivative of that and add to the d_inputs vec
 
-            vec = fem.assemble_vector(fem.form(ufl.derivative(ufl.action(ufl.action(form,u_j),v_j),self.x,self.dX)))
-
+            # vec = fem.assemble_vector(fem.form(ufl.derivative(ufl.action(ufl.action(form,u_j),v_j),self.x,self.dX)))
+            # vec = fem.assemble_vector(fem.form(ufl.action(ufl.action(dFormdx,u_j),v_j)))
+            vec = fem.assemble_vector(form_cache)
             d_input += vec.array
 
         return d_input
@@ -2364,6 +2372,57 @@ class CoupledCrossSection:
 
         return
     
+
+    def _compute_vjp_component_spatial(self,form,d_output,test_space ,trial_space = None):
+        
+        # dFdx = ufl.derivative(form,self.x,self.dX)
+
+        # #create a function and set numpy
+        # d_output_func = fem.Function(fxn_space)
+        # d_output_func.x.array = d_output
+
+        # vec_form = ufl.action(ufl.adjoint(form),d_output_func)
+
+        # dFdx_dx = fem.petsc.assemble_vector(fem.form(vec_form))
+
+        #TODO: we can probably speed this up by being a bit more intelligent with the function values. 
+        # Really... we shouldn't need a loop here at all. 
+        dFormdx = ufl.derivative(form,self.x,self.dX)
+
+
+        d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
+        d_input = np.zeros(d_inputs_size)
+        
+        if trial_space==None:
+            trial_space=test_space
+        
+        u_j = fem.Function(trial_space)
+        v_j = fem.Function(test_space)
+
+        form_cache = fem.form(ufl.derivative(ufl.action(ufl.action(form,u_j),v_j),self.x,self.dX))
+        
+        # for j in range(d_output.shape[0]):
+        # use the nonzero column indices only (instead of all columns regardless of value)                 
+        for j in np.nonzero(d_output)[1]:
+            u_j.x.array[:] = 0.0
+            u_j.x.array[j] = 1.0                
+
+            v_j.x.array[:] = d_output[:, j]     # column j = coefficients Λ_{ij}
+
+            #this only computes the scalar value, needs to be done with the spatial derivative
+            # fem.assemble_scalar(fem.form(ufl.action(ufl.action(self.a_form[0][0],u_j),v_j)))
+
+            #TODO: update to use the actual passed form and function spaces
+            #i barely understand this myself, but we start with a bilinear form, then we compute the "double-action", 
+            # this gives us a form (scalar), then we take the spatial derivative of that and add to the d_inputs vec
+
+            # vec = fem.assemble_vector(fem.form(ufl.derivative(ufl.action(ufl.action(form,u_j),v_j),self.x,self.dX)))
+            # vec = fem.assemble_vector(fem.form(ufl.action(ufl.action(dFormdx,u_j),v_j)))
+            vec = fem.assemble_vector(form_cache)
+            d_input += vec.array
+
+        return d_input
+
 
     def compute_VJP(self, d_residuals_w_a, d_residuals_w_b, d_residuals_w_c, d_residuals_lmbda):
         '''

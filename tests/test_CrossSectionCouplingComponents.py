@@ -130,7 +130,7 @@ dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
 # #mortar mesh is moved identically to the web motion:
 # xy_C = xy_C + csdl.expand(csdl.concatenate([dx_w,0]),xy_C.shape,action='j->ij')
 
-# mortar_mesh = TXS_nm.collisions[(0,1)].mortar_mesh 
+mortar_mesh = TXS_nm.collisions[(0,1)].mortar_mesh 
 # filename_C = 'mortar_mesh'
 
 # inputs_mm_C = csdl.VariableGroup()
@@ -144,108 +144,103 @@ dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
 
 
 #======= construct coupled system =========#
-#get foreground mesh A values
-inputs_A = csdl.VariableGroup()
-#limited test slice:
-# input_slice = xy_A[3,1]
-# inputs_A.xy = xy_A.set(csdl.slice[3,1],input_slice)
-#uncomment for 
-inputs_A.xy = xy_A
-inputs_A.xy_interior = xy_A_interior
-# inputs_A.xy_interior = outputs_mm_A.xy_interior
+# #get foreground mesh A values
+# inputs_A = csdl.VariableGroup()
+# #limited test slice:
+# # input_slice = xy_A[3,1]
+# # inputs_A.xy = xy_A.set(csdl.slice[3,1],input_slice)
+# #uncomment for 
+# inputs_A.xy = xy_A
+# inputs_A.xy_interior = xy_A_interior
+# # inputs_A.xy_interior = outputs_mm_A.xy_interior
 
-conformal_problem_A = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
-                                                                        mesh_id=0,
-                                                                        boundary_nodes=XSs[0].boundary_nodes,
-                                                                        interior_nodes=XSs[0].interior_nodes)
+# conformal_problem_A = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
+#                                                                         mesh_id=0,
+#                                                                         boundary_nodes=XSs[0].boundary_nodes,
+#                                                                         interior_nodes=XSs[0].interior_nodes)
 
-outputs_A = conformal_problem_A.evaluate(inputs_A)
+# outputs_A = conformal_problem_A.evaluate(inputs_A)
 
-K_A = outputs_A.K
-C_A = outputs_A.C
-F_A = csdl.Variable(value=np.zeros(K_A.shape[0]))
-# F_A = outputs_A.F # this is just vector of zeros, does not contain the lagrange multiplier values
+# K_A = outputs_A.K
+# C_A = outputs_A.C
+# F_A = csdl.Variable(value=np.zeros(K_A.shape[0]))
+# # F_A = outputs_A.F # this is just vector of zeros, does not contain the lagrange multiplier values
 
-# csdl.derivative(K_A,inputs_A.xy)
+# # csdl.derivative(K_A,inputs_A.xy)
 
-sim = csdl.experimental.PySimulator(recorder)
-sim.run()
+# sim = csdl.experimental.PySimulator(recorder)
+# sim.run()
 
-# dKdx = csdl.derivative(K_A,inputs_A.xy)
-K_Aii = K_A[:3,:3]
-C_Aii = C_A[:2,:2]
-# K_Aii = K_A[3,3]
-
-#these seem to match well :)
-dK00dx00 = csdl.derivative(K_Aii,xy_A)
-dK00dx00_FD = sim.compute_totals(K_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
+# # dKdx = csdl.derivative(K_A,inputs_A.xy)
+# K_Aii = K_A[:3,:3]
+# # K_Aii = K_A[3,3]
 
 # #these seem to match well :)
-dC00dx00 = csdl.derivative(C_Aii,xy_A)
-dC00dx00_FD = sim.compute_totals(C_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
+# dK00dx00 = csdl.derivative(K_Aii,xy_A)
+# dK00dx00_FD = sim.compute_totals(K_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
 
 
-#THIS IS A BAD IDEA, TOO MANY VALUES ( (N X N )X M sized matrix)
-# sim.check_totals(K_A,inputs_A.xy)
+# #THIS IS A BAD IDEA, TOO MANY VALUES ( (N X N )X M sized matrix)
+# # sim.check_totals(K_A,inputs_A.xy)
 
-#get foreground mesh B values
-inputs_B = csdl.VariableGroup()
-inputs_B.xy = xy_B
-inputs_B.xy_interior = outputs_mm_B.xy_interior
+# #get foreground mesh B values
+# inputs_B = csdl.VariableGroup()
+# inputs_B.xy = xy_B
+# inputs_B.xy_interior = outputs_mm_B.xy_interior
 
-conformal_problem_B = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
-                                                                        mesh_id=1,
-                                                                        boundary_nodes=XSs[1].boundary_nodes,
-                                                                        interior_nodes=XSs[1].interior_nodes)
+# conformal_problem_B = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
+#                                                                         mesh_id=1,
+#                                                                         boundary_nodes=XSs[1].boundary_nodes,
+#                                                                         interior_nodes=XSs[1].interior_nodes)
 
-outputs_B = conformal_problem_B.evaluate(inputs_B)
+# outputs_B = conformal_problem_B.evaluate(inputs_B)
 
-K_B = outputs_B.K
-C_B = outputs_B.C
-F_B = csdl.Variable(value=np.zeros(K_B.shape[0]))
-#F_B = outputs_B.F_B
+# K_B = outputs_B.K
+# C_B = outputs_B.C
+# F_B = csdl.Variable(value=np.zeros(K_B.shape[0]))
+# #F_B = outputs_B.F_B
 
-#get interpolation matrices
-inputs_interp_A = csdl.VariableGroup()
-inputs_interp_A.xy_foreground = xy_A
-inputs_interp_A.xy_interior_foreground = outputs_mm_A.xy_interior
-inputs_interp_A.xy_mortar = xy_C
-inputs_interp_A.xy_interior_mortar = outputs_mm_C.xy_interior
+# #get interpolation matrices
+# inputs_interp_A = csdl.VariableGroup()
+# inputs_interp_A.xy_foreground = xy_A
+# inputs_interp_A.xy_interior_foreground = outputs_mm_A.xy_interior
+# inputs_interp_A.xy_mortar = xy_C
+# inputs_interp_A.xy_interior_mortar = outputs_mm_C.xy_interior
 
-nonmatchingdata_A = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
-                                                                        mesh_id=0,
-                                                                        collision=(0,1),
-                                                                        foreground_boundary = XSs[0].boundary_nodes,
-                                                                        foreground_interior = XSs[0].interior_nodes,
-                                                                        mortar_boundary = mortar_mesh.boundary_nodes,
-                                                                        mortar_interior = mortar_mesh.interior_nodes)
+# nonmatchingdata_A = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
+#                                                                         mesh_id=0,
+#                                                                         collision=(0,1),
+#                                                                         foreground_boundary = XSs[0].boundary_nodes,
+#                                                                         foreground_interior = XSs[0].interior_nodes,
+#                                                                         mortar_boundary = mortar_mesh.boundary_nodes,
+#                                                                         mortar_interior = mortar_mesh.interior_nodes)
 
-outputs_interp_A = nonmatchingdata_A.evaluate(inputs_interp_A)
+# outputs_interp_A = nonmatchingdata_A.evaluate(inputs_interp_A)
 
-P_A = outputs_interp_A.P
+# P_A = outputs_interp_A.P
 
-inputs_interp_B = csdl.VariableGroup()
-inputs_interp_B.xy_foreground = xy_B
-inputs_interp_B.xy_interior_foreground = outputs_mm_B.xy_interior
-inputs_interp_B.xy_mortar = xy_C
-inputs_interp_B.xy_interior_mortar = outputs_mm_C.xy_interior
+# inputs_interp_B = csdl.VariableGroup()
+# inputs_interp_B.xy_foreground = xy_B
+# inputs_interp_B.xy_interior_foreground = outputs_mm_B.xy_interior
+# inputs_interp_B.xy_mortar = xy_C
+# inputs_interp_B.xy_interior_mortar = outputs_mm_C.xy_interior
 
-nonmatchingdata_B = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
-                                                                        mesh_id=1,
-                                                                        collision=(0,1),
-                                                                        foreground_boundary = XSs[1].boundary_nodes,
-                                                                        foreground_interior = XSs[1].interior_nodes,
-                                                                        mortar_boundary = mortar_mesh.boundary_nodes,
-                                                                        mortar_interior = mortar_mesh.interior_nodes)
+# nonmatchingdata_B = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
+#                                                                         mesh_id=1,
+#                                                                         collision=(0,1),
+#                                                                         foreground_boundary = XSs[1].boundary_nodes,
+#                                                                         foreground_interior = XSs[1].interior_nodes,
+#                                                                         mortar_boundary = mortar_mesh.boundary_nodes,
+#                                                                         mortar_interior = mortar_mesh.interior_nodes)
 
-outputs_interp_B = nonmatchingdata_B.evaluate(inputs_interp_B)
+# outputs_interp_B = nonmatchingdata_B.evaluate(inputs_interp_B)
 
-P_B = outputs_interp_B.P
+# P_B = outputs_interp_B.P
 
 #get mortar mesh coupling matrices
 inputs_C = csdl.VariableGroup()
 inputs_C.xy = xy_C
-inputs_C.xy_interior = outputs_mm_C.xy_interior
+inputs_C.xy_interior = xy_C_interior
 
 coupling_terms = ALBATROSS.csdl_utils.CrossSectionCouplingComponents(xs=TXS_nm,
                                                                      collision=(0,1),
@@ -257,6 +252,23 @@ outputs_C = coupling_terms.evaluate(inputs_C)
 M_C = outputs_C.MC
 S_C = outputs_C.SC
 # F_C = outputs_C.F_C
+
+M_Cii = M_C[:3,:3]
+S_Cii = S_C[:2,:2]
+# K_Aii = K_A[3,3]
+
+sim = csdl.experimental.PySimulator(recorder)
+sim.run()
+
+#these seem to match well :)
+dK00dx00 = csdl.derivative(M_Cii,xy_A)
+dK00dx00_FD = sim.compute_totals(M_Cii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
+
+# #these seem to match well :)
+dC00dx00 = csdl.derivative(S_Cii,xy_A)
+dC00dx00_FD = sim.compute_totals(S_Cii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
+
+
 
 #===== warping function computation =======#
 #blocked system:
