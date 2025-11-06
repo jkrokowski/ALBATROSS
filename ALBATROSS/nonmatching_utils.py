@@ -74,7 +74,9 @@ class MortarMesh:
         self.tdim = 2
 
         #add mesh node labels:
+        self.x = ufl.SpatialCoordinate(self.msh)
         self.VX = fem.functionspace(self.msh,("CG",self.degree,(self.tdim,)))
+        self.dX = ufl.Argument(self.VX,2) #TODO: make sure this argument index keeps working? from arguments need unique IDs 
 
         #label nodes and provide dofs to xy mapping:
         self.all_nodes = mesh.locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
@@ -327,7 +329,7 @@ class CoupledProblem:
 
         return self.solution
     
-def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
+def mesh_from_polygon(polygon, mesh_size=None, mesh_name="polygon_mesh"):
     """
     Generate a GMSH mesh from a Shapely Polygon or MultiPolygon.
 
@@ -355,12 +357,16 @@ def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
     loop_id = 1
     surface_tags = []
 
-    def estimate_mesh_resolution(poly, elements_across=30):
+
+    def estimate_mesh_resolution(poly, elements_across=10):
         """Estimate a good GMSH mesh resolution based on geometry size."""
         xmin, ymin = np.array(poly.exterior.coords[:-1]).min(axis=0)
         xmax, ymax = np.array(poly.exterior.coords[:-1]).max(axis=0)
         L = min(xmax - xmin, ymax - ymin)
         return L / elements_across
+    
+    if mesh_size==None:
+        mesh_size = estimate_mesh_resolution(polygon)
     
     def add_polygon(poly):
         nonlocal point_id, curve_id, loop_id
@@ -370,7 +376,7 @@ def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
         coords = list(poly.exterior.coords[:-1])  # omit duplicate endpoint
         outer_pts = []
         for x, y in coords:
-            pid = gmsh.model.geo.addPoint(x, y, 0, mesh_res, point_id)
+            pid = gmsh.model.geo.addPoint(x, y, 0, mesh_size, point_id)
             point_map[(x, y)] = pid
             outer_pts.append(pid)
             point_id += 1
@@ -389,7 +395,7 @@ def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
             coords = list(interior.coords[:-1])
             hole_pts = []
             for x, y in coords:
-                pid = gmsh.model.geo.addPoint(x, y, 0, mesh_res, point_id)
+                pid = gmsh.model.geo.addPoint(x, y, 0, mesh_size, point_id)
                 # pid = gmsh.model.geo.addPoint(x, y, 0, tag=point_id)
                 point_map[(x, y)] = pid
                 hole_pts.append(pid)
@@ -410,7 +416,6 @@ def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
         surface_tags.append(surface)
 
         return outer_lines
-    mesh_size = estimate_mesh_resolution(polygon)
 
     # Support MultiPolygon
     if polygon.geom_type == "Polygon":
@@ -427,10 +432,10 @@ def mesh_from_polygon(polygon, mesh_name="polygon_mesh", mesh_res=0.1):
     gmsh.model.mesh.field.setNumbers(1, "EdgesList", lines)  # or NodesList
     gmsh.model.mesh.field.add("Threshold", 2)
     gmsh.model.mesh.field.setNumber(2, "InField", 1)
-    gmsh.model.mesh.field.setNumber(2, "SizeMin", mesh_size)
-    gmsh.model.mesh.field.setNumber(2, "SizeMax", mesh_size*3)
+    # gmsh.model.mesh.field.setNumber(2, "SizeMin", mesh_size)
+    # gmsh.model.mesh.field.setNumber(2, "SizeMax", mesh_size)
     gmsh.model.mesh.field.setNumber(2, "DistMin", 0)
-    gmsh.model.mesh.field.setNumber(2, "DistMax", mesh_size*5)
+    # gmsh.model.mesh.field.setNumber(2, "DistMax", mesh_size*5)
 
     # gmsh.option.setNumber("Mesh.Optimize", 1)
     # gmsh.option.setNumber("Mesh.OptimizeNetgen", 1)
@@ -853,6 +858,7 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): #
     V0: fxn space to be interpolated FROM
     wrt: flag that specifies whether derivatives should be computed w.r.t. source or target mesh
     adjoint: vector 
+    seed: 
 
     Builds an interpolation matrix that can be used to sample a function on mesh 0 at 
     each nodal position of mesh 1

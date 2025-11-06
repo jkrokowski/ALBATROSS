@@ -17,11 +17,11 @@ maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
 #=================== mesh construction ==================#
-N = 2
+N = 1
 offset = 1
 
-h_to_f = 10
-w_to_w = 10
+h_to_f = 6
+w_to_w = 5
 
 m1,n1 = N*h_to_f,N
 m2,n2 = N,N*w_to_w+offset
@@ -200,24 +200,29 @@ mortar_mesh = TXS_nm.collisions[(0,1)].mortar_mesh
 # F_B = csdl.Variable(value=np.zeros(K_B.shape[0]))
 # #F_B = outputs_B.F_B
 
-# #get interpolation matrices
-# inputs_interp_A = csdl.VariableGroup()
-# inputs_interp_A.xy_foreground = xy_A
-# inputs_interp_A.xy_interior_foreground = outputs_mm_A.xy_interior
-# inputs_interp_A.xy_mortar = xy_C
-# inputs_interp_A.xy_interior_mortar = outputs_mm_C.xy_interior
+#get interpolation matrices
+inputs_interp_A = csdl.VariableGroup()
+inputs_interp_A.xy_foreground = xy_A
+inputs_interp_A.xy_interior_foreground = xy_A_interior
+inputs_interp_A.xy_mortar = xy_C
+inputs_interp_A.xy_interior_mortar = xy_C_interior
 
-# nonmatchingdata_A = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
-#                                                                         mesh_id=0,
-#                                                                         collision=(0,1),
-#                                                                         foreground_boundary = XSs[0].boundary_nodes,
-#                                                                         foreground_interior = XSs[0].interior_nodes,
-#                                                                         mortar_boundary = mortar_mesh.boundary_nodes,
-#                                                                         mortar_interior = mortar_mesh.interior_nodes)
+nonmatchingdata_A = ALBATROSS.csdl_utils.NonmatchingInterpolationMatrix(xs=TXS_nm,
+                                                                        mesh_id=0,
+                                                                        collision=(0,1),
+                                                                        foreground_boundary = XSs[0].boundary_nodes,
+                                                                        foreground_interior = XSs[0].interior_nodes,
+                                                                        mortar_boundary = mortar_mesh.boundary_nodes,
+                                                                        mortar_interior = mortar_mesh.interior_nodes)
 
-# outputs_interp_A = nonmatchingdata_A.evaluate(inputs_interp_A)
+outputs_interp_A = nonmatchingdata_A.evaluate(inputs_interp_A)
 
-# P_A = outputs_interp_A.P
+P_A = outputs_interp_A.P
+nzC = list(np.nonzero(P_A.value)[0])
+nzA = list(np.nonzero(P_A.value)[1])
+
+P_Aii = P_A[nzC[:10],nzA[:10]]
+dP_Adx_A = csdl.derivative(P_Aii,xy_C)
 
 # inputs_interp_B = csdl.VariableGroup()
 # inputs_interp_B.xy_foreground = xy_B

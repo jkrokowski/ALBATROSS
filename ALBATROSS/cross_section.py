@@ -107,7 +107,8 @@ class CrossSection:
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
         self.VX = functionspace(self.msh,("CG",self.degree,(self.tdim,)))
-        self.dX = Argument(self.VX,2) #direction for spatial derivative
+        #TODO: argument number is hard coded, may need to adjust based on form 
+        self.dX = Argument(self.VX,2) #direction for spatial derivative, 
         self.n = FacetNormal(self.msh)
 
         
@@ -702,6 +703,10 @@ class CrossSection:
         
         return P
 
+    def _compute_mesh_size(self):
+        h_expr = ufl.CellDiameter(self.msh)
+        self.mesh_size = fem.assemble_scalar(fem.form(h_expr*self.dx))/self.A
+
     # def _assemble_system_matrix(self,residual = None):
         # if residual is None:
         #     self.system_mat = petsc.assemble_matrix(form(self.Residual))
@@ -1028,7 +1033,7 @@ class CrossSection:
 
         #TODO: we can probably speed this up by being a bit more intelligent with the function values. 
         # Really... we shouldn't need a loop here at all. 
-        dFormdx = ufl.derivative(form,self.x,self.dX)
+        # dFormdx = ufl.derivative(form,self.x,self.dX)
 
 
         d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
@@ -1919,12 +1924,15 @@ class CoupledCrossSection:
         #prepare the system sizes information:
         self._get_system_sizes()
 
-
+    #TODO: this whole function could likely be removed and the functionality to set the penalty param values should be in the 
+    # construction of the penalty terms
     def _set_penalty_values(self):
+        #TODO: this should really be set based on the mortar mesh size, not the foreground mesh size
+        #TODO: the mesh size should really be based on the mesh size in the intersection, not the overall average mesh size 
         h_avg_list = []
         for XS in self.XSs:
-            h_expr = ufl.CellDiameter(XS.msh)
-            h_avg = fem.assemble_scalar(fem.form(h_expr*XS.dx))
+            XS._compute_mesh_size()
+            h_avg = XS.mesh_size 
             print(f'average cell size: {h_avg}')
             h_avg_list.append(h_avg)
         self.nu_u = self.pen / np.average(h_avg_list)**2
@@ -1947,6 +1955,8 @@ class CoupledCrossSection:
 
         #construct the penalty term mass matrices
         self._construct_interpolation_operators()
+        self._construct_mortar_forms()
+        self._assemble_mortar_matrices()
         self._construct_coupling_terms()
 
         #apply the penalty terms
@@ -2143,7 +2153,12 @@ class CoupledCrossSection:
             facet_tags_B = meshtags(mshB,mshB.topology.dim-1,bndry_facets_B,np.ones_like(bndry_facets_B))
 
             poly_C = compute_union_polygon(mshA, facet_tags_A, mshB, facet_tags_B)
-            mesh_C = mesh_from_polygon(poly_C)
+
+            #TODO: this really should be based on just the overlapping cells and extract the 
+            # minimum mesh size in the overlap region, not the min of both meshes' average cell size
+            mesh_size = np.min([self.XSs[collision[0]].mesh_size,
+                               self.XSs[collision[1]].mesh_size])
+            mesh_C = mesh_from_polygon(poly_C,mesh_size=mesh_size,mesh_name='mortar_mesh')
             self.collisions[collision].mortar_mesh = MortarMesh(mesh_C)
 
     def _construct_mortar_mesh_fxns(self):
@@ -2174,8 +2189,7 @@ class CoupledCrossSection:
             self.collisions[collision].PA = get_interpolation_matrix(VC,self.XSs[collision[0]].V,mixed=True)
             self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V,mixed=True)
 
-    
-    def _construct_coupling_terms(self):
+    def _construct_mortar_forms(self):
         for collision in self.collisions:
             #mortar mesh has previously been constructed:
             mesh_C = self.collisions[collision].mortar_mesh.msh
@@ -2231,6 +2245,85 @@ class CoupledCrossSection:
             S_C.assemble()
             self.collisions[collision].SC_form = S_C_form
             self.collisions[collision].S_C = S_C
+
+
+    def _assemble_mortar_matrices(self):
+        for collision in self.collisions:
+            #assemble area term:
+            MC_form = self.collisions[collision].MC_form 
+            MC = fem.petsc.assemble_matrix(fem.form(MC_form))
+            MC.assemble()
+            # self.collisions[collision].MC_form = MC_form
+            self.collisions[collision].MC = MC
+
+            #assemble boundary term:
+            S_C_form = self.collisions[collision].SC_form 
+            S_C = fem.petsc.assemble_matrix(fem.form(S_C_form))
+            S_C.assemble()
+            # self.collisions[collision].SC_form = S_C_form
+            self.collisions[collision].S_C = S_C
+
+    def _construct_coupling_terms(self):
+        for collision in self.collisions:
+            #mortar mesh has previously been constructed:
+            # mesh_C = self.collisions[collision].mortar_mesh.msh
+        
+            # #intialize functions on mortar mesh and add to collision
+            # # Ve_C = element("CG",mesh_C.topology.cell_name(),1,shape=(3,))
+            # # self.collisions[collision].fxn_space = fem.functionspace(mesh_C, mixed_element(4*[Ve_C]))
+            # VC = self.collisions[collision].fxn_space
+            
+            # # self.collisions[collision].u = TrialFunction(VC)
+            # # self.collisions[collision].v = TestFunction(VC)
+            # # self.collisions[collision].dx = Measure("dx",domain=mesh_C)
+            # uC = self.collisions[collision].u
+            # vC = self.collisions[collision].v
+            # dx_C = self.collisions[collision].dx
+
+            # #construct projection operators
+            # self.collisions[collision].PA = get_interpolation_matrix(VC,self.XSs[collision[0]].V,mixed=True)
+            # self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V,mixed=True)
+
+            #construct displacement term (penalty weighted mass matrix)
+            # MC_form = self.nu_u * inner(uC, vC) * dx_C
+            # MC_form = self.collisions[collision].MC_form 
+            # MC = fem.petsc.assemble_matrix(fem.form(MC_form))
+            # MC.assemble()
+            # self.collisions[collision].MC_form = MC_form
+            # self.collisions[collision].MC = MC
+            MC = self.collisions[collision].MC
+
+            # #construct traction term (penalty weighted traction matrix)
+            # n = FacetNormal(mesh_C)
+            # n3 = as_tensor([0,n[0],n[1]])
+
+            # #DG0 space, used for material properties, etc
+            # Q = fem.functionspace(mesh_C,('DG',0))
+            # #construct DG spaces for modulus of elasticity and poisson ratio (assuming all materials are ISOTROPIC)
+            # E = fem.Function(Q)
+            # nu = fem.Function(Q)
+            # E.x.array[:] = np.full_like(E.x.array,self.XSs[0].materials[0].E,dtype=default_scalar_type)
+            # nu.x.array[:] = np.full_like(nu.x.array,self.XSs[0].materials[0].nu,dtype=default_scalar_type)
+            # C_C = getMatConstitutiveIsotropic(mesh_C,E,nu)
+            # i,j,k,l = indices(4)
+
+            # #trial function strain/stress:
+            # eps_C = self.XSs[0].warping2strain(uC,0)
+            # sigma_c =  as_tensor(C_C[i,j,k,l]*eps_C[k,l],(i,j))
+
+            # #test function strain/stress:
+            # eps_vC = self.XSs[0].warping2strain(vC,0)
+            # sigma_vc =  as_tensor(C_C[i,j,k,l]*eps_vC[k,l],(i,j))
+
+            # #traction stiffness matrix:
+            # S_C_form = self.nu_t * dot(dot(sigma_c,n3),dot(sigma_vc,n3))*ds
+            # S_C_form = self.collisions[collision].SC_form 
+            # S_C = fem.petsc.assemble_matrix(fem.form(S_C_form))
+            # S_C.assemble()
+            # self.collisions[collision].SC_form = S_C_form
+            # self.collisions[collision].S_C = S_C
+            S_C = self.collisions[collision].S_C 
+
 
             #construct displacement penalty terms
             PA = self.collisions[collision].PA
@@ -2373,7 +2466,7 @@ class CoupledCrossSection:
         return
     
 
-    def _compute_vjp_component_spatial(self,form,d_output,test_space ,trial_space = None):
+    def _compute_vjp_component_spatial(self,form,collision,d_output,test_space ,trial_space = None):
         
         # dFdx = ufl.derivative(form,self.x,self.dX)
 
@@ -2387,10 +2480,13 @@ class CoupledCrossSection:
 
         #TODO: we can probably speed this up by being a bit more intelligent with the function values. 
         # Really... we shouldn't need a loop here at all. 
-        dFormdx = ufl.derivative(form,self.x,self.dX)
+        x = self.collisions[collision].mortar_mesh.x
+        dX = self.collisions[collision].mortar_mesh.dX
 
+        # dFormdx = ufl.derivative(form,x,dX)
 
-        d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
+        VX = self.collisions[collision].mortar_mesh.VX
+        d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
         
         if trial_space==None:
@@ -2399,7 +2495,7 @@ class CoupledCrossSection:
         u_j = fem.Function(trial_space)
         v_j = fem.Function(test_space)
 
-        form_cache = fem.form(ufl.derivative(ufl.action(ufl.action(form,u_j),v_j),self.x,self.dX))
+        form_cache = fem.form(ufl.derivative(ufl.action(ufl.action(form,u_j),v_j),x,dX))
         
         # for j in range(d_output.shape[0]):
         # use the nonzero column indices only (instead of all columns regardless of value)                 

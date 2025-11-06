@@ -550,7 +550,8 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
 
         #construct forms for uncoupled problem
-        self.xs._construct_coupling_terms()
+        self.xs._construct_mortar_forms()
+        self.xs._assemble_mortar_matrices()
 
         MC_petsc = self.xs.collisions[self.collision].MC
         SC_petsc = self.xs.collisions[self.collision].S_C
@@ -566,19 +567,21 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
 
         #return the two vectors for the 
         pMCpxT_dMC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].MC_form,
+                                                                            self.collision,
                                                                             d_outputs['MC'],
                                                                             test_space = self.xs.collisions[self.collision].fxn_space)
         
-        pSCpxT_dSC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].MC_form,
+        pSCpxT_dSC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].SC_form,
+                                                                            self.collision,
                                                                             d_outputs['SC'],
                                                                             test_space = self.xs.collisions[self.collision].fxn_space)
 
         d_inputs_full = pMCpxT_dMC + pSCpxT_dSC
 
-        d_inputs['xy'] = np.vstack([d_inputs_full[self.xs.XSs[self.mesh_id].dofs_x_boundary],
-                                        d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_boundary]]).T
-        d_inputs['xy_interior'] = np.vstack([d_inputs_full[self.xs.XSs[self.mesh_id].dofs_x_interior],
-                                                 d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_interior]]).T
+        d_inputs['xy'] = np.vstack([d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_x_boundary],
+                                        d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_y_boundary]]).T
+        d_inputs['xy_interior'] = np.vstack([d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_x_interior],
+                                                 d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_y_interior]]).T
 
 
 class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
