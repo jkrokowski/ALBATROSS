@@ -439,6 +439,9 @@ class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
         print('computing interpolation matrix derivatives...')
         
         #TODO: this is a sketch, these matrices are both unassembled and unexpanded
+        conn_A = self.xs.XSs[self.collision[0]].V.sub(0).sub(0).collapse()[0].dofmap.list
+        conn_C = self.xs.collisions[self.collision].fxn_space.sub(0).sub(0).collapse()[0].dofmap.list
+
         dPdx_A  = ALBATROSS.nonmatching_utils.derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
                                                                                                     source_space,
                                                                                                     wrt='FROM')
