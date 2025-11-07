@@ -441,14 +441,38 @@ class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
         #TODO: this is a sketch, these matrices are both unassembled and unexpanded
         conn_A = self.xs.XSs[self.collision[0]].V.sub(0).sub(0).collapse()[0].dofmap.list
         conn_C = self.xs.collisions[self.collision].fxn_space.sub(0).sub(0).collapse()[0].dofmap.list
-
-        dPdx_A  = ALBATROSS.nonmatching_utils.derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
-                                                                                                    source_space,
-                                                                                                    wrt='FROM')
+        
+        #need to loop over subspaces and accumulate the effect of the d_outputs entries :)
+        #get subspace portion of d_outputs:
+        #subspace and subsubspace numbers should match between A and C
+        
+        dxA = np.zeros((self.xs.XSs[self.mesh_id].msh.geometry.x.shape[0],2))
+        dxC = np.zeros((self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x.shape[0],2))
+        for i in range(4):
+            for j in range(3):
+                sub_space_A,sub_space_A_dofmap = self.xs.XSs[self.mesh_id].V.sub(i).sub(j).collapse()
+                sub_space_C,sub_space_C_dofmap = self.xs.collisions[self.collision].fxn_space.sub(i).sub(j).collapse()
+                dP = d_outputs['P'][np.ix_(sub_space_C_dofmap,sub_space_A_dofmap)]
+                dxAij,dxCij = ALBATROSS.nonmatching_utils.action_of_geom_on_nm_interpolation_matrix(sub_space_C,
+                                                                                sub_space_A,
+                                                                                dP=dP)
+                dxA += dxAij
+                dxC += dxCij
+                
+        d_inputs['xy_foreground'] = dxA[self.xs.XSs[self.mesh_id].boundary_nodes,:]
+        d_inputs['xy_interior_foreground'] = dxA[self.xs.XSs[self.mesh_id].interior_nodes,:]
+        
+        d_inputs['xy_mortar'] = dxC[self.xs.collisions[self.collision].mortar_mesh.boundary_nodes]
+        d_inputs['xy_interior_mortar'] = dxC[self.xs.collisions[self.collision].mortar_mesh.interior_nodes]
+        
+        
+        # dPdx_A  = ALBATROSS.nonmatching_utils.derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
+        #                                                                                             source_space,
+        #                                                                                             wrt='FROM')
     
-        dPdx_C  = ALBATROSS.nonmatching_utils.derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
-                                                                                                    source_space,
-                                                                                                    wrt='TO')
+        # dPdx_C  = ALBATROSS.nonmatching_utils.derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
+        #                                                                                             source_space,
+        #                                                                                             wrt='TO')
 
 
 class CrossSectionSystemComponents(csdl.CustomExplicitOperation):

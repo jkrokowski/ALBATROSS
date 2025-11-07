@@ -221,9 +221,22 @@ P_A = outputs_interp_A.P
 nzC = list(np.nonzero(P_A.value)[0])
 nzA = list(np.nonzero(P_A.value)[1])
 
-P_Aii = P_A[nzC[:10],nzA[:10]]
-dP_Adx_A = csdl.derivative(P_Aii,xy_C)
+P_Aii = P_A[nzC[60:70],nzA[60:70]]
+dP_Adx_A = csdl.derivative(P_Aii,xy_A)
+dP_Adx_C = csdl.derivative(P_Aii,xy_C)
 
+sim = csdl.experimental.PySimulator(recorder)
+sim.run()
+
+dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.000001)
+dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
+
+for i in range(10):
+    print(np.linalg.norm(dP_Adx_A[i,:].value-dP_Adx_A_FD[P_Aii,xy_A][i,:]))
+for i in range(10):
+    print(np.linalg.norm(dP_Adx_C[i,:].value-dP_Adx_C_FD[P_Aii,xy_C][i,:]))
+
+print()
 # inputs_interp_B = csdl.VariableGroup()
 # inputs_interp_B.xy_foreground = xy_B
 # inputs_interp_B.xy_interior_foreground = outputs_mm_B.xy_interior
@@ -242,8 +255,7 @@ dP_Adx_A = csdl.derivative(P_Aii,xy_C)
 
 # P_B = outputs_interp_B.P
 
-#get mortar mesh coupling matrices
-inputs_C = csdl.VariableGroup()
+#get mortar mesh coupling matricesdinputs_C = csdl.VariableGroup()
 inputs_C.xy = xy_C
 inputs_C.xy_interior = xy_C_interior
 

@@ -852,6 +852,137 @@ def get_interpolation_matrix(V_1,V_0,mixed=False):
     else:
         return M01
 
+def action_of_geom_on_nm_interpolation_matrix(V_1,V_0,dP=None): # Function spaces from nonmatching meshes
+    '''
+    V1: fxn space to be interpolated TO
+    V0: fxn space to be interpolated FROM
+    dP: matrix the shape of the interpolation matrix specifying the "adjoint load"
+
+    returns 
+        dx0: accumulated sensitivities w.r.t. the source mesh from fxn_space V_0
+        dx1: accumulated sensitivities w.r.t. the target mesh from fxn_space V_1
+    '''
+    msh_0 = V_0.mesh
+    gdim = msh_0.topology.dim
+    msh_1 = V_1.mesh
+    x_0   = V_0.tabulate_dof_coordinates()
+    x_1   = V_1.tabulate_dof_coordinates()
+    nx0 = len(x_0)
+    nx1 = len(x_1) #number of x_1 coords
+
+    #===== FIND CELLS ON MESH 0 CONTAINING MESH 1 DOFS ====== #
+    bb_tree         = geometry.bb_tree(msh_0, msh_0.topology.dim)
+    cell_candidates = geometry.compute_collisions_points(bb_tree, x_1)
+    cells           = []
+    points_on_proc  = []
+    index_points    = []
+    colliding_cells = geometry.compute_colliding_cells(msh_0, cell_candidates, x_1)
+
+    for i, point in enumerate(x_1):
+        if len(colliding_cells.links(i))>0:
+            points_on_proc.append(point)
+            cells.append(colliding_cells.links(i)[0])
+            index_points.append(i)
+            
+    # ====== MAP x_1 COORDINATES TO THE mesh 0 COORDINATE VIA THE PULL BACK ======#
+    #points_on_proc_ are the mesh 1 points to pullback to mesh 0 reference coordinates
+    #index_points correspond to the mesh 1 dof (used to construct interp mat later)
+    #cells_ are the cells on which the mesh 1 points (points_on_proc_) are indicident to
+    index_points_   = np.array(index_points)
+    points_on_proc_ = np.array(points_on_proc, dtype=np.float64) 
+    cells_          = np.array(cells)
+
+    x0_ref = np.zeros((len(cells_), 2))
+    for i in range(0, len(cells_)):
+        geom_dofs  = list(msh_0.geometry.dofmap[cells_[i]])
+        x0_ref[i,:] = msh_0.geometry.cmap.pull_back(np.array([points_on_proc_[i,:]]), msh_0.geometry.x[geom_dofs])
+    
+    # ====== TABULATE THE LAGRANGE BASIS VALUES OF MESH 0 AT THE REFERENCE COORDINATES =====#
+    ct      = cpp.mesh.to_string(msh_0.topology.cell_type)
+    deg_geom = 1
+    deg_field = 1
+
+    bas_geom = basix.create_element(family=basix.finite_element.string_to_family("Lagrange", ct),
+                                    celltype=basix.CellType[ct], 
+                                    degree=deg_geom,
+                                    lagrange_variant=basix.LagrangeVariant.equispaced
+    )
+
+    bas_field = basix.create_element(family=basix.finite_element.string_to_family("Lagrange", ct),
+                                    celltype=basix.CellType[ct], 
+                                    degree=deg_field,
+                                    lagrange_variant=basix.LagrangeVariant.equispaced
+    )
+
+    #tabulate the geometry basis functions and geometry basis function derivatives:
+    bas_geom_tab =  bas_geom.tabulate(1, x0_ref)
+    basis_matrix = bas_geom_tab[0,:,:,0]
+    dNgeom_dxy = bas_geom_tab[1:,:,:,0]
+    dphi_dxy = bas_field.tabulate(1, x0_ref)[1:,:,:,0]
+
+    #TODO: need to map the 0-cellwise/1-dofwise to the full interpolation matrix
+    # Target dof can only affect one interpolation matrix row, 
+    # Source dof can affect many rows (as many rows as the number of dofs inside the cells of which the dof supports) 
+    cell_dofs         = np.zeros((nx1, len(basis_matrix[0,:])))
+    num_cell_dofs = len(basis_matrix[0,:])
+    # if wrt == 'TO':
+    # wrt the target dofs: take the row corresponding to the dof on msh 1
+    #  and populate the columns based on the "geom dofs" value
+
+    #store derivatives by msh1 points, msh0 cells, gdim
+    # each msh1 dof affects the msh 0 dofs of the cell containing it
+    dPdx1 = np.zeros((nx1,num_cell_dofs,gdim))
+
+    # if wrt == 'FROM':
+    #wrt the source dofs, its a bit more challenging since we loop through the cells, 
+    # but we set row values based on the affected mesh 1 dof 
+    # and column values based on the mesh 0 dofs. 
+    # There is just a wider effect of the change of a mesh 0 dof on more mesh 1 dofs
+        
+    #store derivatives by msh1 points, msh0 cells, msh0 cells, gdim
+    dPdx0 = np.zeros((nx1,num_cell_dofs,num_cell_dofs,gdim))
+
+
+    #compute local geometry sensitivity on mesh 0 at the physical locations of the mesh 1 points using the pulled back coords:
+    for i in range(len(index_points_)):
+        #get the dofs of mesh 0 cells:
+        geom_dofs  = list(msh_0.geometry.dofmap[cells_[i]])
+        cell_dofs[index_points_[i],:] = geom_dofs
+
+        #get the mesh 0 nodal coordinates for the cell:
+        X0 = msh_0.geometry.x[geom_dofs]
+
+        #use the derivative of the geometry basis functions and the nodal coordinates to construct the cellwise Jacobian:
+        J0 = dNgeom_dxy[:,i,:]@X0[:,:2]
+        #invert to map from the reference domain back to physical space
+        invJ0 = np.linalg.inv(J0)
+        #construct local geometric sensitivity operator from field basis function derivatives and geometry inverse jacobian
+        B0 = dphi_dxy[:,i,:].T@invJ0
+       
+        # #use geometry basis functions to relate the local geometric sensitivity of the interpolation operator to the mesh coordinates
+        # if wrt=="FROM":
+        dPdx0[index_points_[i],:,:,:] = -np.einsum('i,jk->ijk', basis_matrix[i],B0) #this is the interpolation operator design sensitivity to the mesh0 nodes
+        # if wrt=="TO":
+        dPdx1[index_points_[i],:,:] = B0 
+        
+    cell_dofs_ = cell_dofs.astype(int) ###### Convert to int so we can use to index arrays
+    
+    dx0 = np.zeros((nx0,2))
+    dx1 = np.zeros((nx1,2))
+    for i in index_points_:
+        dP_local = dP[i,cell_dofs_[i]]
+        dx1[i,:] += dP_local@dPdx1[i,:,:]
+
+        dx0_local = dP_local@dPdx0[i,:,:,:]
+        for k in range(num_cell_dofs):
+            dx0[cell_dofs_[i,k],:] += dx0_local[k,:]
+        # for cell in cells_[i]:
+
+
+    return dx0,dx1
+
+
+
 def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): # Function spaces from nonmatching meshes
     '''
     V1: fxn space to be interpolated TO
@@ -929,7 +1060,7 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): #
         # wrt the target dofs: take the row corresponding to the dof on msh 1
         #  and populate the columns based on the "geom dofs" value
 
-        #store derivatives by msh1 points, msh0 cells, gdim
+        #store derivatives by msh1 points, msh0 cell dofs, gdim
         # each msh1 dof affects the msh 0 dofs of the cell containing it
         deriv_vals = np.zeros((nx1,nx0,gdim))
 
@@ -939,7 +1070,7 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): #
         # and column values based on the mesh 0 dofs. 
         # There is just a wider effect of the change of a mesh 0 dof on more mesh 1 dofs
             
-        #store derivatives by msh1 points, msh0 cells, msh0 cells, gdim
+        #store derivatives by msh1 points, msh0 cell dofs, msh0 cell dofs, gdim
         deriv_vals = np.zeros((nx1,nx0,nx0,gdim))
 
 

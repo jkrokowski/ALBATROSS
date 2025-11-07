@@ -40,7 +40,7 @@ def get_overlapping_cells(target_mesh,source_mesh):
 
 def test_interpolation_matrix():
     # Create two overlapping meshes
-    N_source = 3
+    N_source = 2
     N_target = 3
     source_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0, 0], [1, 1]], [N_source, N_source], mesh.CellType.quadrilateral)
     target_mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[0.25, 0.25], [1.5, 1.5]], [N_target ,N_target], mesh.CellType.quadrilateral)
@@ -57,7 +57,9 @@ def test_interpolation_matrix():
 
     # Construct interpolation matrix (replace with your implementation)
     interpolation_matrix = get_interpolation_matrix(target_space, source_space)
-    interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,source_space,wrt='FROM')
+    interpolation_matrix_derivative = derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
+                                                                                            source_space,
+                                                                                            wrt='FROM')
     interpolation_matrix_derivative.assemble()
     dIdx = convert_petsc_to_numpy(interpolation_matrix_derivative)
     
