@@ -21,7 +21,7 @@ N = 1
 offset = 1
 
 h_to_f = 6
-w_to_w = 5
+w_to_w = 6
 
 m1,n1 = N*h_to_f,N
 m2,n2 = N,N*w_to_w+offset
@@ -221,7 +221,7 @@ P_A = outputs_interp_A.P
 nzC = list(np.nonzero(P_A.value)[0])
 nzA = list(np.nonzero(P_A.value)[1])
 
-P_Aii = P_A[nzC[60:70],nzA[60:70]]
+P_Aii = P_A[nzC[:20],nzA[:20]]
 dP_Adx_A = csdl.derivative(P_Aii,xy_A)
 dP_Adx_C = csdl.derivative(P_Aii,xy_C)
 
@@ -231,9 +231,11 @@ sim.run()
 dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.000001)
 dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
 
-for i in range(10):
-    print(np.linalg.norm(dP_Adx_A[i,:].value-dP_Adx_A_FD[P_Aii,xy_A][i,:]))
-for i in range(10):
+for i in range(20):
+    print('delta norm: ',np.linalg.norm(dP_Adx_A[i,:].value-dP_Adx_A_FD[P_Aii,xy_A][i,:]),
+          'norm: ', np.linalg.norm(dP_Adx_A[i,:].value),
+          'fd norm: ',np.linalg.norm(dP_Adx_A_FD[P_Aii,xy_A][i,:]))
+for i in range(20):
     print(np.linalg.norm(dP_Adx_C[i,:].value-dP_Adx_C_FD[P_Aii,xy_C][i,:]))
 
 print()

@@ -961,29 +961,46 @@ def action_of_geom_on_nm_interpolation_matrix(V_1,V_0,dP=None): # Function space
        
         # #use geometry basis functions to relate the local geometric sensitivity of the interpolation operator to the mesh coordinates
         # if wrt=="FROM":
-        dPdx0[index_points_[i],:,:,:] = -np.einsum('i,jk->ijk', basis_matrix[i],B0) #this is the interpolation operator design sensitivity to the mesh0 nodes
+        dPdx0[index_points_[i],:,:,:] = -np.einsum('i,jk->jik', basis_matrix[i],B0) #this is the interpolation operator design sensitivity to the mesh0 nodes
         # if wrt=="TO":
         dPdx1[index_points_[i],:,:] = B0 
         
     cell_dofs_ = cell_dofs.astype(int) ###### Convert to int so we can use to index arrays
     
+    #action for target mesh by looping over target mesh points:
     dx0 = np.zeros((nx0,2))
     dx1 = np.zeros((nx1,2))
     for i in index_points_:
         dP_local = dP[i,cell_dofs_[i]]
         dx1[i,:] += dP_local@dPdx1[i,:,:]
-
-        dx0_local = dP_local@dPdx0[i,:,:,:]
-        for k in range(num_cell_dofs):
+        for k in range(4):
+            dx0_local = np.einsum('i,ijk->jk',dP_local,dPdx0[i,:,:,:])
             dx0[cell_dofs_[i,k],:] += dx0_local[k,:]
-        # for cell in cells_[i]:
-
+    unique_cells = np.unique(cells_)
+    # unique_foreground_dofs = np.unique(msh_0.geometry.dofmap.list[unique_cells])
+    msh_0.topology.create_connectivity(0,2) #make sure map from dofs to cells is created
+    for unique_cell in unique_cells: 
+    # for foreground_dof in unique_foreground_dofs:
+        # supported_cells = msh_0.topology.connectivity(0,2).links(foreground_dof)
+        unique_cell_dofs = msh_0.geometry.dofmap[unique_cell]
+        contained_mortar_nodes = index_points_[np.where(cells_==unique_cell)[0]]
+        for mortar_node in contained_mortar_nodes:
+            dP_local = dP[mortar_node,cell_dofs_[mortar_node]]
+            for unique_cell_dof in unique_cell_dofs:
+                cell_dofs_idx = np.where(cell_dofs_[mortar_node]==unique_cell_dof)[0][0]
+                dx0_local =  dP_local@dPdx0[mortar_node,:,cell_dofs_idx,:]
+                dx0[cell_dofs_idx,:] += dx0_local
+            # dx0_local = np.einsum('i,ijk->jk',dP_local,dPdx0[i,:,:,:])
+            # dx0[cell_dofs_[i,k],:] += dx0_local[k,:]
+    # for source mesh points, we need to find all cells that are supported by the source dof,
+    #   then, we need all mortar nodes contained in those supported cells, 
+    #   which we can loop over and accumulate the effect of 
 
     return dx0,dx1
 
 
 
-def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): # Function spaces from nonmatching meshes
+def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM',dof=None): # Function spaces from nonmatching meshes
     '''
     V1: fxn space to be interpolated TO
     V0: fxn space to be interpolated FROM
@@ -1092,7 +1109,7 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): #
        
         # #use geometry basis functions to relate the local geometric sensitivity of the interpolation operator to the mesh coordinates
         if wrt=="FROM":
-            deriv_vals[index_points_[i],:,:,:] = -np.einsum('i,jk->ijk', basis_matrix[i],B0) #this is the interpolation operator design sensitivity to the mesh0 nodes
+            deriv_vals[index_points_[i],:,:,:] = -np.einsum('i,jk->jik', basis_matrix[i],B0) #this is the interpolation operator design sensitivity to the mesh0 nodes
         if wrt=="TO":
             deriv_vals[index_points_[i],:,:] = B0 
         
@@ -1115,26 +1132,40 @@ def derivative_of_interpolation_matrix_nonmatching_meshes(V_1,V_0,wrt='FROM'): #
 
     cell_dofs_ = cell_dofs.astype(int) ###### REDUCE HERE
 
-    # ====== CREATE A PESTc MATRIX FROM THE TABULATED LAGRANGE BASIS VALUES ===== #
-    dIdxy = PETSc.Mat().create(comm=MPI.COMM_WORLD)
-    dIdxy.setSizes((gdim*nx1, len(x_0)))
-    dIdxy.setUp()
-    for i in range(0,nx1):
-        for j in range(deriv_vals.shape[1]):
-            #TODO: replace the .setValue() with addition so (j,i), doesn't overwrite the (i,j value)
-            #       alternatively, first add all (j,i) pairs for the i target dof ,then loop :)
-            if wrt == "FROM":
-                for k in range(deriv_vals.shape[2]):
-                    dIdxy.setValue(i,cell_dofs_[i,k],deriv_vals[i,j,k,0])
-                    #set y derivative values:
-                    dIdxy.setValue(i+nx1,cell_dofs_[i,k],deriv_vals[i,j,k,1])
-            if wrt == "TO":
-                dIdxy.setValue(i,cell_dofs_[i,j],deriv_vals[i,j,0])
-                #set y derivative values:
-                dIdxy.setValue(i+nx1,cell_dofs_[i,j],deriv_vals[i,j,1])
-                # print()
+    # # ====== CREATE A PESTc MATRIX FROM THE TABULATED LAGRANGE BASIS VALUES ===== #
+    # dIdxy = PETSc.Mat().create(comm=MPI.COMM_WORLD)
+    # dIdxy.setSizes((gdim*nx1, len(x_0)))
+    # dIdxy.setUp()
+    # for i in range(0,nx1):
+    #     for j in range(deriv_vals.shape[1]):
+    #         #TODO: replace the .setValue() with addition so (j,i), doesn't overwrite the (i,j value)
+    #         #       alternatively, first add all (j,i) pairs for the i target dof ,then loop :)
+    #         if wrt == "FROM":
+    #             for k in range(deriv_vals.shape[2]):
+    #                 dIdxy.setValue(i,cell_dofs_[i,k],deriv_vals[i,j,k,0])
+    #                 #set y derivative values:
+    #                 dIdxy.setValue(i+nx1,cell_dofs_[i,k],deriv_vals[i,j,k,1])
+    #         if wrt == "TO":
+    #             dIdxy.setValue(i,cell_dofs_[i,j],deriv_vals[i,j,0])
+    #             #set y derivative values:
+    #             dIdxy.setValue(i+nx1,cell_dofs_[i,j],deriv_vals[i,j,1])
+    #             # print()
 
-    return dIdxy
+    #find the adjoining cells to the relevant dof
+    #OUTER LOOP HERE: 
+    #for dof in foreground dofs:
+    msh_0.topology.create_connectivity(0,2)
+    supported_cells = msh_0.topology.connectivity(0,2).links(dof)
+    dIdx = np.zeros((nx1,len(x_0)))
+    for supported_cell in supported_cells:
+        supported_mortar_nodes = index_points_[np.where(cells_==supported_cell)[0]]
+        
+        supported_cell_dofs = msh_0.geometry.dofmap[supported_cell]
+        for mortar_node in supported_mortar_nodes:
+            cell_dofs_idx = np.where(cell_dofs[mortar_node]==dof)[0][0]
+            dIdx[mortar_node,supported_cell_dofs] += deriv_vals[mortar_node,:,cell_dofs_idx,0]
+
+    return dIdx
 
 
 
