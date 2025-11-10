@@ -650,6 +650,7 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].boundary_nodes,0:2]=inputs['xy_B']
         self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].interior_nodes,0:2]=inputs['xy_B_interior']
 
+        #TODO: is this necessary? or is the mortar mesh just used for the warping function discovery?
         #UPDATE MORTAR MESH GEOMETRY:
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
@@ -670,20 +671,7 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
     
     def compute_derivatives(self, inputs, outputs, derivatives):
         print('compute beam matrix derivatives...')
-        #update boundary nodes:
-        # if self.boundary_nodes is not None: 
-        #     self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
-        
-        # #update interior nodes
-        # if self.interior_nodes is not None: 
-        #     self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        # else: 
-        #     self.xs.msh.geometry.x[:,0:2]=inputs['xy']
-        
-        # for i in range(6):
-        #     self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
-        #     self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-        
+                
         # self.xs._compute_xs_stiffness_matrix()
         if self.check_partials != 'w':                
             pKpx = self.xs.compute_pKpx()
@@ -696,11 +684,17 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
             derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
             derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
 
-
-        # print('input vals:')
-        # print(inputs['xy'])
-        # print('mesh coords:')
-        # print(self.xs.msh.geometry.x[:,0:2])
+        
+        derivatives['K', 'xy_A']
+        derivatives['K', 'xy_A_interior']
+        derivatives['K', 'xy_B']
+        derivatives['K', 'xy_B_interior']
+        derivatives['K', 'xy_C']
+        derivatives['K', 'xy_C_interior']
+        derivatives['K', 'w_A']
+        derivatives['K', 'w_B']
+        derivatives['K', 'lmbda']
+        
         
         #declare derivatives
         

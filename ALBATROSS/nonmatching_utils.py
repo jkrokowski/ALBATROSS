@@ -976,22 +976,28 @@ def action_of_geom_on_nm_interpolation_matrix(V_1,V_0,dP=None): # Function space
         for k in range(4):
             dx0_local = np.einsum('i,ijk->jk',dP_local,dPdx0[i,:,:,:])
             dx0[cell_dofs_[i,k],:] += dx0_local[k,:]
-    unique_cells = np.unique(cells_)
-    # unique_foreground_dofs = np.unique(msh_0.geometry.dofmap.list[unique_cells])
-    msh_0.topology.create_connectivity(0,2) #make sure map from dofs to cells is created
-    for unique_cell in unique_cells: 
+
+
+    # unique_cells = np.unique(cells_)
+    # unique_foreground_dofs = np.unique(msh_0.geometry.dofmap[unique_cells])
+    # msh_0.topology.create_connectivity(0,2) #make sure map from dofs to cells is created
     # for foreground_dof in unique_foreground_dofs:
-        # supported_cells = msh_0.topology.connectivity(0,2).links(foreground_dof)
-        unique_cell_dofs = msh_0.geometry.dofmap[unique_cell]
-        contained_mortar_nodes = index_points_[np.where(cells_==unique_cell)[0]]
-        for mortar_node in contained_mortar_nodes:
-            dP_local = dP[mortar_node,cell_dofs_[mortar_node]]
-            for unique_cell_dof in unique_cell_dofs:
-                cell_dofs_idx = np.where(cell_dofs_[mortar_node]==unique_cell_dof)[0][0]
-                dx0_local =  dP_local@dPdx0[mortar_node,:,cell_dofs_idx,:]
-                dx0[cell_dofs_idx,:] += dx0_local
-            # dx0_local = np.einsum('i,ijk->jk',dP_local,dPdx0[i,:,:,:])
-            # dx0[cell_dofs_[i,k],:] += dx0_local[k,:]
+    
+    # # for unique_cell in unique_cells: 
+    # # for foreground_dof in unique_foreground_dofs:
+    #     supported_cells = msh_0.topology.connectivity(0,2).links(foreground_dof)
+    #     for supported_cell in supported_cells: 
+    #         supported_cell_dofs = msh_0.geometry.dofmap[supported_cell]
+    #         mortar_nodes = index_points_[np.where(cells_==supported_cell)[0]]
+    #         for mortar_node in mortar_nodes:
+    #             dP_local = dP[mortar_node,supported_cell_dofs]
+    #             # for unique_cell_dof in supported_cell_dofs:
+    #             cell_dofs_idx = np.where(cell_dofs_[mortar_node]==foreground_dof)[0][0]
+    #             dx0_local =  dP_local@dPdx0[mortar_node,:,cell_dofs_idx,:]
+    #             dx0[foreground_dof,:] += dx0_local
+    #         # dx0_local = np.einsum('i,ijk->jk',dP_local,dPdx0[i,:,:,:])
+    #         # dx0[cell_dofs_[i,k],:] += dx0_local[k,:]
+    
     # for source mesh points, we need to find all cells that are supported by the source dof,
     #   then, we need all mortar nodes contained in those supported cells, 
     #   which we can loop over and accumulate the effect of 

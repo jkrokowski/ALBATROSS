@@ -221,7 +221,10 @@ P_A = outputs_interp_A.P
 nzC = list(np.nonzero(P_A.value)[0])
 nzA = list(np.nonzero(P_A.value)[1])
 
-P_Aii = P_A[nzC[:20],nzA[:20]]
+start = 0
+stop = 30
+num_nz= stop- start
+P_Aii = P_A[nzC[start:stop],nzA[start:stop]]
 dP_Adx_A = csdl.derivative(P_Aii,xy_A)
 dP_Adx_C = csdl.derivative(P_Aii,xy_C)
 
@@ -231,12 +234,18 @@ sim.run()
 dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.000001)
 dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
 
-for i in range(20):
+#we actually expect some issues here with the x_A mesh nodes derivatives, since some motions can move the 
+print('derivatives w.r.t. x_A')
+for i in range(num_nz):
     print('delta norm: ',np.linalg.norm(dP_Adx_A[i,:].value-dP_Adx_A_FD[P_Aii,xy_A][i,:]),
           'norm: ', np.linalg.norm(dP_Adx_A[i,:].value),
           'fd norm: ',np.linalg.norm(dP_Adx_A_FD[P_Aii,xy_A][i,:]))
-for i in range(20):
-    print(np.linalg.norm(dP_Adx_C[i,:].value-dP_Adx_C_FD[P_Aii,xy_C][i,:]))
+
+print('derivatives w.r.t. x_C')
+for i in range(num_nz):
+    print('delta norm: ',np.linalg.norm(dP_Adx_C[i,:].value-dP_Adx_C_FD[P_Aii,xy_C][i,:]),
+          'norm: ', np.linalg.norm(dP_Adx_C[i,:].value),
+          'fd norm: ',np.linalg.norm(dP_Adx_C_FD[P_Aii,xy_C][i,:]))
 
 print()
 # inputs_interp_B = csdl.VariableGroup()
