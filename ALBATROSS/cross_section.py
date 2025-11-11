@@ -2647,16 +2647,21 @@ class CoupledCrossSection:
         return numpy arrays
         '''
         XS = self.XSs[mesh_id]
+        K1 = self.K1
+        K2inv = self.K2inv
+        K2 = self.K2
+
+        #get K1 and K2 adjoint loads
+        W_1 = dK @ K1 @ K2inv.T + K2inv.T @ K1.T @ dK
+        W_2 = - K2inv.T @ K1.T @ dK @ K1 @ K2inv.T
+
         if derivative_type == 'x':
             d_form = 0
-            #get K1 and K2 adjoint loads
-            W_1 = dK@self.K1@self.K2inv.T + self.K2inv.T@self.K1@dK
-            W_2 = self.K2inv.T@self.K1.T@dK@self.K1@self.K2inv.T
-
+            
             indices_i,indices_j = np.nonzero(dK)
             for idx_i,idx_j in zip(indices_i,indices_j):
-                d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+                d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_j][idx_i]     
+                d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_j][idx_i]
 
             d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
 
@@ -2664,17 +2669,14 @@ class CoupledCrossSection:
         
         if derivative_type == 'w':
             d_form = 0
-            #get K1 and K2 adjoint loads
-            W_1 = dK@self.K1@self.K2inv.T + self.K2inv.T@self.K1@dK
-            W_2 = self.K2inv.T@self.K1.T@dK@self.K1@self.K2inv.T
 
             d_inputs = np.zeros((XS.V.dofmap.index_map_bs*XS.V.dofmap.index_map.size_global,6))
             indices_i,indices_j = np.nonzero(dK)
             #loop over warping functions:
             for idx_k in range(6):
                 for idx_i,idx_j in zip(indices_i,indices_j):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_j][idx_i]     
+                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_j][idx_i]  
 
                 d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.warping_functions[idx_k])))
 
@@ -2682,17 +2684,14 @@ class CoupledCrossSection:
         
         if derivative_type == 'l':
             d_form = 0
-            #get K1 and K2 adjoint loads
-            W_1 = dK@self.K1@self.K2inv.T + self.K2inv.T@self.K1@dK
-            W_2 = self.K2inv.T@self.K1.T@dK@self.K1@self.K2inv.T
 
             d_inputs = np.zeros((XS.LM.dofmap.index_map_bs*XS.LM.dofmap.index_map.size_global,6))
             indices_i,indices_j = np.nonzero(dK)
             #loop over lagrange multipliers:
             for idx_k in range(6):
                 for idx_i,idx_j in zip(indices_i,indices_j):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_j][idx_i]      
+                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_j][idx_i]  
 
                 d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
 
