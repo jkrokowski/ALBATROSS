@@ -2640,7 +2640,89 @@ class CoupledCrossSection:
 
         return dRdx_dr
 
+    def _compute_pK_action(self,dK,mesh_id=0,derivative_type='x'):
+        '''
+        compute the action of the seed dK on the input based on derivative_type
 
+        return numpy arrays
+        '''
+        XS = self.XSs[mesh_id]
+        if derivative_type == 'x':
+            d_form = 0
+            #get K1 and K2 adjoint loads
+            W_1 = dK@self.K1@self.K2inv.T + self.K2inv.T@self.K1@dK
+            W_2 = self.K2inv.T@self.K1.T@dK@self.K1@self.K2inv.T
+
+            indices_i,indices_j = np.nonzero(dK)
+            for idx_i,idx_j in zip(indices_i,indices_j):
+                d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+
+            d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
+
+            return d_inputs.array
+        
+        if derivative_type == 'w':
+            d_form = 0
+            #get K1 and K2 adjoint loads
+            W_1 = dK@self.K1@self.K2inv.T + self.K2inv.T@self.K1@dK
+            W_2 = self.K2inv.T@self.K1.T@dK@self.K1@self.K2inv.T
+
+            d_inputs = np.zeros((XS.V.dofmap.index_map_bs*XS.V.dofmap.index_map.size_global,6))
+            indices_i,indices_j = np.nonzero(dK)
+            #loop over warping functions:
+            for idx_k in range(6):
+                for idx_i,idx_j in zip(indices_i,indices_j):
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+
+                d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.warping_functions[idx_k])))
+
+            return d_inputs
+        
+        if derivative_type == 'l':
+            d_form = 0
+            #get K1 and K2 adjoint loads
+            W_1 = dK@self.K1@self.K2inv.T + self.K2inv.T@self.K1@dK
+            W_2 = self.K2inv.T@self.K1.T@dK@self.K1@self.K2inv.T
+
+            d_inputs = np.zeros((XS.LM.dofmap.index_map_bs*XS.LM.dofmap.index_map.size_global,6))
+            indices_i,indices_j = np.nonzero(dK)
+            #loop over lagrange multipliers:
+            for idx_k in range(6):
+                for idx_i,idx_j in zip(indices_i,indices_j):
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+
+                d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
+
+            return d_inputs
+
+        # self.pK1px_form = [[derivative(self.XSs[mesh_id].K1_form[idx1][idx2],self.x,self.dX)
+        #                     for idx2 in range(6)] 
+        #                         for idx1 in range(6)]
+        # self.pK2px_form = [[derivative(self.K2_form[idx1][idx2],self.x,self.dX)
+        #                     for idx2 in range(6)] 
+        #                         for idx1 in range(6)]
+                
+        # self.pK1px_lol = [[petsc.assemble_vector(form(self.pK1px_form[idx1][idx2]))
+        #                 for idx2 in range(6)] 
+        #                     for idx1 in range(6)]
+        # self.pK2px_lol = [[petsc.assemble_vector(form(self.pK2px_form[idx1][idx2]))
+        #         for idx2 in range(6)] 
+        #             for idx1 in range(6)]
+
+        # #Term 1: (dK1/dx) @ K2inv @ K1^T
+        # term1 = np.einsum("ijm,jk,kl->ilm", self.pK1px, self.K2inv, self.K1)
+        # # Term 2: - K1 @ K2inv @ (dK2/dx) @ K2inv @ K1^T
+        # term2 = -np.einsum("ij,jk,klm,ln,np->ipm", self.K1,self.K2inv,self.pK2px,self.K2inv,self.K1.T)
+        # # Term 3: K1@ K2inv @ (dK1/dx)^T
+        # term3 = np.einsum("ij,jk,lkm->ilm", self.K1, self.K2inv, self.pK1px)
+
+        # #partial derivatives
+        # self.pKpx = term1 + term2 + term3 
+
+        # return self.pKpx.reshape((36,self.pKpx.shape[-1]))
 
 
 
@@ -2754,7 +2836,9 @@ class CoupledCrossSection:
 
             # self.S += self.XSs[i].S
             # self.K += self.XSs[i].K
-        
+
+        self.K2inv = np.linalg.inv(self.K2)
+
         self.K = self.K1 @ np.linalg.inv(self.K2) @ self.K1.T
            
 

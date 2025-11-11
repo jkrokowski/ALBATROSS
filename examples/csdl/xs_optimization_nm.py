@@ -98,8 +98,8 @@ xy_C_interior = csdl.Variable(value=xy_C_interior,shape=xy_C_interior.shape,name
 xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
 
 #web translation parameter
-dx_w = csdl.Variable(value=-0.45)
-dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
+dx_w = csdl.Variable(value=0)
+dx_w.set_as_design_variable(lower=-0.45,upper=0.45,scaler=100)
 
 
 #=====mesh motion=======#
@@ -308,15 +308,15 @@ with csdl.namespace('Objective'):
     f.add_name('max_bending_stiffness')
     f.set_as_objective()
 
-with csdl.namespace('Area constraint'):
-    g1 = K[0,0]
-    g1.add_name('g1')
-    g1.set_as_constraint(upper=35,lower=25) # constraint
+# with csdl.namespace('Area constraint'):
+#     g1 = K[0,0]
+#     g1.add_name('g1')
+#     g1.set_as_constraint(upper=35,lower=25) # constraint
 
-with csdl.namespace('Shear constraint'):
-    g2 = K[2,2]
-    g2.add_name('g2')
-    g2.set_as_constraint(lower=4) # constraint
+# with csdl.namespace('Shear constraint'):
+#     g2 = K[2,2]
+#     g2.add_name('g2')
+#     g2.set_as_constraint(lower=4) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
@@ -327,7 +327,7 @@ sim.run()
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-# sim.check_totals(outputs_sec.K,inputs.coeffs)
+sim.check_totals(outputs_sec.K,dx_w)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
@@ -344,7 +344,7 @@ from modopt import PySLSQP
 prob = CSDLAlphaProblem(problem_name='bending_stiffness_max',simulator=sim)
 
 # optimizer = SLSQP(prob,recording=True,solver_options={'ftol':1e-8, 'maxiter':20})
-optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':100,'acc':1e-6,'iprint':2})
+optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':1,'acc':1e-6,'iprint':2})
 
 # Check first derivatives at the initial guess, if needed
 # optimizer.check_first_derivatives(prob.x0,step=0.001)
@@ -354,5 +354,5 @@ optimizer.solve()
 
 optimizer.print_results()
 
-print("xy values:")
-print(xy.value)
+print("xy B values:")
+print(xy_B.value)

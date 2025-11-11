@@ -525,7 +525,7 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         # then constructing a field with the d_inputs array
         # then, use ufl.action(ufl.adjoint(FORM),d_inputs_function)
         # and fem.petsc.assemble_vector()
-        print("getting derivatives!")
+        print("getting system component derivatives!")
 
         #return the two vectors for the 
         pKpxT_dK = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[0][0],
@@ -591,6 +591,7 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         '''
         Derivatives of M_C and S_C w.r.t. the spatial coordinates
         '''
+        print('getting coupling component derivatives:')
 
         #return the two vectors for the 
         pMCpxT_dMC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].MC_form,
@@ -626,8 +627,8 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         self.declare_input('xy_A_interior',inputs.xy_A_interior)
         self.declare_input('xy_B',inputs.xy_B)
         self.declare_input('xy_B_interior',inputs.xy_B_interior)
-        self.declare_input('xy_C',inputs.xy_C)
-        self.declare_input('xy_C_interior',inputs.xy_C_interior)
+        # self.declare_input('xy_C',inputs.xy_C)
+        # self.declare_input('xy_C_interior',inputs.xy_C_interior)
         self.declare_input('w_A',inputs.w_A)
         self.declare_input('w_B',inputs.w_B)
         self.declare_input('lmbda',inputs.lmbda)
@@ -650,10 +651,10 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].boundary_nodes,0:2]=inputs['xy_B']
         self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].interior_nodes,0:2]=inputs['xy_B_interior']
 
-        #TODO: is this necessary? or is the mortar mesh just used for the warping function discovery?
-        #UPDATE MORTAR MESH GEOMETRY:
-        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
-        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
+        # #TODO: is this necessary? or is the mortar mesh just used for the warping function discovery?
+        # #UPDATE MORTAR MESH GEOMETRY:
+        # self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
+        # self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
 
         #UPDATE WARPING FUNCTIONS:
         for i in range(6):
@@ -669,31 +670,65 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         outputs['K'] = self.xs.K
         # outputs['A'] = self.xs.A
     
-    def compute_derivatives(self, inputs, outputs, derivatives):
-        print('compute beam matrix derivatives...')
-                
-        # self.xs._compute_xs_stiffness_matrix()
-        if self.check_partials != 'w':                
-            pKpx = self.xs.compute_pKpx()
-            derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
-            derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
         
-        if self.check_partials != 'x':
-            pKpw = self.xs.compute_pKpw()
-            pKpl = self.xs.compute_pKpl()
-            derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
-            derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
+        # dxA = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
+        # dxB = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
+        # dwA = np.zeros_like(self.d_outputs['w_A'])
+        # dwB = np.zeros_like(self.d_outputs['w_B'])
+        # dlmbda = np.zeros_like(self.d_outputs['lmbda'])
+
+        dxA = self.xs._compute_pK_action(d_outputs['K'],
+                                           mesh_id=self.collision[0],
+                                           derivative_type='x')
+        dxB = self.xs._compute_pK_action(d_outputs['K'],
+                                           mesh_id=self.collision[1],
+                                           derivative_type='x')
+
+        d_inputs['xy_A'] = np.vstack([dxA[self.xs.XSs[self.collision[0]].dofs_x_boundary],
+                                        dxA[self.xs.XSs[self.collision[0]].dofs_y_boundary]]).T
+        d_inputs['xy_A_interior'] = np.vstack([dxA[self.xs.XSs[self.collision[0]].dofs_x_interior],
+                                        dxA[self.xs.XSs[self.collision[0]].dofs_y_interior]]).T
+        
+        d_inputs['xy_B'] = np.vstack([dxB[self.xs.XSs[self.collision[1]].dofs_x_boundary],
+                                        dxB[self.xs.XSs[self.collision[1]].dofs_y_boundary]]).T
+        d_inputs['xy_B_interior'] = np.vstack([dxB[self.xs.XSs[self.collision[1]].dofs_x_interior],
+                                        dxB[self.xs.XSs[self.collision[1]].dofs_y_interior]]).T
+        
+        d_inputs['w_A'] = self.xs._compute_pK_action(d_outputs['K'],
+                                                    mesh_id=self.collision[0],
+                                                    derivative_type='w')
+        d_inputs['w_B'] = self.xs._compute_pK_action(d_outputs['K'],
+                                                    mesh_id=self.collision[1],
+                                                    derivative_type='w')
+        d_inputs['lmbda'] = self.xs._compute_pK_action(d_outputs['K'],
+                                                    mesh_id=self.collision[0],
+                                                    derivative_type='l')
+
+    # def compute_derivatives(self, inputs, outputs, derivatives):
+    #     print('compute beam matrix derivatives...')
+                
+    #     if self.check_partials != 'w':                
+    #         pKpx = self.xs.compute_pKpx()
+    #         derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
+    #         derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
+        
+    #     if self.check_partials != 'x':
+    #         pKpw = self.xs.compute_pKpw()
+    #         pKpl = self.xs.compute_pKpl()
+    #         derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
+    #         derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
 
         
-        derivatives['K', 'xy_A']
-        derivatives['K', 'xy_A_interior']
-        derivatives['K', 'xy_B']
-        derivatives['K', 'xy_B_interior']
-        derivatives['K', 'xy_C']
-        derivatives['K', 'xy_C_interior']
-        derivatives['K', 'w_A']
-        derivatives['K', 'w_B']
-        derivatives['K', 'lmbda']
+    #     derivatives['K', 'xy_A']
+    #     derivatives['K', 'xy_A_interior']
+    #     derivatives['K', 'xy_B']
+    #     derivatives['K', 'xy_B_interior']
+    #     # derivatives['K', 'xy_C']
+    #     # derivatives['K', 'xy_C_interior']
+    #     derivatives['K', 'w_A']
+    #     derivatives['K', 'w_B']
+    #     derivatives['K', 'lmbda']
         
         
         #declare derivatives

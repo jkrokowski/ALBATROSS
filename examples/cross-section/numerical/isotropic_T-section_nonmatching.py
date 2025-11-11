@@ -60,6 +60,18 @@ mesh_C = TXS_nm.collisions[(0,1)].mortar_mesh.msh
 TXS_nm.plot_warping_fxns()
 K = TXS_nm.K
 
+dK = np.array([[1,0,0,0,0,0],
+               [0,0,0,0,0,0],
+               [0,0,0,0,0,0],
+               [0,0,0,0,0,0],
+               [0,0,0,0,0,0],
+               [0,0,0,0,0,0]])
+dx0 = TXS_nm._compute_pK_action(dK,0)
+dw0 = TXS_nm._compute_pK_action(dK,0,derivative_type = 'w')
+dx1 = TXS_nm._compute_pK_action(dK,1)
+dw1 = TXS_nm._compute_pK_action(dK,1,derivative_type = 'w')
+dl = TXS_nm._compute_pK_action(dK,0,derivative_type = 'l')
+
 np.set_printoptions(precision=3)
 print(K)
 TXS_conformal_K = np.load("T_section_K_n_20.npy")
