@@ -33,7 +33,7 @@ xy=domain.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
 
 #restrict custom explicit operation to 'x', 'w', or 'False'
-check_partials = 'w'
+check_partials = 'x'
 #get the warping functions, since we are only interested in checking the beam matrix derivatives
 xs._get_warping_functions()
 
@@ -86,6 +86,10 @@ outputs_sec = section_model.evaluate(inputs)
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
+dKdx = csdl.derivative(outputs_sec.K,inputs.xy)
+#might have to skip this line and run the full FD check first
+dKdx_FD = np.load('dKdx_FD.npy')
+
 #============ WARPING FUNCTION PARTIAL DERIVATIVE CHECK =========#
 if check_partials == 'w':
     print('checking pK/pw...')
@@ -123,11 +127,13 @@ if check_partials == 'x':
     for i in range(xs.boundary_nodes.shape[0]*2):
         print(i,np.linalg.norm(dKdx[:,i]-dKdx_FD[:,i]),np.linalg.norm(dKdx[:,i]),np.linalg.norm(dKdx_FD[:,i]))
 
-    step_size=0.0001
-    dK1dx0_FD=np.load('dK1dx_FD_dx='+str(step_size)+'.npy')
-    dK2dx0_FD=np.load('dK2dx_FD_dx='+str(step_size)+'.npy')
-    dK2invdx0_FD=np.load('dK2invdx_FD_dx='+str(step_size)+'.npy')
-    dKdx0_FD=np.load('dKdx_FD_dx='+str(step_size)+'.npy')
+    dKdx_FD = np.save('dKdx_FD',dKdx_FD)
+
+    # step_size=0.0001
+    # dK1dx0_FD=np.load('dK1dx_FD_dx='+str(step_size)+'.npy')
+    # dK2dx0_FD=np.load('dK2dx_FD_dx='+str(step_size)+'.npy')
+    # dK2invdx0_FD=np.load('dK2invdx_FD_dx='+str(step_size)+'.npy')
+    # dKdx0_FD=np.load('dKdx_FD_dx='+str(step_size)+'.npy')
 
 dK00dx = sim.compute_totals(K00,reduced_xy)
 dK00dx_FD = sim.compute_totals(K00,reduced_xy,use_finite_difference=True,finite_difference_step_size=0.001)

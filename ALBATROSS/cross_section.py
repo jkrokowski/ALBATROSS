@@ -1284,7 +1284,70 @@ class CrossSection:
 
         return self.pKpl
     
+    def _compute_pK_action(self,dK,derivative_type='x'):
+        '''
+        compute the action of the seed dK on the input based on derivative_type
 
+        return numpy arrays
+        '''
+        XS = self
+        K1 = self.K1
+        K2inv = self.K2inv
+        
+        # #make symmetric?
+        # dK = 0.5*(dK+dK.T)
+
+        #get K1 and K2 adjoint loads
+        W_1 = dK @ K1 @ K2inv + K2inv @ K1.T @ dK
+        W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
+        # print('dK:')
+        # print(dK)
+        print('W1:')
+        print(W_1)
+        print('W2:')
+        print(W_2)
+
+        if derivative_type == 'x':
+            d_form = 0
+            
+            for idx_i in range(6):
+                for idx_j in range(6):
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                    d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+
+            d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
+
+            return d_inputs.array
+        
+        if derivative_type == 'w':
+            d_form = 0
+
+            d_inputs = np.zeros((XS.V.dofmap.index_map_bs*XS.V.dofmap.index_map.size_global,6))
+            indices_i,indices_j = np.nonzero(dK)
+            #loop over warping functions:
+            for idx_k in range(6):
+                for idx_i,idx_j in zip(indices_i,indices_j):
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]  
+
+                d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.warping_functions[idx_k])))
+
+            return d_inputs
+        
+        if derivative_type == 'l':
+            d_form = 0
+
+            d_inputs = np.zeros((XS.LM.dofmap.index_map_bs*XS.LM.dofmap.index_map.size_global,6))
+            indices_i,indices_j = np.nonzero(dK)
+            #loop over lagrange multipliers:
+            for idx_k in range(6):
+                for idx_i,idx_j in zip(indices_i,indices_j):
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+
+                d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
+
+            return d_inputs
     # def compute_spatial_totals(self):
     #     args = self.residuals[0][0].arguments()
     #     n = max(a.number() for a in args) if args else -1

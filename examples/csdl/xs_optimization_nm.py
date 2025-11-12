@@ -98,7 +98,7 @@ xy_C_interior = csdl.Variable(value=xy_C_interior,shape=xy_C_interior.shape,name
 xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
 
 #web translation parameter
-dx_w = csdl.Variable(value=0)
+dx_w = csdl.Variable(value=0.45)
 dx_w.set_as_design_variable(lower=-0.45,upper=0.45,scaler=100)
 
 
