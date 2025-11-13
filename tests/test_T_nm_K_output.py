@@ -284,6 +284,8 @@ dx_w.set_as_design_variable(lower=-0.45,upper=0.45,scaler=100)
 
 # # TXS_nm.get_xs_stiffness_matrix()
 # # Kcheck = TXS_nm.K 
+#manually get the warping functions
+TXS_nm._get_warping_functions()
 
 #======= cross-section stiffness matrix ==========#
 inputs_sec = csdl.VariableGroup()
@@ -294,14 +296,13 @@ inputs_sec.xy_B_interior = xy_B_interior
 # inputs_sec.xy_C = inputs_mm_C.xy
 # inputs_sec.xy_C_interior = outputs_mm_C.xy_interior
 inputs_sec.w_A = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].warping_functions[i].x.array for i in range(6)]).T)
-inputs_sec.w_B = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].warping_functions[i].x.array for i in range(6)]).T)
+inputs_sec.w_B = csdl.Variable(value=np.vstack([TXS_nm.XSs[1].warping_functions[i].x.array for i in range(6)]).T)
 inputs_sec.lmbda = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].lmbdas[i].x.array for i in range(6)]).T)
 
-#manual get the warping functions
-TXS_nm._get_warping_functions()
 
 section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
-                                                                  collision=(0,1))
+                                                                  collision=(0,1),
+                                                                  check_partials='w')
 
 outputs_sec = section_model.evaluate(inputs_sec)
 

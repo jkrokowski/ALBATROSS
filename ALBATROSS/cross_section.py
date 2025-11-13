@@ -1293,19 +1293,10 @@ class CrossSection:
         XS = self
         K1 = self.K1
         K2inv = self.K2inv
-        
-        # #make symmetric?
-        # dK = 0.5*(dK+dK.T)
 
         #get K1 and K2 adjoint loads
-        W_1 = dK @ K1 @ K2inv + K2inv @ K1.T @ dK
+        W_1 = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
         W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
-        # print('dK:')
-        # print(dK)
-        print('W1:')
-        print(W_1)
-        print('W2:')
-        print(W_2)
 
         if derivative_type == 'x':
             d_form = 0
@@ -1326,9 +1317,10 @@ class CrossSection:
             indices_i,indices_j = np.nonzero(dK)
             #loop over warping functions:
             for idx_k in range(6):
-                for idx_i,idx_j in zip(indices_i,indices_j):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]  
+                for idx_i in range(6):
+                    for idx_j in range(6):
+                        d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                        d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
                 d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.warping_functions[idx_k])))
 
@@ -1341,9 +1333,10 @@ class CrossSection:
             indices_i,indices_j = np.nonzero(dK)
             #loop over lagrange multipliers:
             for idx_k in range(6):
-                for idx_i,idx_j in zip(indices_i,indices_j):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+                for idx_i in range(6):
+                    for idx_j in range(6):
+                        d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                        d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
                 d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
 
@@ -2715,16 +2708,16 @@ class CoupledCrossSection:
         K2 = self.K2
 
         #get K1 and K2 adjoint loads
-        W_1 = dK @ K1 @ K2inv.T + K2inv.T @ K1.T @ dK
-        W_2 = - K2inv.T @ K1.T @ dK @ K1 @ K2inv.T
+        W_1 = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
+        W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
 
         if derivative_type == 'x':
             d_form = 0
             
-            indices_i,indices_j = np.nonzero(dK)
-            for idx_i,idx_j in zip(indices_i,indices_j):
-                d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_j][idx_i]     
-                d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_j][idx_i]
+            for idx_i,idx_j in np.argwhere(W_1):
+                d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+            for idx_i,idx_j in np.argwhere(W_2):
+                d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
             d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
 
@@ -2737,9 +2730,10 @@ class CoupledCrossSection:
             indices_i,indices_j = np.nonzero(dK)
             #loop over warping functions:
             for idx_k in range(6):
-                for idx_i,idx_j in zip(indices_i,indices_j):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_j][idx_i]     
-                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_j][idx_i]  
+                for idx_i,idx_j in np.argwhere(W_1):
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                for idx_i,idx_j in np.argwhere(W_2):
+                    d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
                 d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.warping_functions[idx_k])))
 
@@ -2752,9 +2746,10 @@ class CoupledCrossSection:
             indices_i,indices_j = np.nonzero(dK)
             #loop over lagrange multipliers:
             for idx_k in range(6):
-                for idx_i,idx_j in zip(indices_i,indices_j):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_j][idx_i]      
-                    d_form += W_2[idx_i,idx_j] * XS.K2_form[idx_j][idx_i]  
+                for idx_i,idx_j in np.argwhere(W_1):
+                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                for idx_i,idx_j in np.argwhere(W_2):
+                    d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
                 d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
 

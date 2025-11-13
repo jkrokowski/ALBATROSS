@@ -87,6 +87,7 @@ sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
 dKdx = csdl.derivative(outputs_sec.K,inputs.xy)
+
 #might have to skip this line and run the full FD check first
 dKdx_FD = np.load('dKdx_FD.npy')
 

@@ -98,8 +98,8 @@ xy_C_interior = csdl.Variable(value=xy_C_interior,shape=xy_C_interior.shape,name
 xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
 
 #web translation parameter
-dx_w = csdl.Variable(value=0.45)
-dx_w.set_as_design_variable(lower=-0.45,upper=0.45,scaler=100)
+dx_w = csdl.Variable(value=0.1)
+dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
 
 
 #=====mesh motion=======#
@@ -327,7 +327,7 @@ sim.run()
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-sim.check_totals(outputs_sec.K,dx_w)
+# sim.check_totals(outputs_sec.K,dx_w)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
@@ -344,7 +344,7 @@ from modopt import PySLSQP
 prob = CSDLAlphaProblem(problem_name='bending_stiffness_max',simulator=sim)
 
 # optimizer = SLSQP(prob,recording=True,solver_options={'ftol':1e-8, 'maxiter':20})
-optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':1,'acc':1e-6,'iprint':2})
+optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':100,'acc':1e-6,'iprint':2})
 
 # Check first derivatives at the initial guess, if needed
 # optimizer.check_first_derivatives(prob.x0,step=0.001)
