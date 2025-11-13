@@ -1526,12 +1526,13 @@ class CrossSection:
         c = self.K1inv@reactions
 
         c_const=Constant(self.msh,PETSc.ScalarType(c))
-        ubar = dot(self.N_bar,c_const)
-        uhat = dot(self.N_hat,c_const)
+        # ubar = dot(self.N_bar,c_const)
+        # uhat = dot(self.N_hat,c_const)
         # utilde = dot(self.N_tilde,c_const)
         # ubreve = dot(self.N_breve,c_const)
+        u_c = dot(c_const,as_tensor(self.warping_functions))
 
-        stress = self.warping2stress(ubar,uhat)
+        stress = self.warping2stress(u_c,0)
         return stress
 
     def get_von_mises_stress(self,stress):

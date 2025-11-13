@@ -64,7 +64,7 @@ class Beam(Axial):
             self.numxs = len(self.xs_list)
             self.numsegments = len(self.xs_adj_list)
 
-            #check that all the adjacency list and the xs list contain the same number of xs's
+            #check that all the adjacency list and the xs list contain the correct number of xs's:
             assert(set(range(self.numxs))==set(self.xs_adj_list.flatten()))
             
             print("Orienting XSs along beam axis....")
@@ -113,14 +113,14 @@ class Beam(Axial):
             element_type = ('DG',0,(3,))
             # num_vals_to_enter = self.numsegments
 
-        elif self.segment_type == "VARIABLE":
+        elif self.segment_type == "LINEAR":
             element_type = ('CG',1,(3,))
             # num_vals_to_enter = self.numsegments + 1
             # self.orientations=self.orientations.append(self.orientations)
         
         self.O2 = functionspace(self.axial_pos_mesh,element_type)
         self.o2 = Function(self.O2)
-        self.o2.vector.array = np.array(self.orientations)
+        self.o2.x.array[:] = np.array(self.orientations)
         # self.o2.vector.destroy() #needed for PETSc garbage collection
 
         #interpolate these orientations into the finer 1D analysis mesh
@@ -130,10 +130,19 @@ class Beam(Axial):
         # https://fenicsproject.discourse.group/t/segv-fault-when-interpolating-function-onto-different-mesh/13593
         # https://github.com/FEniCS/dolfinx/blob/v0.7.3/python/test/unit/fem/test_interpolation.py#L720-L765 
         #TODO: nm_interpolation needs to be fixed here
-        self.o.interpolate(self.o2,nmm_interpolation_data=create_interpolation_data(
-            self.o.function_space.mesh,
-            self.o.function_space.element,
-            self.o2.function_space.mesh, padding=1e-14))
+        cell_map_o = self.axial_mesh.topology.index_map(self.axial_mesh.topology.dim)
+        num_cells_on_proc = cell_map_o.size_local + cell_map_o.num_ghosts
+        cells_o = np.arange(num_cells_on_proc,dtype=np.int32)
+        self.o.interpolate_nonmatching(self.o2, 
+                                       cells_o,
+                                       interpolation_data=create_interpolation_data(self.O,
+                                                                                    self.O2,
+                                                                                    cells_o))
+
+        # self.o.interpolate(self.o2,nmm_interpolation_data=create_interpolation_data(
+        #     self.o.function_space.mesh,
+        #     self.o.function_space.element,
+        #     self.o2.function_space.mesh, padding=1e-14))
 
     def _link_xs_to_axial(self):
         '''
@@ -149,12 +158,11 @@ class Beam(Axial):
             scalar_element = ('DG',0)
             vector_element = ('DG',0,(3,))
             tensor_element = ('DG',0,(6,6))
-            num_vals_to_enter = self.numsegments
-        elif self.segment_type == "VARIABLE":
+        elif self.segment_type == "LINEAR":
             scalar_element = ('CG',1)
             vector_element = ('CG',1,(3,))
             tensor_element = ('CG',1,(6,6))
-            num_vals_to_enter = self.numsegments + 1
+            
 
         #We need to construct a continuous field over the axial mesh 
         #   from the properties computed from each cross-section
@@ -166,21 +174,21 @@ class Beam(Axial):
         linear_density2 = Function(S2)
 
         #populate cross-sectional properties over axial positioning mesh
-        for i in range(num_vals_to_enter):
-            #TODO: think a bit more about how to build up the xs properties over the beam
-            xs_idx =  self.xs_adj_list[i][0]
-            xs=self.xs_list[xs_idx]
-            #output stiffess matrix
-            if sym_cond:
-                print("symmetric mode not available yet,try again soon")
-                exit()
-                k2.vector.array[21*i,21*(i+1)] = xs.K.flatten()
-            elif not sym_cond:
-                k2.vector.array[36*i:36*(i+1)] = xs.K.flatten()
-                linear_density2.vector.array[i] = xs.linear_density
-                # a2.vector.array[i] = xs.A
-                # rho2.vector.array[i] = xs.rho
-                # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
+        for i in range(self.numsegments):
+            for j,xs_idx in enumerate(self.xs_adj_list[i]):
+                xs=self.xs_list[xs_idx]
+                #output stiffess matrix
+                if sym_cond:
+                    print("symmetric mode not available yet,try again soon")
+                    exit()
+                    k2.x.array[21*i,21*(i+1)] = xs.K.flatten()
+                elif not sym_cond:
+                    #TODO: need to think a bit about this mapping, but seems fine rn
+                    k2.x.array[36*j:36*(j+1)] = xs.K.flatten()
+                    linear_density2.x.array[i] = xs.linear_density
+                    # a2.vector.array[i] = xs.A
+                    # rho2.vector.array[i] = xs.rho
+                    # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
 
         #interpolate from axial_pos_mesh to axial_mesh 
 
@@ -191,18 +199,38 @@ class Beam(Axial):
         #interpolate beam constitutive matrix
         self.k = Function(self.T_66)
         #TODO: nm_interpolation needs to be fixed here
-        self.k.interpolate(k2,nmm_interpolation_data=create_interpolation_data(
-            self.k.function_space.mesh,
-            self.k.function_space.element,
-            k2.function_space.mesh, padding=1e-14))
+
+        cell_map_axial = self.axial_mesh.topology.index_map(self.axial_mesh.topology.dim)
+        num_cells_on_proc = cell_map_axial.size_local + cell_map_axial.num_ghosts
+        cells_axial = np.arange(num_cells_on_proc,dtype=np.int32)
+        self.o.interpolate_nonmatching(self.o2, 
+                                       cells_axial,
+                                       interpolation_data=create_interpolation_data(self.O,
+                                                                                    self.O2,
+                                                                                    cells_axial))
+
+        self.k.interpolate_nonmatching(k2, 
+                                       cells_axial,
+                                       interpolation_data=create_interpolation_data(self.T_66,
+                                                                                    T2_66,
+                                                                                    cells_axial))
+        # self.k.interpolate(k2,nmm_interpolation_data=create_interpolation_data(
+        #     self.k.function_space.mesh,
+        #     self.k.function_space.element,
+        #     k2.function_space.mesh, padding=1e-14))
 
         #interpolate linear density area
         self.linear_density = Function(self.S)
         #TODO: nm_interpolation needs to be fixed here
-        self.linear_density.interpolate(linear_density2,nmm_interpolation_data=create_interpolation_data(
-            self.k.function_space.mesh,
-            self.k.function_space.element,
-            linear_density2.function_space.mesh, padding=1e-14))
+        self.linear_density.interpolate_nonmatching(linear_density2, 
+                                       cells_axial,
+                                       interpolation_data=create_interpolation_data(self.S,
+                                                                                    S2,
+                                                                                    cells_axial))
+        # self.linear_density.interpolate(linear_density2,nmm_interpolation_data=create_interpolation_data(
+        #     self.k.function_space.mesh,
+        #     self.k.function_space.element,
+        #     linear_density2.function_space.mesh, padding=1e-14))
 
         # # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
         # k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
@@ -395,10 +423,10 @@ class Beam(Axial):
                 
         def apply_disp_to_xs(xsdisp,u_local):
             numdofs = int(xsdisp.x.array.shape[0]/3)
-            xsdisp.vector.array += np.tile(self.RGB@u_local,numdofs)
+            xsdisp.x.array[:] += np.tile(self.RGB@u_local,numdofs)
             
-            #needed for PETSc garbage collection
-            xsdisp.vector.destroy()
+            # #needed for PETSc garbage collection
+            # xsdisp.vector.destroy()
 
         def apply_rot_to_xs(xsdisp,centroid,theta_local):
             def rotation_to_disp(x):
@@ -519,7 +547,7 @@ class Beam(Axial):
         actor_1 = plotter.add_mesh(warped,line_width=5,scalar_bar_args=sargs)
         # Controlling the text properties
         # plotter.add_scalar_bar('u',interactive=True)
-        self.uh.vector.destroy()
+        # self.uh.vector.destroy()
         # self.plot_axial_displacement()
         
         grids = [] #used for rotated xs
@@ -580,7 +608,7 @@ class Beam(Axial):
                 # color = [1,1,1]
             )
             warped = grids[i].warp_by_vector("cross-section displacement", factor=warp_factor)
-            warped.cell_data["VonMises"] = section.von_mises.vector.array
+            warped.cell_data["VonMises"] = section.von_mises.x.array
             warped.set_active_scalars("VonMises")
             actor_3 = plotter.add_mesh(warped, show_edges=True,clim=[0,sigma_max],show_scalar_bar=True)
             # actor_3 = plotter.add_mesh(warped, show_edges=True,scalar_bar_args=sargs)

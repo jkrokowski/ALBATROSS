@@ -877,21 +877,27 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
 
 class BeamModel(csdl.CustomExplicitOperation):
     '''
-    initialization inputs: beam axis and xs info
+    initialization inputs: beam object
 
     evaluation inputs: loads (at some subset of points?)
     
     outputs: deflection
     '''
-    def __init__(self,beam_axis,xs_info):
+    def __init__(self,beam):
         super().__init__()
-        self.beam_axis = beam_axis
-        self.xs_info = xs_info
+        self.beam = beam
         
-        ALBATROSS.beam.Beam(beam_axis,xs_info)
-
     def evaluate(self,inputs: csdl.VariableGroup):
-        self.declare_input('K',inputs.xy)
+        self.declare_input('K',inputs.K)
+        self.declare_input('F'.inputs.F)
+
+        outputs = csdl.VariableGroup()
+        outputs.d = self.create_output('d', (1,))
+        outputs.d.name = 'tip_deflection'
+        # outputs.A = self.create_output('A',(1,))
+        # outputs.A.name = 'beam xs area'
+
+        return outputs
     
     def compute(self, inputs, outputs):
         return super().compute(inputs, outputs)

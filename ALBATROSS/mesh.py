@@ -337,7 +337,7 @@ def beam_interval_mesh_3D(pts,ne,meshname):
      msh.name = meshname
      cell_markers.name = f"{msh.name}_cells"
      facet_markers.name = f"{msh.name}_facets"
-     gmsh.fltk.run()
+     # gmsh.fltk.run()
      # close gmsh API
      gmsh.finalize()
 

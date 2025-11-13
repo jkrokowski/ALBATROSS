@@ -69,6 +69,7 @@ TXS_nm.plot_meshes()
 filename_C = 'mortar_mesh'
 with XDMFFile(MPI.COMM_WORLD, "output/"+filename_C+".xdmf", "w") as xdmf:
     xdmf.write_mesh(TXS_nm.collisions[(0,1)].mortar_mesh.msh)
+TXS_nm.collisions[(0,1)].mortar_mesh.msh.name = filename_C
 
 #get boundary orderings for mesh A
 xy_A=mesh_A.geometry.x[XSs[0].boundary_nodes,0:2]

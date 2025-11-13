@@ -174,7 +174,7 @@ class Axial:
 
         #initialize function to store solution of assembled system:
         self.uh = Function(self.beam_element.W)
-        uvec = self.uh.vector #petsc vector
+        uvec = self.uh.x.petsc_vec#petsc vector
         uvec.setUp()
         ksp = PETSc.KSP().create()
         ksp.setType(PETSc.KSP.Type.CG)
@@ -249,8 +249,8 @@ class Axial:
         print("Adding clamped point...")
         #function for bc application
         ubc = Function(self.beam_element.W)
-        with ubc.vector.localForm() as uloc:
-            uloc.set(0.)
+        # with ubc.vector.localForm() as uloc:
+        #     uloc.set(0.)
         
         clamped_disp_dofs = self._get_dofs(pt,'disp')
         clamped_rot_dofs = self._get_dofs(pt,'rot')
@@ -259,8 +259,8 @@ class Axial:
         clamped_bc = dirichletbc(ubc,clamped_dofs)
         self.bcs.append(clamped_bc)
 
-        # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        ubc.vector.destroy()    #need to add to prevent PETSc memory leak 
+        # # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
+        # ubc.vector.destroy()    #need to add to prevent PETSc memory leak 
     
     def _get_dofs(self,pt,dof_type="disp"):
             def locate_pt(x):
