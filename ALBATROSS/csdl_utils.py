@@ -302,8 +302,14 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         # dlmbda = np.zeros_like(self.d_outputs['lmbda'])
         
         if self.check_partials != 'w':
-            dx = self.xs._compute_pK_action(d_outputs['K'],
-                                            derivative_type='x')
+            num_spatial_dofs = self.xs.VX.dofmap.index_map_bs*self.xs.VX.dofmap.index_map.size_global
+            dx = np.zeros((num_spatial_dofs,))
+            
+            if len(np.nonzero(d_outputs['K'])[0])>0:
+                dx += self.xs._compute_pK_action(d_outputs['K'],
+                                                derivative_type='x')
+            if not np.isclose(d_outputs['A'][0],0):
+                dx += self.xs._compute_pA_action(d_outputs['A'])
 
             d_inputs['xy'] = np.vstack([dx[self.xs.dofs_x_boundary],
                                             dx[self.xs.dofs_y_boundary]]).T
@@ -311,10 +317,12 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
                                             dx[self.xs.dofs_y_interior]]).T
             
         if self.check_partials != 'x':
-            d_inputs['w'] = self.xs._compute_pK_action(d_outputs['K'],
-                                                        derivative_type='w')
-            d_inputs['lmbda'] = self.xs._compute_pK_action(d_outputs['K'],
-                                                        derivative_type='l')
+            if len(np.nonzero(d_outputs['K'])[0])>0:
+                d_inputs['w'] = self.xs._compute_pK_action(d_outputs['K'],
+                                                            derivative_type='w')
+                d_inputs['lmbda'] = self.xs._compute_pK_action(d_outputs['K'],
+                                                            derivative_type='l')
+            
 
         # print('input vals:')
         # print(inputs['xy'])
@@ -883,24 +891,35 @@ class BeamModel(csdl.CustomExplicitOperation):
     
     outputs: deflection
     '''
-    def __init__(self,beam):
+    def __init__(self,beam,tip_point):
         super().__init__()
         self.beam = beam
+        self.tip_point = tip_point
+        self.output_dof = beam._get_dofs(tip_point,'disp')[0]
         
     def evaluate(self,inputs: csdl.VariableGroup):
         self.declare_input('K',inputs.K)
-        self.declare_input('F'.inputs.F)
+        self.declare_input('xy')
+        # self.declare_input('F',inputs.F)
 
         outputs = csdl.VariableGroup()
         outputs.d = self.create_output('d', (1,))
         outputs.d.name = 'tip_deflection'
-        # outputs.A = self.create_output('A',(1,))
-        # outputs.A.name = 'beam xs area'
+
+        outputs.M = self.create_output('M', (1,))
+        outputs.d.name = 'mass'
 
         return outputs
     
     def compute(self, inputs, outputs):
-        return super().compute(inputs, outputs)
+        self.beam.xs_list[0].K = inputs['K']
+
+        self.beam._link_xs_to_axial()
+        self.beam.solve()
+        outputs['d']  = self.beam.uh.x.array[self.output_dof]
+        
+        self.beam.get_mass()
+        outputs['M'] = self.beam.M
     
     def compute_derivatives(self, inputs, outputs, derivatives):
         return super().compute_derivatives(inputs, outputs, derivatives)

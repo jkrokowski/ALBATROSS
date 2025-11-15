@@ -581,6 +581,9 @@ class CrossSection:
         
         self.A = assemble_scalar(fem.form(self.A_form))
         
+        #TODO: for multi-material, need smarter update
+        self.linear_density = self.A*self.materials[0].density
+
         #store K1^-1 for recovery and sensitivity computation
         self.K1inv = np.linalg.inv(self.K1)
 
@@ -1293,6 +1296,7 @@ class CrossSection:
         XS = self
         K1 = self.K1
         K2inv = self.K2inv
+        
 
         #get K1 and K2 adjoint loads
         W_1 = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
@@ -1341,6 +1345,21 @@ class CrossSection:
                 d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
 
             return d_inputs
+        
+    def _compute_pA_action(self,dA,derivative_type='x'):
+        '''
+        compute the action of the seed dK on the input based on derivative_type
+
+        return numpy arrays
+        '''
+        XS = self
+
+        if derivative_type == 'x':
+            
+            d_inputs = dA*fem.petsc.assemble_vector(fem.form(ufl.derivative(XS.A_form,XS.x,XS.dX)))
+            
+            return d_inputs
+        
     # def compute_spatial_totals(self):
     #     args = self.residuals[0][0].arguments()
     #     n = max(a.number() for a in args) if args else -1

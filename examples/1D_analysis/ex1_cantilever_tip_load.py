@@ -82,6 +82,9 @@ CantileverBeam.add_point_load([(0,0,-F)],[p2])
 #solve the linear problem
 CantileverBeam.solve()
 
+#compute beam mass:
+CantileverBeam.get_mass()
+
 #################################################################
 ######### POSTPROCESSING, TESTING & VISUALIZATION ############
 #################################################################

@@ -21,8 +21,8 @@ tdim = 1
 
 #create or read in series of 2D meshes
 N = 20 #number of quad elements per side on xc mesh
-W_root = .5 #xs width
-H_root = .5 #xs height
+W_root = .2 #xs width
+H_root = .2 #xs height
 W_tip = .1 #xs width
 H_tip = .1 #xs height
 A_root = W_root*H_root #xs area

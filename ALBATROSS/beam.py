@@ -8,7 +8,8 @@ stress solution field to be obtained
 
 '''
 
-from dolfinx.fem import Function,functionspace,create_interpolation_data
+# from dolfinx.fem import Function,functionspace,create_interpolation_data
+from dolfinx import fem
 from ufl import sin,cos
 from ALBATROSS.cross_section import CrossSectionAnalytical
 from ALBATROSS.axial import Axial
@@ -118,14 +119,14 @@ class Beam(Axial):
             # num_vals_to_enter = self.numsegments + 1
             # self.orientations=self.orientations.append(self.orientations)
         
-        self.O2 = functionspace(self.axial_pos_mesh,element_type)
-        self.o2 = Function(self.O2)
+        self.O2 = fem.functionspace(self.axial_pos_mesh,element_type)
+        self.o2 = fem.Function(self.O2)
         self.o2.x.array[:] = np.array(self.orientations)
         # self.o2.vector.destroy() #needed for PETSc garbage collection
 
         #interpolate these orientations into the finer 1D analysis mesh
-        self.O = functionspace(self.axial_mesh,element_type)
-        self.o = Function(self.O)
+        self.O = fem.functionspace(self.axial_mesh,element_type)
+        self.o = fem.Function(self.O)
         #TODO: need to update based on this syntax change: 
         # https://fenicsproject.discourse.group/t/segv-fault-when-interpolating-function-onto-different-mesh/13593
         # https://github.com/FEniCS/dolfinx/blob/v0.7.3/python/test/unit/fem/test_interpolation.py#L720-L765 
@@ -135,7 +136,7 @@ class Beam(Axial):
         cells_o = np.arange(num_cells_on_proc,dtype=np.int32)
         self.o.interpolate_nonmatching(self.o2, 
                                        cells_o,
-                                       interpolation_data=create_interpolation_data(self.O,
+                                       interpolation_data=fem.create_interpolation_data(self.O,
                                                                                     self.O2,
                                                                                     cells_o))
 
@@ -168,10 +169,10 @@ class Beam(Axial):
         #   from the properties computed from each cross-section
         sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
         #initialize functions and functionspaces over axial positioning mesh            
-        T2_66 = functionspace(self.axial_pos_mesh,tensor_element)
-        k2 = Function(T2_66)
-        S2 = functionspace(self.axial_pos_mesh,scalar_element)
-        linear_density2 = Function(S2)
+        T2_66 = fem.functionspace(self.axial_pos_mesh,tensor_element)
+        k2 = fem.Function(T2_66)
+        S2 = fem.functionspace(self.axial_pos_mesh,scalar_element)
+        linear_density2 = fem.Function(S2)
 
         #populate cross-sectional properties over axial positioning mesh
         for i in range(self.numsegments):
@@ -193,11 +194,11 @@ class Beam(Axial):
         #interpolate from axial_pos_mesh to axial_mesh 
 
         #initialize fxn spaces
-        self.T_66 = functionspace(self.axial_mesh,tensor_element)
-        self.S = functionspace(self.axial_mesh,scalar_element)
+        self.T_66 = fem.functionspace(self.axial_mesh,tensor_element)
+        self.S = fem.functionspace(self.axial_mesh,scalar_element)
 
         #interpolate beam constitutive matrix
-        self.k = Function(self.T_66)
+        self.k = fem.Function(self.T_66)
         #TODO: nm_interpolation needs to be fixed here
 
         cell_map_axial = self.axial_mesh.topology.index_map(self.axial_mesh.topology.dim)
@@ -205,13 +206,13 @@ class Beam(Axial):
         cells_axial = np.arange(num_cells_on_proc,dtype=np.int32)
         self.o.interpolate_nonmatching(self.o2, 
                                        cells_axial,
-                                       interpolation_data=create_interpolation_data(self.O,
+                                       interpolation_data=fem.create_interpolation_data(self.O,
                                                                                     self.O2,
                                                                                     cells_axial))
 
         self.k.interpolate_nonmatching(k2, 
                                        cells_axial,
-                                       interpolation_data=create_interpolation_data(self.T_66,
+                                       interpolation_data=fem.create_interpolation_data(self.T_66,
                                                                                     T2_66,
                                                                                     cells_axial))
         # self.k.interpolate(k2,nmm_interpolation_data=create_interpolation_data(
@@ -220,11 +221,11 @@ class Beam(Axial):
         #     k2.function_space.mesh, padding=1e-14))
 
         #interpolate linear density area
-        self.linear_density = Function(self.S)
+        self.linear_density = fem.Function(self.S)
         #TODO: nm_interpolation needs to be fixed here
         self.linear_density.interpolate_nonmatching(linear_density2, 
                                        cells_axial,
-                                       interpolation_data=create_interpolation_data(self.S,
+                                       interpolation_data=fem.create_interpolation_data(self.S,
                                                                                     S2,
                                                                                     cells_axial))
         # self.linear_density.interpolate(linear_density2,nmm_interpolation_data=create_interpolation_data(
@@ -475,7 +476,7 @@ class Beam(Axial):
 
         for xs_id,nodal_coord in zip(xs_ids,nodal_coords):
             xs = self.xs_list[xs_id]
-            xsdisp = Function(xs.recovery_V)
+            xsdisp = fem.Function(xs.recovery_V)
             [u_local,theta_local] = self.get_local_disp([nodal_coord])
             centroid = np.array([[0,0,0]]).T
             # centroid = np.array([[xs.yavg,xs.zavg,0]]).T
@@ -618,7 +619,11 @@ class Beam(Axial):
         plotter.show_axes()
         plotter.show_bounds()
         plotter.show()
+    
 
+    def get_mass(self):
+        self.M = fem.assemble_scalar(fem.form(self.linear_density*self.dx))
+        
     def recover_stress(self):
         
         # reactions = self.get_reactions(self.axial_pos_mesh.geometry.x)
