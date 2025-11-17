@@ -15,7 +15,7 @@ from dolfinx.fem import (functionspace,Expression,Function,Constant,
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
 from ufl import (Jacobian, TestFunction,TrialFunction,as_vector, sqrt, 
-                inner,dot,grad,split,cross,Measure)
+                inner,dot,grad,split,cross,Measure,derivative)
 from ALBATROSS.elements import LinearTimoshenkoElement
 from petsc4py.PETSc import ScalarType
 import numpy as np
@@ -61,11 +61,12 @@ class Axial:
 
         self.dx = Measure('dx',self.domain)
         self.dx_shear = Measure('dx',self.domain,metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
-
-        self.w = TestFunction(self.beam_element.W)
+        
+        self.w = Function(self.beam_element.W)
+        self.v = TestFunction(self.beam_element.W)
         self.dw = TrialFunction(self.beam_element.W)
         (self.u_, self.theta_) = split(self.w)
-        (self.du_, self.dtheta) = split(self.dw)
+        (self.v_u, self.v_theta) = split(self.v)
 
         self.a_form = None
         self.L_form = None
@@ -82,13 +83,15 @@ class Axial:
         self.compute_local_axes()
        
     def elastic_energy(self):
-        self.Sig = self.generalized_stresses(self.dw)
+        self.Sig = self.generalized_stresses(self.v)
         self.Eps = self.generalized_strains(self.w)
 
         #assemble variational form separately for shear terms (using reduced integration)
-        self.a_form = (sum([self.Sig[i]*self.Eps[i]*self.dx for i in [0, 3, 4, 5]]) 
+        self.F_form = (sum([self.Sig[i]*self.Eps[i]*self.dx for i in [0, 3, 4, 5]]) 
                         + sum([self.Sig[i]*self.Eps[i]*self.dx_shear for i in [1,2]])) 
         # self.a_form = (inner(self.Sig,self.Eps))
+
+        self.a_form = derivative(self.F_form,self.w,self.dw)
 
     def tangent(self,domain):
         t = Jacobian(domain)
@@ -128,13 +131,13 @@ class Axial:
         print("Adding distributed load....")
         # f_vec = as_vector([self.linear_density[i]*Constant(self.domain,default_scalar_type(f[i])) for i in range(3)])
         f_vec = self.linear_density*Constant(self.domain,default_scalar_type(f))
-        print(f_vec.ufl_shape)
-        print(self.u_.ufl_shape)
-        print(dot(f_vec,self.u_).ufl_shape)
+        # print(f_vec.ufl_shape)
+        # print(self.v_.ufl_shape)
+        print(dot(f_vec,self.v_u).ufl_shape)
         if self.L_form is None:
-            self.L_form = dot(f_vec,self.u_)*self.dx
+            self.L_form = dot(f_vec,self.v_u)*self.dx
         else:
-            self.L_form += dot(f_vec,self.u_)*self.dx
+            self.L_form += dot(f_vec,self.v_u)*self.dx
 
     def add_point_load(self,f_list,pts):
         '''
@@ -176,12 +179,12 @@ class Axial:
         self.uh = Function(self.beam_element.W)
         uvec = self.uh.x.petsc_vec#petsc vector
         uvec.setUp()
-        ksp = PETSc.KSP().create()
-        ksp.setType(PETSc.KSP.Type.CG)
-        ksp.setTolerances(rtol=1e-15)
-        ksp.setOperators(self.A_mat)
+        self.solver = PETSc.KSP().create()
+        self.solver.setType(PETSc.KSP.Type.CG)
+        self.solver.setTolerances(rtol=1e-15)
+        self.solver.setOperators(self.A_mat)
         # ksp.setFromOptions()
-        ksp.solve(self.b,uvec)
+        self.solver.solve(self.b,uvec)
 
     def _solve_simple(self):    
         # --------
@@ -192,7 +195,7 @@ class Axial:
         self.uh = Function(self.beam_element.W)
         if self.L_form is None:
             f = Constant(self.domain,ScalarType((0,0,0)))
-            self.L_form = -dot(f,self.u_)*self.dx
+            self.L_form = -dot(f,self.v_u)*self.dx
         
         self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
         self.uh = self.problem.solve()
@@ -204,7 +207,7 @@ class Axial:
 
         if self.L_form is None:
             f0 = Constant(self.domain,ScalarType((0,0,0)))
-            self.L_form = -dot(f0,self.u_)*self.dx
+            self.L_form = -dot(f0,self.v_u)*self.dx
         
         self.b=create_vector(form(self.L_form))
         with self.b.localForm() as b_loc:
@@ -213,8 +216,8 @@ class Axial:
 
         # APPLY dirichlet bc: these steps are directly pulled from the 
         # petsc.py LinearProblem().solve() method
-        self.a_form = form(self.a_form)
-        apply_lifting(self.b,[self.a_form],bcs=[self.bcs])
+        # self.a_form = form(self.a_form)
+        apply_lifting(self.b,[form(self.a_form)],bcs=[self.bcs])
         self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(self.b,self.bcs)
         
@@ -475,3 +478,49 @@ class Axial:
         Reactions = r.eval(points_on_proc,cells)
 
         return Reactions
+    
+
+
+    #========== derivative computations ============#
+    def compute_vjp(self,d_residual):
+        # #set up input vector sizes
+        # d_residuals_w_vec_size = d_residuals.shape[0]
+        # d_residuals_w_vec = PETSc.Vec().createSeq(d_residuals_w_vec_size, comm=PETSc.COMM_SELF)
+        
+        # #set up output vector sizes
+        # d_inputs_vec_size = self.VX.dofmap.index_map_bs*self.VX.dofmap.index_map.size_global
+        # d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
+        
+        # dRdx_dr = np.zeros(d_inputs_vec_size)
+        
+        # #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
+        # # this is actually pretty straightfoward using UFL when you get around to it
+        # dRwdx = fem.assemble_vector(fem.form(ufl.derivative(self.a_form,) #num_dofs x num_nodes
+        
+        # d_residuals_w_vec.array = d_residuals_w[:,idx]
+        # dRwdx.multTranspose(d_residuals_w_vec,d_inputs_vec) #perform vec-mat product
+        # dRdx_dr += d_inputs_vec.array
+        
+
+        return d_input
+
+
+
+    def apply_inverse_jacobian(self,d_output,dof):
+        d_residuals = self.A_mat.createVecLeft()
+        d_residuals.setUp()
+        d_outputs = self.A_mat.createVecRight()
+        d_outputs.setUp()
+        # d_outputs_len=d_output_w.shape[0]
+
+        #TODO: for more sophisticated objective functions, we can 
+        # d_residuals_w = np.zeros_like(d_output_w)
+        with d_outputs.localForm() as rhs_local:
+            rhs_local.set(0.0)
+            rhs_local[dof] = d_output
+        # with d_residuals.localForm() as lhs_local:
+        #     lhs_local.set(0.0)
+
+        self.solver.solveTranspose(d_outputs,d_residuals)
+    
+        return d_residuals.array[dof]

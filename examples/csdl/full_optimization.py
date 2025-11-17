@@ -80,6 +80,9 @@ CantileverBeam.add_point_load([(0,0,-F)],[p2])
 # #solve the linear problem
 # CantileverBeam.solve()
 
+CantileverBeam.get_mass()
+print('original beam mass:',CantileverBeam.M)
+
 #get mesh geometry
 xy = xs_msh.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = xs_msh.geometry.x[xs.interior_nodes,0:2]
@@ -134,21 +137,33 @@ K.name = 'stiffness_mat'
 A = outputs_sec.A
 A.name = 'area'
 # csdl.derivative(outputs_sec.K,inputs_sec.xy)
-csdl.derivative(outputs_sec.A,inputs_sec.xy)
-#======= beam model run ==========#
+# csdl.derivative(outputs_sec.A,inputs_sec.xy)
+
+#======= beam deflection ==========#
 inputs_beam = csdl.VariableGroup()
 inputs_beam.K = outputs_sec.K
-inputs_beam.A = outputs_sec.A 
+# inputs_beam.A = outputs_sec.A 
 # inputs_beam.F = csdl.Variable(value = F)
 
-beam_model = ALBATROSS.csdl_utils.BeamModel(CantileverBeam,
+beam_model = ALBATROSS.csdl_utils.BeamDeflection(CantileverBeam,
                                             tip_point = p2)
 
 outputs_beam = beam_model.evaluate(inputs_beam)
 
 tip_displacement = outputs_beam.d
-beam_mass = outputs_beam.M
 
+
+#======= beam mass ==========#
+inputs_mass = csdl.VariableGroup()
+inputs_mass.A = outputs_sec.A
+# inputs_beam.A = outputs_sec.A 
+# inputs_beam.F = csdl.Variable(value = F)
+
+mass_model = ALBATROSS.csdl_utils.BeamMass(CantileverBeam)
+
+outputs_mass = mass_model.evaluate(inputs_mass)
+
+beam_mass = outputs_mass.M
 
 
 with csdl.namespace('Objective'):
@@ -156,7 +171,7 @@ with csdl.namespace('Objective'):
     f.add_name('beam_mass')
     f.set_as_objective()
 
-with csdl.namespace('Area constraint'):
+with csdl.namespace('Deflection constraint'):
     g1 = tip_displacement
     g1.add_name('g1')
     g1.set_as_constraint(lower=-.3) # constraint

@@ -623,6 +623,10 @@ class Beam(Axial):
 
     def get_mass(self):
         self.M = fem.assemble_scalar(fem.form(self.linear_density*self.dx))
+    
+
+    def get_length(self):
+        self.L = fem.assemble_scalar(fem.form(1.0*self.dx))
         
     def recover_stress(self):
         

@@ -883,7 +883,7 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
 #             # d_inputs['xy_interior'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']) ['interior']
 
 
-class BeamModel(csdl.CustomExplicitOperation):
+class BeamDeflection(csdl.experimental.CustomImplicitOperation):
     '''
     initialization inputs: beam object
 
@@ -895,33 +895,94 @@ class BeamModel(csdl.CustomExplicitOperation):
         super().__init__()
         self.beam = beam
         self.tip_point = tip_point
-        self.output_dof = beam._get_dofs(tip_point,'disp')[0]
+        self.output_dof = beam._get_dofs(tip_point,'disp')[2]
         
     def evaluate(self,inputs: csdl.VariableGroup):
         self.declare_input('K',inputs.K)
-        self.declare_input('xy')
+        # self.declare_input('xy')
         # self.declare_input('F',inputs.F)
 
         outputs = csdl.VariableGroup()
         outputs.d = self.create_output('d', (1,))
         outputs.d.name = 'tip_deflection'
 
-        outputs.M = self.create_output('M', (1,))
-        outputs.d.name = 'mass'
-
         return outputs
     
-    def compute(self, inputs, outputs):
+    def solve_residual_equations(self, inputs, outputs):
         self.beam.xs_list[0].K = inputs['K']
 
         self.beam._link_xs_to_axial()
         self.beam.solve()
+
         outputs['d']  = self.beam.uh.x.array[self.output_dof]
+    
+    def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
+        # for mode = rev:
+        # d_outputs --> d_residuals
+
+        '''
+        This is just the transpose solve with  K_1d ^ T d_residuals['d] = d_outputs['d] 
+
+        we can use similar machinery (just the KSP.solveTranspose() method)
+
+        so this requires a minor mod to the axial .solve() method to make sure the object keeps the solver accessible
+
+        '''
+
+        d_residuals['d'] = self.beam.apply_inverse_jacobian(d_outputs['d'],self.output_dof)    
+
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
+        # for mode = rev
+        # d_residuals --> d_inputs
+
+        d_residuals['d'] 
+
+
+        d_inputs['K']
+
+    # def compute_derivatives(self, inputs, outputs, derivatives):
+        # return super().compute_derivatives(inputs, outputs, derivatives)
+    
+        # derivatives['M'] = inputs['A']*
+
+
+class BeamMass(csdl.CustomExplicitOperation):
+    '''
+    Compute the mass of a beam based on cross-sectional areas and mass properties
+    '''
+    def __init__(self,beam):
+        super().__init__()
+        self.beam = beam
+
+    def evaluate(self,inputs: csdl.VariableGroup):
+        self.declare_input('A',inputs.A)
+
+        outputs = csdl.VariableGroup()
+
+        outputs.M = self.create_output('M', (1,))
+        outputs.M.name = 'mass'
+
+        return outputs
+
+
+    def compute(self,inputs,outputs):
+        #Do we need to do this? hmm?
+        self.beam.xs_list[0].A = inputs['A']
         
+        #TODO: move this to a more general method that handles multiple sections?
+        # self.beam._update_linear_density()
+        
+        self.beam.linear_density.x.array[:] = self.beam.xs_list[0].A*self.beam.xs_list[0].materials[0].density
+
         self.beam.get_mass()
         outputs['M'] = self.beam.M
-    
-    def compute_derivatives(self, inputs, outputs, derivatives):
-        return super().compute_derivatives(inputs, outputs, derivatives)
-    
 
+
+    def compute_derivatives(self, inputs, outputs, derivatives):
+        L  = self.beam.get_length()
+        rho = self.beam.xs_list[0].materials[0].density
+
+        derivatives['M','A'] = rho*L
+
+
+    
