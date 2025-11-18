@@ -152,19 +152,17 @@ outputs_beam = beam_model.evaluate(inputs_beam)
 
 tip_displacement = outputs_beam.d
 
+csdl.derivative(outputs_beam.d,inputs_beam.K)
 
 #======= beam mass ==========#
 inputs_mass = csdl.VariableGroup()
 inputs_mass.A = outputs_sec.A
-# inputs_beam.A = outputs_sec.A 
-# inputs_beam.F = csdl.Variable(value = F)
 
 mass_model = ALBATROSS.csdl_utils.BeamMass(CantileverBeam)
 
 outputs_mass = mass_model.evaluate(inputs_mass)
 
 beam_mass = outputs_mass.M
-
 
 with csdl.namespace('Objective'):
     f = -beam_mass

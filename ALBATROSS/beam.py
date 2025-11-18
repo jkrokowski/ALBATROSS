@@ -10,7 +10,7 @@ stress solution field to be obtained
 
 # from dolfinx.fem import Function,functionspace,create_interpolation_data
 from dolfinx import fem
-from ufl import sin,cos
+import ufl
 from ALBATROSS.cross_section import CrossSectionAnalytical
 from ALBATROSS.axial import Axial
 import numpy as np
@@ -73,6 +73,7 @@ class Beam(Axial):
 
             print("Linking cross-sectional properties to axial mesh...")
             self._link_xs_to_axial()
+            self.update_k() #TODO: this is a bit of temporary hack to overwrite the fem.function with ufl variables
 
         elif xs_type == 'precomputed':
             #For usage with fully populated beam constitutive matrices
@@ -145,6 +146,7 @@ class Beam(Axial):
         #     self.o.function_space.element,
         #     self.o2.function_space.mesh, padding=1e-14))
 
+
     def _link_xs_to_axial(self):
         '''
         CORE FUNCTION FOR PROCESSING MULTIPLE 2D XSs TO PREPARE A 1D MODEL
@@ -199,7 +201,6 @@ class Beam(Axial):
 
         #interpolate beam constitutive matrix
         self.k = fem.Function(self.T_66)
-        #TODO: nm_interpolation needs to be fixed here
 
         cell_map_axial = self.axial_mesh.topology.index_map(self.axial_mesh.topology.dim)
         num_cells_on_proc = cell_map_axial.size_local + cell_map_axial.num_ghosts
@@ -215,10 +216,6 @@ class Beam(Axial):
                                        interpolation_data=fem.create_interpolation_data(self.T_66,
                                                                                     T2_66,
                                                                                     cells_axial))
-        # self.k.interpolate(k2,nmm_interpolation_data=create_interpolation_data(
-        #     self.k.function_space.mesh,
-        #     self.k.function_space.element,
-        #     k2.function_space.mesh, padding=1e-14))
 
         #interpolate linear density area
         self.linear_density = fem.Function(self.S)
@@ -228,17 +225,26 @@ class Beam(Axial):
                                        interpolation_data=fem.create_interpolation_data(self.S,
                                                                                     S2,
                                                                                     cells_axial))
-        # self.linear_density.interpolate(linear_density2,nmm_interpolation_data=create_interpolation_data(
-        #     self.k.function_space.mesh,
-        #     self.k.function_space.element,
-        #     linear_density2.function_space.mesh, padding=1e-14))
 
-        # # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
-        # k2.vector.destroy()     #need to add to prevent PETSc memory leak from garbage collection issues
-        # linear_density2.vector.destroy()
 
         print("Done interpolating cross-sectional properties to axial mesh...")
     
+    def update_k(self):
+        '''
+        say it with me now: 
+        
+            temporary solution! yay
+        
+        '''
+        self.K_params = [[fem.Constant(self.axial_mesh, self.xs_list[0].K[i,j]) for j in range(6)]
+                        for i in range(6)]
+
+        self.k = ufl.as_tensor([[ufl.variable(self.K_params[i][j]) for j in range(6)]
+                            for i in range(6)])
+        
+
+
+
     #TODO: fix this list
     # def get_axial_props_from_K_list(self):
     #     '''
@@ -434,15 +440,15 @@ class Beam(Axial):
                 [[alpha],[beta],[gamma]] = self.RGB@theta_local.reshape((3,1))
                 # rotation about X-axis
                 Rx = np.array([[1,         0,         0],
-                                [0,cos(alpha),-sin(alpha)],
-                                [0,sin(alpha),cos(alpha)]])
+                                [0,ufl.cos(alpha),-ufl.sin(alpha)],
+                                [0,ufl.sin(alpha),ufl.cos(alpha)]])
                 # rotation about Y-axis
-                Ry = np.array([[cos(beta), 0,sin(beta)],
+                Ry = np.array([[ufl.cos(beta), 0,ufl.sin(beta)],
                                 [0,         1,        0],
-                                [-sin(beta),0,cos(beta)]])
+                                [-ufl.sin(beta),0,ufl.cos(beta)]])
                 #rotation about Z-axis
-                Rz = np.array([[cos(gamma),-sin(gamma),0],
-                                [sin(gamma),cos(gamma), 0],
+                Rz = np.array([[ufl.cos(gamma),-ufl.sin(gamma),0],
+                                [ufl.sin(gamma),ufl.cos(gamma), 0],
                                 [0,         0,          1]])
 
                 #TODO: think about how this rotation matrix could be stored?
@@ -627,6 +633,7 @@ class Beam(Axial):
 
     def get_length(self):
         self.L = fem.assemble_scalar(fem.form(1.0*self.dx))
+        return self.L
         
     def recover_stress(self):
         

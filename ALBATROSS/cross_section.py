@@ -5,17 +5,14 @@ from ufl import (Argument,derivative,dot,ds,cross,Identity,sqrt,inner,tr,variabl
 from basix.ufl import element,mixed_element
 from dolfinx.fem import (Constant,Expression,assemble_scalar,form,Function,
                          functionspace,assemble_vector,petsc)
-from dolfinx import fem
+from dolfinx import fem,plot,geometry,mesh
 import numpy as np
 from petsc4py import PETSc
-from dolfinx.mesh import locate_entities_boundary,meshtags,locate_entities
-from dolfinx import geometry # import compute_collisions_trees
 from scipy.sparse.linalg import inv,lsqr,spsolve
 # import sparseqr
 from scipy.sparse import csr_matrix
 import ufl 
 import pyvista
-from dolfinx import plot
 from scifem import create_real_functionspace
 from dolfinx.cpp.la.petsc import get_local_vectors
 
@@ -132,8 +129,8 @@ class CrossSection:
         self.recovery_V = functionspace(self.msh,('CG',self.degree,(self.d,)))
 
         #label nodes and provide dofs to xy mapping:
-        self.all_nodes = locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
-        self.boundary_nodes =locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+        self.all_nodes = mesh.locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
+        self.boundary_nodes = mesh.locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         self.interior_nodes = self.all_nodes[~np.isin(self.all_nodes, self.boundary_nodes)]
         self.dofs_x_boundary = fem.locate_dofs_topological(self.VX.sub(0),0,self.boundary_nodes)
         self.dofs_y_boundary = fem.locate_dofs_topological(self.VX.sub(1),0,self.boundary_nodes)
@@ -2225,8 +2222,8 @@ class CoupledCrossSection:
             bndry_facets_A = get_overlap_boundary_facets(mshA,tags_A)
             bndry_facets_B = get_overlap_boundary_facets(mshB,tags_B)
 
-            facet_tags_A = meshtags(mshA,mshA.topology.dim-1,bndry_facets_A,np.ones_like(bndry_facets_A))
-            facet_tags_B = meshtags(mshB,mshB.topology.dim-1,bndry_facets_B,np.ones_like(bndry_facets_B))
+            facet_tags_A = mesh.meshtags(mshA,mshA.topology.dim-1,bndry_facets_A,np.ones_like(bndry_facets_A))
+            facet_tags_B = mesh.meshtags(mshB,mshB.topology.dim-1,bndry_facets_B,np.ones_like(bndry_facets_B))
 
             poly_C = compute_union_polygon(mshA, facet_tags_A, mshB, facet_tags_B)
 

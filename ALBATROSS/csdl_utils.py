@@ -912,6 +912,8 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         self.beam.xs_list[0].K = inputs['K']
 
         self.beam._link_xs_to_axial()
+        self.beam.update_k()
+        self.beam.elastic_energy()
         self.beam.solve()
 
         outputs['d']  = self.beam.uh.x.array[self.output_dof]
@@ -934,11 +936,7 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
         # for mode = rev
         # d_residuals --> d_inputs
-
-        d_residuals['d'] 
-
-
-        d_inputs['K']
+        d_inputs['K'] = self.beam.compute_vjp(d_residuals['d'],self.output_dof)
 
     # def compute_derivatives(self, inputs, outputs, derivatives):
         # return super().compute_derivatives(inputs, outputs, derivatives)
@@ -979,10 +977,13 @@ class BeamMass(csdl.CustomExplicitOperation):
 
 
     def compute_derivatives(self, inputs, outputs, derivatives):
+        #this is a simplified mass model for a constant cross-section beam
+        # we would need to integrate along the span based on the interpolated cross-sectional area value
+        # to get the accurate value for a tapered/variable cross-section
         L  = self.beam.get_length()
         rho = self.beam.xs_list[0].materials[0].density
-
-        derivatives['M','A'] = rho*L
+        
+        derivatives['M','A'] = np.array([rho*L])
 
 
     

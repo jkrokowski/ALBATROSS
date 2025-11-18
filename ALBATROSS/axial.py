@@ -9,19 +9,20 @@ using shear-deformable Timoshenko Beam Theory
 #TODO: upgrade to geometrically nonlinear capable models
 #TODO: include dynamics by adding mass properties
 
-from dolfinx.fem import (functionspace,Expression,Function,Constant, 
-                        locate_dofs_geometrical,locate_dofs_topological,
-                        dirichletbc,form)
+# from dolfinx.fem import (functionspace,Expression,Function,Constant, 
+#                         locate_dofs_geometrical,locate_dofs_topological,
+#                         dirichletbc,form)
+from dolfinx import fem,plot,default_scalar_type
 from dolfinx.fem.petsc import (LinearProblem,assemble_matrix,assemble_vector, 
                                 apply_lifting,set_bc,create_vector)
+import ufl
 from ufl import (Jacobian, TestFunction,TrialFunction,as_vector, sqrt, 
                 inner,dot,grad,split,cross,Measure,derivative)
 from ALBATROSS.elements import LinearTimoshenkoElement
 from petsc4py.PETSc import ScalarType
 import numpy as np
-from dolfinx import plot,default_scalar_type
 import pyvista
-
+from ALBATROSS.petsc_utils import convert_petsc_to_numpy
 from ALBATROSS.utils import get_pts_and_cells
 from ALBATROSS.mesh import beam_interval_mesh_3D
 
@@ -52,17 +53,17 @@ class Axial:
     beam_props: 2-tensor (6x6) function defining beam properties along span
     '''
 
-    def __init__(self,domain,xsinfo,orientation):
+    def __init__(self,domain,k,orientation):
         #import domain, function, and beam properties
         self.domain = domain
         self.beam_element = LinearTimoshenkoElement(domain)
         self.eleDOFs = 6
-        self.xsinfo = xsinfo
+        self.k = k
 
         self.dx = Measure('dx',self.domain)
         self.dx_shear = Measure('dx',self.domain,metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
         
-        self.w = Function(self.beam_element.W)
+        self.w = fem.Function(self.beam_element.W)
         self.v = TestFunction(self.beam_element.W)
         self.dw = TrialFunction(self.beam_element.W)
         (self.u_, self.theta_) = split(self.w)
@@ -81,7 +82,7 @@ class Axial:
         self.a1 /= sqrt(dot(self.a1, self.a1))
 
         self.compute_local_axes()
-       
+    
     def elastic_energy(self):
         self.Sig = self.generalized_stresses(self.v)
         self.Eps = self.generalized_strains(self.w)
@@ -120,17 +121,17 @@ class Axial:
                         dot(self.tgrad(theta), self.a2)])
 
     def generalized_stresses(self,w):
-        return dot(self.xsinfo, self.generalized_strains(w))
+        return dot(self.k, self.generalized_strains(w))
 
     #constructing RHS:
     def add_dist_load(self,f):
-        '''
+        '''K
         f = tuple for (x,y,z) components of distributed load
         '''
         
         print("Adding distributed load....")
         # f_vec = as_vector([self.linear_density[i]*Constant(self.domain,default_scalar_type(f[i])) for i in range(3)])
-        f_vec = self.linear_density*Constant(self.domain,default_scalar_type(f))
+        f_vec = self.linear_density*fem.Constant(self.domain,default_scalar_type(f))
         # print(f_vec.ufl_shape)
         # print(self.v_.ufl_shape)
         print(dot(f_vec,self.v_u).ufl_shape)
@@ -176,7 +177,7 @@ class Axial:
         self._construct_system()
 
         #initialize function to store solution of assembled system:
-        self.uh = Function(self.beam_element.W)
+        self.uh = fem.Function(self.beam_element.W)
         uvec = self.uh.x.petsc_vec#petsc vector
         uvec.setUp()
         self.solver = PETSc.KSP().create()
@@ -192,9 +193,9 @@ class Axial:
         #   -no point loads
         #   -no point moments
         # initialize function for displacement and rotation solution
-        self.uh = Function(self.beam_element.W)
+        self.uh = fem.Function(self.beam_element.W)
         if self.L_form is None:
-            f = Constant(self.domain,ScalarType((0,0,0)))
+            f = fem.Constant(self.domain,ScalarType((0,0,0)))
             self.L_form = -dot(f,self.v_u)*self.dx
         
         self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
@@ -202,22 +203,22 @@ class Axial:
         # --------
 
     def _construct_system(self):
-        self.A_mat = assemble_matrix(form(self.a_form),bcs=self.bcs)
+        self.A_mat = assemble_matrix(fem.form(self.a_form),bcs=self.bcs)
         self.A_mat.assemble()
 
         if self.L_form is None:
-            f0 = Constant(self.domain,ScalarType((0,0,0)))
+            f0 = fem.Constant(self.domain,ScalarType((0,0,0)))
             self.L_form = -dot(f0,self.v_u)*self.dx
         
-        self.b=create_vector(form(self.L_form))
+        self.b=create_vector(fem.form(self.L_form))
         with self.b.localForm() as b_loc:
                     b_loc.set(0)
-        assemble_vector(self.b,form(self.L_form))
+        assemble_vector(self.b,fem.form(self.L_form))
 
         # APPLY dirichlet bc: these steps are directly pulled from the 
         # petsc.py LinearProblem().solve() method
         # self.a_form = form(self.a_form)
-        apply_lifting(self.b,[form(self.a_form)],bcs=[self.bcs])
+        apply_lifting(self.b,[fem.form(self.a_form)],bcs=[self.bcs])
         self.b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(self.b,self.bcs)
         
@@ -231,7 +232,7 @@ class Axial:
                     return np.logical_and.reduce((np.isclose(x[0],pt[0]),
                                                   np.isclose(x[1],pt[1]),
                                                   np.isclose(x[2],pt[2])))
-                f_dofs = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),locate_dofs)
+                f_dofs = fem.locate_dofs_geometrical((self.beam_element.W.sub(0),W0),locate_dofs)
                 self.b.array[f_dofs[0]] = f
         if bool(self.m_pt):
             W1, rot_dofs = self.beam_element.W.sub(1).collapse()
@@ -242,7 +243,7 @@ class Axial:
                     return np.logical_and.reduce((np.isclose(x[0],pt[0]),
                                                   np.isclose(x[1],pt[1]),
                                                   np.isclose(x[2],pt[2])))
-                m_dofs = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),locate_dofs)
+                m_dofs = fem.locate_dofs_geometrical((self.beam_element.W.sub(1),W1),locate_dofs)
                 self.b.array[m_dofs[0]] = m
 
     def add_clamped_point(self,pt):
@@ -251,7 +252,7 @@ class Axial:
         '''
         print("Adding clamped point...")
         #function for bc application
-        ubc = Function(self.beam_element.W)
+        ubc = fem.Function(self.beam_element.W)
         # with ubc.vector.localForm() as uloc:
         #     uloc.set(0.)
         
@@ -259,7 +260,7 @@ class Axial:
         clamped_rot_dofs = self._get_dofs(pt,'rot')
 
         clamped_dofs= np.concatenate([clamped_disp_dofs,clamped_rot_dofs])
-        clamped_bc = dirichletbc(ubc,clamped_dofs)
+        clamped_bc = fem.dirichletbc(ubc,clamped_dofs)
         self.bcs.append(clamped_bc)
 
         # # see: https://fenicsproject.discourse.group/t/yaksa-warning-related-to-the-vectorfunctionspace/11111
@@ -274,18 +275,18 @@ class Axial:
             if dof_type=='disp':
                 #find displacement DOFs
                 W0, disp_map = self.beam_element.W.sub(0).collapse()
-                dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(0),W0),locate_pt)
+                dofs,_ = fem.locate_dofs_geometrical((self.beam_element.W.sub(0),W0),locate_pt)
             if dof_type=='rot':
                 W1, rot_map = self.beam_element.W.sub(1).collapse()
-                dofs,_ = locate_dofs_geometrical((self.beam_element.W.sub(1),W1),locate_pt)
+                dofs,_ = fem.locate_dofs_geometrical((self.beam_element.W.sub(1),W1),locate_pt)
     
             return dofs
     def add_clamped_point_topo(self,dof):
-        ubc = Function(self.beam_element.W)
+        ubc = fem.Function(self.beam_element.W)
         with ubc.vector.localForm() as uloc:
             uloc.set(0.)
-        locate_BC = locate_dofs_topological(self.beam_element.W,0,dof)
-        self.bcs.append(dirichletbc(ubc,locate_BC))
+        locate_BC = fem.locate_dofs_topological(self.beam_element.W,0,dof)
+        self.bcs.append(fem.dirichletbc(ubc,locate_BC))
         ubc.vector.destroy()
 
     def get_global_disp(self,points):
@@ -311,17 +312,17 @@ class Axial:
         '''
         points_on_proc,cells=get_pts_and_cells(self.domain,points)
         #get coordinate system at each mesh node
-        T = functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
+        T = fem.functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
 
-        t = Function(T)
-        t.interpolate(Expression(self.t,T.element.interpolation_points()))
+        t = fem.Function(T)
+        t.interpolate(fem.Expression(self.t,T.element.interpolation_points()))
         tangent = t.eval(points_on_proc,cells)
-        a1 = Function(T)
-        a1.interpolate(Expression(self.a1,T.element.interpolation_points()))
+        a1 = fem.Function(T)
+        a1.interpolate(fem.Expression(self.a1,T.element.interpolation_points()))
         y = a1.eval(points_on_proc,cells)
         # y = self.a1.eval(points_on_proc,cells)
-        a2 = Function(T)
-        a2.interpolate(Expression(self.a2,T.element.interpolation_points()))
+        a2 = fem.Function(T)
+        a2.interpolate(fem.Expression(self.a2,T.element.interpolation_points()))
         z = a2.eval(points_on_proc,cells)
 
         return np.moveaxis(np.array([tangent,y,z]),0,1)
@@ -361,14 +362,14 @@ class Axial:
         This only works under the assumption of small displacments (e.g. linear beam theory)
         '''
         # self.RTb = 
-        T = functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
-        T2 =functionspace(self.domain,('CG',1,(3,3)))
-        grad_uh_interp = Function(T2)
+        T = fem.functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
+        T2 =fem.functionspace(self.domain,('CG',1,(3,3)))
+        grad_uh_interp = fem.Function(T2)
         grad_uh = grad(self.uh.sub(0))
         grad_uh_0 = grad(self.uh.sub(0)[0])
-        grad_uh_0_interp= Function(T)
-        grad_uh_0_interp.interpolate(Expression(grad_uh_0,T.element.interpolation_points()))
-        grad_uh_interp.interpolate(Expression(grad_uh,T2.element.interpolation_points()))
+        grad_uh_0_interp= fem.Function(T)
+        grad_uh_0_interp.interpolate(fem.Expression(grad_uh_0,T.element.interpolation_points()))
+        grad_uh_interp.interpolate(fem.Expression(grad_uh,T2.element.interpolation_points()))
         
         points_on_proc,cells=get_pts_and_cells(self.domain,points)
         # print("strains:")
@@ -467,9 +468,9 @@ class Axial:
         '''
         
         #Construct expression to evalute
-        R = functionspace(self.axial_mesh,('DG',0,(6,)))
-        r = Function(R)
-        r.interpolate(Expression(
+        R = fem.functionspace(self.axial_mesh,('DG',0,(6,)))
+        r = fem.Function(R)
+        r.interpolate(fem.Expression(
                         self.generalized_stresses(self.uh),
                         R.element.interpolation_points()
                         ) )
@@ -482,29 +483,40 @@ class Axial:
 
 
     #========== derivative computations ============#
-    def compute_vjp(self,d_residual):
-        # #set up input vector sizes
-        # d_residuals_w_vec_size = d_residuals.shape[0]
-        # d_residuals_w_vec = PETSc.Vec().createSeq(d_residuals_w_vec_size, comm=PETSc.COMM_SELF)
+    def compute_vjp(self,d_residual,dof):
+        #set up input vector sizes
+        d_residuals_vec_size = self.b.getSize()
+        d_residuals_vec = PETSc.Vec().createSeq(d_residuals_vec_size, comm=PETSc.COMM_SELF)
         
-        # #set up output vector sizes
-        # d_inputs_vec_size = self.VX.dofmap.index_map_bs*self.VX.dofmap.index_map.size_global
+        #set up output vector sizes
+        # d_inputs_vec_size = self.T_66.dofmap.index_map_bs*self.T_66.dofmap.index_map.size_global
         # d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
+        d_inputs_vec =  PETSc.Vec().createSeq(36, comm=PETSc.COMM_SELF)
         
-        # dRdx_dr = np.zeros(d_inputs_vec_size)
-        
-        # #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
-        # # this is actually pretty straightfoward using UFL when you get around to it
-        # dRwdx = fem.assemble_vector(fem.form(ufl.derivative(self.a_form,) #num_dofs x num_nodes
-        
-        # d_residuals_w_vec.array = d_residuals_w[:,idx]
-        # dRwdx.multTranspose(d_residuals_w_vec,d_inputs_vec) #perform vec-mat product
-        # dRdx_dr += d_inputs_vec.array
-        
+        d_residuals_vec.array[dof] = d_residual
 
-        return d_input
+        d_inputs = np.zeros((36,))
+        for i in range(6):
+            for j in range(6):
+                dFdKij=fem.petsc.assemble_matrix(fem.form(ufl.diff(self.a_form,self.k[i][j])))        
+                dFdKij.assemble()
+
+                dFdKijnp = convert_petsc_to_numpy(dFdKij)
+                
+                print(i,j,': ',np.linalg.norm(dFdKijnp@d_residuals_vec.array),d_residuals_vec.array.dot(dFdKijnp@self.uh.x.array ))
+                # dRdK00 = dFdKijnp@self.uh.x.array           
+    
+                # dFdKij.multTranspose(d_residuals_vec,d_inputs_vec) #perform vec-mat product
+                # d_inputs[i,j] += d_inputs_vec
 
 
+        # dRdK = fem.petsc.assemble_matrixf(fem.form(derivative(self.F_form,self.k,ufl.TestFunction(self.T_66))))
+        # dRdK.assemble()
+        
+        # d_residuals_vec.array[dof] = d_residual
+        # dRdK.multTranspose(d_residuals_vec,d_inputs_vec) #perform vec-mat product
+        
+        return d_inputs   
 
     def apply_inverse_jacobian(self,d_output,dof):
         d_residuals = self.A_mat.createVecLeft()
