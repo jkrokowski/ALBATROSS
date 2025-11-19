@@ -54,9 +54,9 @@ section_model = ALBATROSS.csdl_utils.BeamMatrixFromWarping(xs=xs,
 #set up
 if check_partials != 'x':
     warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
-    start = 0
-    end = 12
-    wf_num = 0
+    start = 14
+    end = 24
+    wf_num = 3
     warping_slice = csdl.Variable(value = warping_input.value[start:end,wf_num])
 
     inputs.w = warping_input.set(csdl.slice[start:end,wf_num],warping_slice)

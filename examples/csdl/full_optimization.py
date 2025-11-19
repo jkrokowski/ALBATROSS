@@ -13,7 +13,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 4 #number of quad elements per side on xc mesh
+N = 3 #number of quad elements per side on xc mesh
 W = .1 #xs width
 H = .1 #xs height
 A = W*H #xs area
@@ -50,7 +50,7 @@ meshname = 'ex_1'
 nodal_points = [p1,p2]
 # number of segments of the beams that use different cross-sections
 num_segments = len(nodal_points)-1 
-num_ele = [5] #number of subdivisions for each beam segment
+num_ele = [3] #number of subdivisions for each beam segment
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
 
 #define orientation of each xs with a vector
@@ -150,11 +150,14 @@ beam_model = ALBATROSS.csdl_utils.BeamDeflection(CantileverBeam,
 
 outputs_beam = beam_model.evaluate(inputs_beam)
 
-tip_displacement = outputs_beam.d[beam_model.output_dof]
-
-
+#  = csdl.Variable(shape=(1,))
+tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dof])
+tip_displacement.name = 'tip_deflection'
 # dddK = csdl.derivative(outputs_beam.d,inputs_beam.K)
 
+# dddxy = csdl.derivative(tip_displacement,xy)
+
+# dAdxy = csdl.derivative(outputs_sec.A,xy)
 
 #======= beam mass ==========#
 inputs_mass = csdl.VariableGroup()
@@ -167,7 +170,7 @@ outputs_mass = mass_model.evaluate(inputs_mass)
 beam_mass = outputs_mass.M
 
 with csdl.namespace('Objective'):
-    f = -beam_mass
+    f = beam_mass
     f.add_name('beam_mass')
     f.set_as_objective()
 
@@ -175,6 +178,11 @@ with csdl.namespace('Deflection constraint'):
     g1 = tip_displacement
     g1.add_name('g1')
     g1.set_as_constraint(lower=-.3) # constraint
+
+# with csdl.namespace('Objective'):
+#     f = -tip_displacement
+#     f.add_name('tip_deflection')
+#     f.set_as_objective()
 
 # with csdl.namespace('Shear constraint'):
 #     g2 = K[2,2]
@@ -185,7 +193,7 @@ with csdl.namespace('Deflection constraint'):
 # recorder.stop()
 
 sim = csdl.experimental.PySimulator(recorder)
-sim.run()
+# sim.run()
 
 # recorder.visualize_adjacency_matrix()
 

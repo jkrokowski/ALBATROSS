@@ -53,11 +53,13 @@ print(E*I)
 print("Computed bending stiffness:")
 print(squareXS.K[4,4])
 # exit()
+pApx = squareXS.compute_pApx()
 
 pKpx = squareXS.compute_pKpx()
 
 pKpw = squareXS.compute_pKpw()
 pKpl = squareXS.compute_pKpl()
+
 
 def computeFDcheck(xs,step_size,mode='x'):
     K1=xs.K1

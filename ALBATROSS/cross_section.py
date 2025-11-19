@@ -1284,6 +1284,10 @@ class CrossSection:
 
         return self.pKpl
     
+    def compute_pApx(self):
+        self.pApx = fem.petsc.assemble_vector(fem.form(derivative(self.A_form,self.x,self.dX)))
+        return self.pApx.array
+    
     def _compute_pK_action(self,dK,derivative_type='x'):
         '''
         compute the action of the seed dK on the input based on derivative_type

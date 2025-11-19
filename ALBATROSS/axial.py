@@ -66,7 +66,7 @@ class Axial:
         self.w = fem.Function(self.beam_element.W)
         self.v = TestFunction(self.beam_element.W)
         self.dw = TrialFunction(self.beam_element.W)
-        (self.u_, self.theta_) = split(self.w)
+        (self.u, self.theta) = split(self.w)
         (self.v_u, self.v_theta) = split(self.v)
 
         self.a_form = None
@@ -177,8 +177,7 @@ class Axial:
         self._construct_system()
 
         #initialize function to store solution of assembled system:
-        self.uh = fem.Function(self.beam_element.W)
-        uvec = self.uh.x.petsc_vec#petsc vector
+        uvec = self.w.x.petsc_vec#petsc vector
         uvec.setUp()
         self.solver = PETSc.KSP().create()
         self.solver.setType(PETSc.KSP.Type.CG)
@@ -193,13 +192,13 @@ class Axial:
         #   -no point loads
         #   -no point moments
         # initialize function for displacement and rotation solution
-        self.uh = fem.Function(self.beam_element.W)
+        # self.w = fem.Function(self.beam_element.W)
         if self.L_form is None:
             f = fem.Constant(self.domain,ScalarType((0,0,0)))
             self.L_form = -dot(f,self.v_u)*self.dx
         
-        self.problem = LinearProblem(self.a_form, self.L_form, u=self.uh, bcs=self.bcs)
-        self.uh = self.problem.solve()
+        self.problem = LinearProblem(self.a_form, self.L_form, u=self.w, bcs=self.bcs)
+        self.w = self.problem.solve()
         # --------
 
     def _construct_system(self):
@@ -301,8 +300,8 @@ class Axial:
         '''
         points_on_proc,cells=get_pts_and_cells(self.domain,points)
 
-        disp = self.uh.sub(0).eval(points_on_proc,cells)
-        rot = self.uh.sub(1).eval(points_on_proc,cells)
+        disp = self.w.sub(0).eval(points_on_proc,cells)
+        rot = self.w.sub(1).eval(points_on_proc,cells)
         
         return disp,rot
     
@@ -364,18 +363,18 @@ class Axial:
         # self.RTb = 
         T = fem.functionspace(self.domain,('CG',1,(self.domain.geometry.dim,)))
         T2 =fem.functionspace(self.domain,('CG',1,(3,3)))
-        grad_uh_interp = fem.Function(T2)
-        grad_uh = grad(self.uh.sub(0))
-        grad_uh_0 = grad(self.uh.sub(0)[0])
-        grad_uh_0_interp= fem.Function(T)
-        grad_uh_0_interp.interpolate(fem.Expression(grad_uh_0,T.element.interpolation_points()))
-        grad_uh_interp.interpolate(fem.Expression(grad_uh,T2.element.interpolation_points()))
+        grad_w_interp = fem.Function(T2)
+        grad_w = grad(self.w.sub(0))
+        grad_w_0 = grad(self.w.sub(0)[0])
+        grad_w_0_interp= fem.Function(T)
+        grad_w_0_interp.interpolate(fem.Expression(grad_w_0,T.element.interpolation_points()))
+        grad_w_interp.interpolate(fem.Expression(grad_w,T2.element.interpolation_points()))
         
         points_on_proc,cells=get_pts_and_cells(self.domain,points)
         # print("strains:")
-        # print(grad_uh_interp.eval(points_on_proc,cells))
-        strains = grad_uh_interp.eval(points_on_proc,cells).reshape((len(points),3,3))
-        first_comp = grad_uh_0_interp.eval(points_on_proc,cells)
+        # print(grad_w_interp.eval(points_on_proc,cells))
+        strains = grad_w_interp.eval(points_on_proc,cells).reshape((len(points),3,3))
+        first_comp = grad_w_0_interp.eval(points_on_proc,cells)
         #TODO: ensure this works for multiple points at once
         RbA = self.get_local_basis(points)
 
@@ -448,7 +447,7 @@ class Axial:
             fmt="%.3f",
             font_family="arial",
         )
-        grid.point_data["Beam axis displacement"] = self.uh.sub(0).collapse().x.array.reshape((geom.shape[0],3))
+        grid.point_data["Beam axis displacement"] = self.w.sub(0).collapse().x.array.reshape((geom.shape[0],3))
         actor_0 = plotter.add_mesh(grid, style="wireframe", line_width=5,color="k",scalar_bar_args=sargs)
         warped = grid.warp_by_vector("Beam axis displacement", factor=warp_factor)
         actor_1 = plotter.add_mesh(warped, line_width=5,show_edges=True)
@@ -471,7 +470,7 @@ class Axial:
         R = fem.functionspace(self.axial_mesh,('DG',0,(6,)))
         r = fem.Function(R)
         r.interpolate(fem.Expression(
-                        self.generalized_stresses(self.uh),
+                        self.generalized_stresses(self.w),
                         R.element.interpolation_points()
                         ) )
         
@@ -491,24 +490,29 @@ class Axial:
         #set up output vector sizes
         # d_inputs_vec_size = self.T_66.dofmap.index_map_bs*self.T_66.dofmap.index_map.size_global
         # d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
-        d_inputs_vec =  PETSc.Vec().createSeq(36, comm=PETSc.COMM_SELF)
+        # dRdk_vec = PETSc.Vec().createSeq(d_residuals_vec_size, comm=PETSc.COMM_SELF)
+
+        # d_inputs_vec =  PETSc.Vec().createSeq(36, comm=PETSc.COMM_SELF)
         
         d_residuals_vec.array[:] = d_residuals
 
         d_inputs = np.zeros((6,6))
         for i in range(6):
             for j in range(6):
-                dFdKij=fem.petsc.assemble_matrix(fem.form(ufl.diff(self.a_form,self.k[i,j])))        
-                dFdKij.assemble()
-
-                dFdKijnp = convert_petsc_to_numpy(dFdKij)
+                #compute the derivative of the beam linear functional w.r.t. the Kij entry
+                dRdk_vec = fem.petsc.assemble_vector(fem.form(ufl.diff(self.F_form,self.k[i,j])))
+                # populate value of d_inputs
+                d_inputs[i,j] = d_residuals_vec.dot(dRdk_vec)
                 
-                # print(i,j,': ',np.linalg.norm(dFdKijnp@d_residuals_vec.array),d_residuals_vec.array.dot(dFdKijnp@self.uh.x.array ),(dFdKijnp@self.uh.x.array)[dof],(dFdKijnp@d_residuals_vec.array)[dof], self.uh.x.array.T@dFdKijnp@self.uh.x.array)
-                # dRdK00 = dFdKijnp@self.uh.x.array           
-    
-                # dFdKij.multTranspose(d_residuals_vec,d_inputs_vec) #perform vec-mat product
-                # d_inputs[i,j] = d_residual*(dFdKijnp@self.uh.x.array )[dof]
-                d_inputs[i,j] = d_residuals_vec.array.dot(dFdKijnp@self.uh.x.array )
+                
+                
+                # dFdKij=fem.petsc.assemble_matrix(fem.form(ufl.diff(self.a_form,self.k[i,j])))        
+                # dFdKij.assemble()
+
+                # dFdKij.mult(self.w.x.petsc_vec,dRdk_vec)
+                #numpy version for debugging:
+                # dFdKijnp = convert_petsc_to_numpy(dFdKij)
+                # d_inputs[i,j] = d_residuals_vec.array.dot(dFdKijnp@self.w.x.array )
 
 
         # dRdK = fem.petsc.assemble_matrixf(fem.form(derivative(self.F_form,self.k,ufl.TestFunction(self.T_66))))
