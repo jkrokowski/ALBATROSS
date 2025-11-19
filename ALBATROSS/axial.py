@@ -483,7 +483,7 @@ class Axial:
 
 
     #========== derivative computations ============#
-    def compute_vjp(self,d_residual,dof):
+    def compute_vjp(self,d_residuals):
         #set up input vector sizes
         d_residuals_vec_size = self.b.getSize()
         d_residuals_vec = PETSc.Vec().createSeq(d_residuals_vec_size, comm=PETSc.COMM_SELF)
@@ -493,21 +493,22 @@ class Axial:
         # d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
         d_inputs_vec =  PETSc.Vec().createSeq(36, comm=PETSc.COMM_SELF)
         
-        d_residuals_vec.array[dof] = d_residual
+        d_residuals_vec.array[:] = d_residuals
 
-        d_inputs = np.zeros((36,))
+        d_inputs = np.zeros((6,6))
         for i in range(6):
             for j in range(6):
-                dFdKij=fem.petsc.assemble_matrix(fem.form(ufl.diff(self.a_form,self.k[i][j])))        
+                dFdKij=fem.petsc.assemble_matrix(fem.form(ufl.diff(self.a_form,self.k[i,j])))        
                 dFdKij.assemble()
 
                 dFdKijnp = convert_petsc_to_numpy(dFdKij)
                 
-                print(i,j,': ',np.linalg.norm(dFdKijnp@d_residuals_vec.array),d_residuals_vec.array.dot(dFdKijnp@self.uh.x.array ))
+                # print(i,j,': ',np.linalg.norm(dFdKijnp@d_residuals_vec.array),d_residuals_vec.array.dot(dFdKijnp@self.uh.x.array ),(dFdKijnp@self.uh.x.array)[dof],(dFdKijnp@d_residuals_vec.array)[dof], self.uh.x.array.T@dFdKijnp@self.uh.x.array)
                 # dRdK00 = dFdKijnp@self.uh.x.array           
     
                 # dFdKij.multTranspose(d_residuals_vec,d_inputs_vec) #perform vec-mat product
-                # d_inputs[i,j] += d_inputs_vec
+                # d_inputs[i,j] = d_residual*(dFdKijnp@self.uh.x.array )[dof]
+                d_inputs[i,j] = d_residuals_vec.array.dot(dFdKijnp@self.uh.x.array )
 
 
         # dRdK = fem.petsc.assemble_matrixf(fem.form(derivative(self.F_form,self.k,ufl.TestFunction(self.T_66))))
@@ -518,21 +519,23 @@ class Axial:
         
         return d_inputs   
 
-    def apply_inverse_jacobian(self,d_output,dof):
+    def apply_inverse_jacobian(self,d_outputs):
         d_residuals = self.A_mat.createVecLeft()
         d_residuals.setUp()
-        d_outputs = self.A_mat.createVecRight()
-        d_outputs.setUp()
+        d_outputs_vec = self.A_mat.createVecRight()
+        d_outputs_vec.setUp()
         # d_outputs_len=d_output_w.shape[0]
 
         #TODO: for more sophisticated objective functions, we can 
         # d_residuals_w = np.zeros_like(d_output_w)
-        with d_outputs.localForm() as rhs_local:
-            rhs_local.set(0.0)
-            rhs_local[dof] = d_output
+        # with d_outputs.localForm() as rhs_local:
+        #     rhs_local.set(0.0)
+        #     rhs_local[dof] = d_output
         # with d_residuals.localForm() as lhs_local:
         #     lhs_local.set(0.0)
 
-        self.solver.solveTranspose(d_outputs,d_residuals)
+        d_outputs_vec.array[:] = d_outputs
+
+        self.solver.solveTranspose(d_outputs_vec,d_residuals)
     
-        return d_residuals.array[dof]
+        return d_residuals.array

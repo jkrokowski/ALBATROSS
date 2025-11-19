@@ -903,7 +903,7 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         # self.declare_input('F',inputs.F)
 
         outputs = csdl.VariableGroup()
-        outputs.d = self.create_output('d', (1,))
+        outputs.d = self.create_output('d', (self.beam.beam_element.W.dofmap.index_map.size_global,))
         outputs.d.name = 'tip_deflection'
 
         return outputs
@@ -916,7 +916,7 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         self.beam.elastic_energy()
         self.beam.solve()
 
-        outputs['d']  = self.beam.uh.x.array[self.output_dof]
+        outputs['d']  = self.beam.uh.x.array
     
     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
         # for mode = rev:
@@ -931,12 +931,12 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
 
         '''
 
-        d_residuals['d'] = self.beam.apply_inverse_jacobian(d_outputs['d'],self.output_dof)    
+        d_residuals['d'] = self.beam.apply_inverse_jacobian(d_outputs['d'])    
 
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
         # for mode = rev
         # d_residuals --> d_inputs
-        d_inputs['K'] = self.beam.compute_vjp(d_residuals['d'],self.output_dof)
+        d_inputs['K'] = self.beam.compute_vjp(d_residuals['d'])
 
     # def compute_derivatives(self, inputs, outputs, derivatives):
         # return super().compute_derivatives(inputs, outputs, derivatives)
