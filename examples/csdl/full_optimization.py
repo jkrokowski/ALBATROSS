@@ -13,7 +13,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 3 #number of quad elements per side on xc mesh
+N = 4 #number of quad elements per side on xc mesh
 W = .1 #xs width
 H = .1 #xs height
 A = W*H #xs area
@@ -50,7 +50,7 @@ meshname = 'ex_1'
 nodal_points = [p1,p2]
 # number of segments of the beams that use different cross-sections
 num_segments = len(nodal_points)-1 
-num_ele = [3] #number of subdivisions for each beam segment
+num_ele = [10] #number of subdivisions for each beam segment
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
 
 #define orientation of each xs with a vector
@@ -93,7 +93,7 @@ recorder.start()
 #create geometry variables for cross-section:
 xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
 xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-xy.set_as_design_variable(lower=-1,upper=1,scaler=10)
+xy.set_as_design_variable(lower=-1,upper=1,scaler=500)
 
 #create csdl variables for tip load force:
 
@@ -110,7 +110,7 @@ outputs_mm = meshSmoothing.evaluate(inputs_mm)
 
 #===== warping function computation =======#
 inputs_w = csdl.VariableGroup()
-inputs_w.xy = inputs_mm.xy
+inputs_w.xy = xy
 inputs_w.xy_interior = outputs_mm.xy_interior
 
 warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
@@ -151,7 +151,7 @@ beam_model = ALBATROSS.csdl_utils.BeamDeflection(CantileverBeam,
 outputs_beam = beam_model.evaluate(inputs_beam)
 
 #  = csdl.Variable(shape=(1,))
-tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dof])
+tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs[2]])
 tip_displacement.name = 'tip_deflection'
 # dddK = csdl.derivative(outputs_beam.d,inputs_beam.K)
 
@@ -193,12 +193,12 @@ with csdl.namespace('Deflection constraint'):
 # recorder.stop()
 
 sim = csdl.experimental.PySimulator(recorder)
-# sim.run()
+sim.run()
 
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-# sim.check_totals(tip_displacement,xy)
+dddx = sim.check_totals(tip_displacement,xy)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

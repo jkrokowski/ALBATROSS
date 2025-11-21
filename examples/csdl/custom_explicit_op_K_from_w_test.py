@@ -33,7 +33,7 @@ xy=domain.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
 
 #restrict custom explicit operation to 'x', 'w', or 'False'
-check_partials = 'w'
+check_partials = 'x'
 
 recorder = csdl.Recorder(inline=True)
 recorder.start()

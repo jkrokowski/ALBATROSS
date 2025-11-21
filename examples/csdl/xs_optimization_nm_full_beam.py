@@ -7,16 +7,18 @@ from mpi4py import MPI
 import lsdo_function_spaces as lfs
 
 '''
-This optimization problem is not well-posed with just the bending stiffness maximization
-A potential way to counter this (without applying constraints on the boundary self-intersections)
-would be to add a shear stiffness constraint as well as the area constraint?
-the shear stiffness constraint prevents the "web" from necking down and self intersecting
 
-UPDATE: the shear stiffness constraint didn't work because element inversion is not handled well by the cross-section model
-maybe this needs to be "fixed" by the mesh smoothing?
 '''
+#=================== beam parameters ==================#
 
-#=================== mesh construction ==================#
+L = 20 
+
+#define tip load magnitude 
+F = .001 
+
+#beam endpoint locations
+p1 = (0,0,0)
+p2 = (L,0,0)
 N = 2
 offset = 1
 
@@ -28,9 +30,10 @@ m2,n2 = N,N*w_to_w+offset
 
 H = 1
 W = 1
-tf = 1/h_to_f
-tw = 1/w_to_w
+tf = H/h_to_f
+tw = W/w_to_w
 
+#=================== mesh construction ==================#
 mesh_A = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
 mesh_A.geometry.x[:, :2] -= .5
 mesh_A.geometry.x[:, 1] *= tf
@@ -56,14 +59,14 @@ meshes= [mesh_A,mesh_B]
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':100,'nu':0.2},
+                                           mech_props={'E':10e6,'nu':0.2},
                                            density=2700)
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
 TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
-
+# TXS_nm.get_xs_stiffness_matrix()
 TXS_nm.plot_meshes()
 
 filename_C = 'mortar_mesh'
@@ -83,6 +86,48 @@ xy_B_interior = mesh_B.geometry.x[XSs[1].interior_nodes,0:2]
 xy_C= TXS_nm.collisions[(0,1)].mortar_mesh.msh.geometry.x[TXS_nm.collisions[(0,1)].mortar_mesh.boundary_nodes,0:2]
 xy_C_interior = TXS_nm.collisions[(0,1)].mortar_mesh.msh.geometry.x[TXS_nm.collisions[(0,1)].mortar_mesh.interior_nodes,0:2]
 
+#################################################################
+######### INITIALIZE BEAM OBJECT, APPLY BCs ############
+#################################################################
+TXS_nm.get_xs_stiffness_matrix()
+
+#collect cross-sections:
+xs_list = [TXS_nm]
+
+#create a beam axis
+meshname = 'ex_1'
+nodal_points = [p1,p2]
+# number of segments of the beams that use different cross-sections
+num_segments = len(nodal_points)-1 
+num_ele = [10] #number of subdivisions for each beam segment
+beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
+
+#define orientation of each xs with a vector
+orientations = np.tile([0,1,0],num_segments)
+
+#collect all xs information
+xs_adjacency_list = [[0]] #this is the trivial connectivity for a uniform beam 
+xs_info = [xs_list,orientations,xs_adjacency_list]
+#initialize beam object using beam axis and definition of xs's
+CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
+
+#show the orientation of each xs and the interpolated orientation along the beam
+# CantileverBeam.plot_xs_orientations()
+
+#applied fixed bc to first endpoint
+CantileverBeam.add_clamped_point(p1)
+
+#TODO: update this to be updated in the custom op?
+#apply force at free end in the negative z direction
+CantileverBeam.add_point_load([(0,0,-F)],[p2])
+
+# #solve the linear problem
+# CantileverBeam.solve()
+
+CantileverBeam.get_mass()
+print('original beam mass:',CantileverBeam.M)
+
+
 recorder = csdl.Recorder(inline=True)
 recorder.start()
 
@@ -99,9 +144,8 @@ xy_C_interior = csdl.Variable(value=xy_C_interior,shape=xy_C_interior.shape,name
 xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
 
 #web translation parameter
-dx_w = csdl.Variable(value=0.25)
+dx_w = csdl.Variable(value=-.45)
 dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
-
 
 #=====mesh motion=======#
 inputs_mm_A = csdl.VariableGroup()
@@ -300,24 +344,46 @@ section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
 outputs_sec = section_model.evaluate(inputs_sec)
 
 K = outputs_sec.K
-# K.name = 'stiffness_mat'
+K.name = 'stiffness_mat'
 # A = outputs_sec.A
 # A.name = 'area'
 
+#======= beam deflection ==========#
+inputs_beam = csdl.VariableGroup()
+inputs_beam.K = outputs_sec.K
+
+beam_model = ALBATROSS.csdl_utils.BeamDeflection(CantileverBeam,
+                                            tip_point = p2)
+
+outputs_beam = beam_model.evaluate(inputs_beam)
+
+tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs[1]])
+tip_displacement.name = 'tip_deflection'
+# dddK = csdl.derivative(outputs_beam.d,inputs_beam.K)
+
+# dddxy = csdl.derivative(tip_displacement,xy)
+
+# dAdxy = csdl.derivative(outputs_sec.A,xy)
+
+# #======= beam mass ==========#
+# inputs_mass = csdl.VariableGroup()
+# inputs_mass.A = outputs_sec.A
+
+# mass_model = ALBATROSS.csdl_utils.BeamMass(CantileverBeam)
+
+# outputs_mass = mass_model.evaluate(inputs_mass)
+
+# beam_mass = outputs_mass.M
+
 with csdl.namespace('Objective'):
-    f = -K[5,5]
-    f.add_name('max_bending_stiffness')
+    f = -tip_displacement
+    # f.add_name('lateral_deflection')
     f.set_as_objective()
 
-# with csdl.namespace('Area constraint'):
-#     g1 = K[0,0]
+# with csdl.namespace('Deflection constraint'):
+#     g1 = tip_displacement
 #     g1.add_name('g1')
-#     g1.set_as_constraint(upper=35,lower=25) # constraint
-
-# with csdl.namespace('Shear constraint'):
-#     g2 = K[2,2]
-#     g2.add_name('g2')
-#     g2.set_as_constraint(lower=4) # constraint
+#     g1.set_as_constraint(lower=-.3) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()

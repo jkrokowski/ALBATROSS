@@ -33,7 +33,7 @@ xy=domain.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
 
 #restrict custom explicit operation to 'x', 'w', or 'False'
-check_partials = 'x'
+check_partials = 'w'
 #get the warping functions, since we are only interested in checking the beam matrix derivatives
 xs._get_warping_functions()
 
@@ -51,7 +51,7 @@ if check_partials != 'w':
 if check_partials != 'x':
     warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
     start = 0
-    end = 12
+    end = 108
     wf_num = 0
     warping_slice = csdl.Variable(value = warping_input.value[start:end,wf_num])
 
@@ -86,10 +86,10 @@ outputs_sec = section_model.evaluate(inputs)
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
-dKdx = csdl.derivative(outputs_sec.K,inputs.xy)
+# dKdx = csdl.derivative(outputs_sec.K,inputs.xy)
 
 #might have to skip this line and run the full FD check first
-dKdx_FD = np.load('dKdx_FD.npy')
+# dKdx_FD = np.load('dKdx_FD.npy')
 
 #============ WARPING FUNCTION PARTIAL DERIVATIVE CHECK =========#
 if check_partials == 'w':

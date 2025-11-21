@@ -121,7 +121,8 @@ class Axial:
                         dot(self.tgrad(theta), self.a2)])
 
     def generalized_stresses(self,w):
-        return dot(self.k, self.generalized_strains(w))
+        # return dot(self.k, self.generalized_strains(w))
+        return dot(self.generalized_strains(w),self.k)
 
     #constructing RHS:
     def add_dist_load(self,f):

@@ -538,7 +538,7 @@ class Beam(Axial):
         grid = pyvista.UnstructuredGrid(topology, cell_types, geom)
         plotter = pyvista.Plotter()
 
-        grid.point_data["Beam axis displacement"] = self.uh.sub(0).collapse().x.array.reshape((geom.shape[0],3))
+        grid.point_data["Beam axis displacement"] = self.w.sub(0).collapse().x.array.reshape((geom.shape[0],3))
         sargs = dict(
             title_font_size=20,
             label_font_size=16,

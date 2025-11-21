@@ -121,7 +121,7 @@ class CrossSection:
             self.linear_density += self.materials[0].A*self.materials[0].density
         #TODO: compute density weighted areas and areas of each subdomain?
         
-        #compute average y and z locations 
+        #compute centroid coordinates 
         self.yavg = assemble_scalar(form(self.x[0]*self.dx))/self.A
         self.zavg = assemble_scalar(form(self.x[1]*self.dx))/self.A
 
@@ -576,8 +576,13 @@ class CrossSection:
                      for idx2 in range(6)] 
                         for idx1 in range(6)])
         
+        #update cross-sectional area:
         self.A = assemble_scalar(fem.form(self.A_form))
-        
+
+        #update centroid coordinates:
+        self.yavg = assemble_scalar(form(self.x[0]*self.dx))/self.A
+        self.zavg = assemble_scalar(form(self.x[1]*self.dx))/self.A
+
         #TODO: for multi-material, need smarter update
         self.linear_density = self.A*self.materials[0].density
 
@@ -2716,7 +2721,33 @@ class CoupledCrossSection:
 
 
         return dRdx_dr
+    
+    # def _compute_pA_action(self,dK,mesh_id=0,derivative_type='x'):
+    #     '''
+    #     compute the action of the seed dK on the input based on derivative_type
 
+    #     return numpy arrays
+    #     '''
+    #     XS = self.XSs[mesh_id]
+    #     K1 = self.K1
+    #     K2inv = self.K2inv
+    #     K2 = self.K2
+
+    #     #get K1 and K2 adjoint loads
+    #     W_1 = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
+    #     W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
+
+    #     if derivative_type == 'x':
+    #         d_form = 0
+            
+    #         for idx_i,idx_j in np.argwhere(W_1):
+    #             d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+    #         for idx_i,idx_j in np.argwhere(W_2):
+    #             d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+
+    #         d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
+
+    #         return d_inputs.array
     def _compute_pK_action(self,dK,mesh_id=0,derivative_type='x'):
         '''
         compute the action of the seed dK on the input based on derivative_type
@@ -2906,6 +2937,7 @@ class CoupledCrossSection:
         self.K1 = np.zeros((6,6))
         self.K2 = np.zeros((6,6))
         # self.S = np.zeros((6,6))
+        self.A = 0
 
         for i,region in zip(self.regions,self.regions.values()):
             self.XSs[i]._compute_xs_stiffness_matrix()
@@ -2915,21 +2947,32 @@ class CoupledCrossSection:
             # self.S += self.XSs[i].S
             # self.K += self.XSs[i].K
 
+            self.A += self.XSs[i].A
+
         self.K2inv = np.linalg.inv(self.K2)
 
         self.K = self.K1 @ np.linalg.inv(self.K2) @ self.K1.T
+
+        self.A -= self.get_overlap_area()
+
+        self.linear_density = self.A*self.XSs[0].materials[0].density
            
 
-    def get_overlap_area(self):
+    def get_overlap_area(self,approach='under'):
         for idx,val in np.ndenumerate(self.adjacency):
             if val == 0:
                 continue
             else:
-                dx_overlap = Measure("dx", domain=self.regions[idx[0]].msh, subdomain_data=self.collisions[idx[0]][idx[1]].celltags[1])
+                dx_overlap = Measure("dx", domain=self.regions[idx[0]].msh, subdomain_data=self.collisions[idx].celltags[1])
 
-                A_plus = fem.assemble_scalar(fem.form(1.0*dx_overlap((1,2))))
-                A_minus = fem.assemble_scalar(fem.form(1.0*dx_overlap((1))))
-                A_avg = 0.5*(A_plus+A_minus)
+                if approach == 'under': 
+                    return fem.assemble_scalar(fem.form(1.0*dx_overlap((1))))
+                elif approach == 'over': 
+                    return fem.assemble_scalar(fem.form(1.0*dx_overlap((1,2))))
+                elif approach == 'average':
+                    A_minus = fem.assemble_scalar(fem.form(1.0*dx_overlap((1))))
+                    A_plus = fem.assemble_scalar(fem.form(1.0*dx_overlap((1,2)))) 
+                    A_avg = 0.5*(A_plus+A_minus)
 
                 self.collisions[idx[0]][idx[1]].add_overlap_areas(A_plus,A_minus,A_avg)
     

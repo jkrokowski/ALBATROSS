@@ -33,7 +33,7 @@ mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= W
-mesh_1.geometry.x[:,0] += -0.45
+# mesh_1.geometry.x[:,0] += -0.45
 mesh_1.name = 'w'
 
 #================= initialize individual cross-sections ===========#
