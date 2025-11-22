@@ -1293,6 +1293,17 @@ class CrossSection:
         self.pApx = fem.petsc.assemble_vector(fem.form(derivative(self.A_form,self.x,self.dX)))
         return self.pApx.array
     
+    def _set_up_dK_forms(self):
+            
+
+        self.dK_form = 0
+        for idx_i in range(6):
+            for idx_j in range(6):
+                self.dK_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                self.dK_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+
+
+    
     def _compute_pK_action(self,dK,derivative_type='x'):
         '''
         compute the action of the seed dK on the input based on derivative_type
@@ -2748,6 +2759,7 @@ class CoupledCrossSection:
     #         d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
 
     #         return d_inputs.array
+    
     def _compute_pK_action(self,dK,mesh_id=0,derivative_type='x'):
         '''
         compute the action of the seed dK on the input based on derivative_type

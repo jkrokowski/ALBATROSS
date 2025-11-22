@@ -33,7 +33,7 @@ tw = W/w_to_w
 A = tf*W + tw*(H-tf)
 
 #define tip load magnitude and direction
-F = .001 
+F = .1 
 loading = 'z'
 
 #beam endpoint locations
@@ -101,7 +101,7 @@ CantileverBeam.get_mass()
 #################################################################
 
 #shows plot of 1D displacement solution (recovery doesn't need be executed)
-CantileverBeam.plot_axial_displacement(warp_factor=10)
+CantileverBeam.plot_axial_displacement(warp_factor=1e3)
 
 #recovers the 3D displacement field over each xs
 CantileverBeam.recover_displacement()

@@ -304,6 +304,8 @@ K = outputs_sec.K
 # A = outputs_sec.A
 # A.name = 'area'
 
+dK_dxw=csdl.derivative(outputs_sec.K,dx_w)
+
 with csdl.namespace('Objective'):
     f = -K[5,5]
     f.add_name('max_bending_stiffness')
@@ -324,6 +326,8 @@ with csdl.namespace('Objective'):
 
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
+
+
 
 # recorder.visualize_adjacency_matrix()
 

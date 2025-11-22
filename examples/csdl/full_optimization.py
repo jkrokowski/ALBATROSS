@@ -13,7 +13,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 4 #number of quad elements per side on xc mesh
+N = 10 #number of quad elements per side on xc mesh
 W = .1 #xs width
 H = .1 #xs height
 A = W*H #xs area

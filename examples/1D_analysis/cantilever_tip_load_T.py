@@ -33,7 +33,7 @@ tw = W/w_to_w
 A = tf*W + tw*(H-tf)
 
 #define tip load magnitude and direction
-F = .001 
+F = .1 
 loading = 'z'
 
 #beam endpoint locations
@@ -61,7 +61,7 @@ meshname = 't-section'
 nodal_points = [p1,p2]
 # number of segments of the beams that use different cross-sections
 num_segments = len(nodal_points)-1 
-num_ele = [100] #number of subdivisions for each beam segment
+num_ele = [10] #number of subdivisions for each beam segment
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
 
 #define orientation of each xs with a vector
@@ -101,7 +101,7 @@ CantileverBeam.get_mass()
 #################################################################
 
 #shows plot of 1D displacement solution (recovery doesn't need be executed)
-CantileverBeam.plot_axial_displacement(warp_factor=10)
+CantileverBeam.plot_axial_displacement(warp_factor=1e3)
 
 #recovers the 3D displacement field over each xs
 CantileverBeam.recover_displacement()
