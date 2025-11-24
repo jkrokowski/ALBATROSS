@@ -965,6 +965,7 @@ class CrossSection:
         '''
         solve the 6 systems for the action of the warping functions on the residual
         '''
+        self.pRkpuk.assemble()
         d_residuals = self.pRkpuk.createVecLeft()
         d_residuals.setUp()
         d_outputs = self.pRkpuk.createVecRight()
@@ -1010,17 +1011,32 @@ class CrossSection:
         
         #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
         # this is actually pretty straightfoward using UFL when you get around to it
+
+        #this looks somethings like:
+        
+        
+        d_residual_w_func = fem.Function(self.V)
+        d_residual_l_func = fem.Function(self.LM)
         for idx in range(d_residuals_w.shape[1]):
-            dRwdx = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
+            #TODO: compile these forms outside this function so they don't have to be reassembled
+            d_residual_w_func.x.array[:] = d_residuals_w[:,idx]
+            dinputs_w_test = fem.petsc.assemble_vector(fem.form(ufl.derivative(ufl.action(self.residuals[idx][0],d_residual_w_func),self.x,self.dX)))
             
-            d_residuals_w_vec.array = d_residuals_w[:,idx]
-            dRwdx.multTranspose(d_residuals_w_vec,d_inputs_vec) #perform vec-mat product
-            dRdx_dr += d_inputs_vec.array
+            d_residual_l_func.x.array[:] = d_residuals_lmbda[:,idx]
+            dinputs_l_test = fem.petsc.assemble_vector(fem.form(ufl.derivative(ufl.action(self.residuals[idx][1],d_residual_l_func),self.x,self.dX)))
+
+            dRdx_dr += dinputs_w_test.array
+            dRdx_dr += dinputs_l_test.array
+            # dRwdx = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
             
-            dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
-            d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
-            dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_vec) #perform vec-mat product
-            dRdx_dr += d_inputs_vec.array
+            # d_residuals_w_vec.array = d_residuals_w[:,idx]
+            # dRwdx.multTranspose(d_residuals_w_vec,d_inputs_vec) #perform vec-mat product
+            # dRdx_dr += d_inputs_vec.array
+            
+            # dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
+            # d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
+            # dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_vec) #perform vec-mat product
+            # dRdx_dr += d_inputs_vec.array
 
         return dRdx_dr
     
@@ -1294,16 +1310,31 @@ class CrossSection:
         return self.pApx.array
     
     def _set_up_dK_forms(self):
+        self.W_1 = fem.Constant(self.msh,np.zeros((6,6)))
+        self.W_2 = fem.Constant(self.msh,np.zeros((6,6)))
             
+        XS = self
+        W_1 = self.W_1
+        W_2 = self.W_2
 
         self.dK_form = 0
         for idx_i in range(6):
             for idx_j in range(6):
                 self.dK_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
                 self.dK_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+        
+        #spatial partials form
+        self.dKdx_form = fem.form(ufl.derivative(self.dK_form,XS.x,XS.dX))
+
+        #partials w.r.t. warping functions and lagrange multipliers
+        self.dKdw_form = []
+        self.dKdl_form = []
+        for idx_k in range(6):
+            self.dKdw_form.append(fem.form(ufl.derivative(self.dK_form,XS.warping_functions[idx_k])))
+            self.dKdl_form.append(fem.form(ufl.derivative(self.dK_form,XS.lmbdas[idx_k])))
 
 
-    
+        
     def _compute_pK_action(self,dK,derivative_type='x'):
         '''
         compute the action of the seed dK on the input based on derivative_type
@@ -1314,55 +1345,62 @@ class CrossSection:
         K1 = self.K1
         K2inv = self.K2inv
         
-
         #get K1 and K2 adjoint loads
-        W_1 = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
-        W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
+        W_1_value = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
+        W_2_value = K2inv @ K1.T @ dK @ K1 @ K2inv
+
+        self.W_1.value = W_1_value
+        self.W_2.value = W_2_value
 
         if derivative_type == 'x':
-            d_form = 0
+            # d_form = 0
             
-            for idx_i in range(6):
-                for idx_j in range(6):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                    d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+            # for idx_i in range(6):
+            #     for idx_j in range(6):
+            #         d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+            #         d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
-            d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
+            d_inputs = fem.petsc.assemble_vector(self.dKdx_form)
 
             return d_inputs.array
         
         if derivative_type == 'w':
-            d_form = 0
+            # d_form = 0
 
             d_inputs = np.zeros((XS.V.dofmap.index_map_bs*XS.V.dofmap.index_map.size_global,6))
             indices_i,indices_j = np.nonzero(dK)
             #loop over warping functions:
             for idx_k in range(6):
-                for idx_i in range(6):
-                    for idx_j in range(6):
-                        d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                        d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+                # for idx_i in range(6):
+                #     for idx_j in range(6):
+                #         d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                #         d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
-                d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.warping_functions[idx_k])))
+                d_inputs[:,idx_k] = fem.petsc.assemble_vector(self.dKdw_form[idx_k])
 
             return d_inputs
         
         if derivative_type == 'l':
-            d_form = 0
+            # d_form = 0
 
             d_inputs = np.zeros((XS.LM.dofmap.index_map_bs*XS.LM.dofmap.index_map.size_global,6))
             indices_i,indices_j = np.nonzero(dK)
             #loop over lagrange multipliers:
             for idx_k in range(6):
-                for idx_i in range(6):
-                    for idx_j in range(6):
-                        d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                        d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+            #     for idx_i in range(6):
+            #         for idx_j in range(6):
+            #             d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+            #             d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
-                d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
+                d_inputs[:,idx_k] = fem.petsc.assemble_vector(self.dKdl_form[idx_k])
 
             return d_inputs
         
+
+    def _set_up_dA_form(self):
+        self.dAdx_form = fem.form(ufl.derivative(self.A_form,self.x,self.dX))
+    
+    
     def _compute_pA_action(self,dA,derivative_type='x'):
         '''
         compute the action of the seed dK on the input based on derivative_type
@@ -1373,7 +1411,7 @@ class CrossSection:
 
         if derivative_type == 'x':
             
-            d_inputs = dA*fem.petsc.assemble_vector(fem.form(ufl.derivative(XS.A_form,XS.x,XS.dX)))
+            d_inputs = dA*fem.petsc.assemble_vector(self.dAdx_form)
             
             return d_inputs
         

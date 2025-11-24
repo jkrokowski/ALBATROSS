@@ -49,10 +49,18 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
         # print("apply_inverse_jacobian:")
         #TODO: do we need to update the inputs, etc (eg. does the mesh update need to happen here?)
-        xy = inputs['xy']
-        xy_interior = inputs['xy_interior']
-        w = outputs['w']
-        lmbda = outputs['lmbda']
+        mesh_geometry = self.xs.msh.geometry.x.copy()
+
+        #update boundary nodes:
+        self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        
+        #update interior nodes
+        self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+
+        #update the warping functions
+        for i in range(6):
+            self.xs.warping_functions[i].x.array[:] = outputs['w'][:,i]
+            self.xs.lmbdas[i].x.array[:] = outputs['lmbda'][:,i]    
 
         # for mode = rev:
         # d_outputs --> d_residuals
@@ -75,14 +83,26 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
 
             # d_residuals['w'] = drw_dw_inv @ d_outputs['w'] + drw_dl_inv @ d_outputs['lmbda']
             # d_residuals['lmbda'] = drl_dl_inv @ d_outputs['lmbda'] # + drl_dw_inv @ d_outputs['w'] <-- this term is = 
+        
+        #return mesh geometry to original state:
+        self.xs.msh.geometry.x[:] = mesh_geometry
 
 
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
         # print("compute vector-jacobian product:")
-        xy = inputs['xy']
-        xy_interior = inputs['xy_interior']
-        w = outputs['w']
-        lmbda = outputs['lmbda']
+        #TODO: do we need to update the inputs, etc (eg. does the mesh update need to happen here?)
+        mesh_geometry = self.xs.msh.geometry.x.copy()
+
+        #update boundary nodes:
+        self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        
+        #update interior nodes
+        self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+
+        #update the warping functions
+        for i in range(6):
+            self.xs.warping_functions[i].x.array[:] = outputs['w'][:,i]
+            self.xs.lmbdas[i].x.array[:] = outputs['lmbda'][:,i]   
 
         # for mode = rev
         # d_residuals --> d_inputs
@@ -106,7 +126,9 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
             
             # d_inputs['xy'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda'] )['boundary']
             # d_inputs['xy_interior'] = (dRwdx @ d_residuals['w'] + dRldx @ d_residuals['lmbda']) ['interior']
-
+        
+        #return mesh geometry to original state:
+        self.xs.msh.geometry.x[:] = mesh_geometry
 
 
 class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
@@ -116,7 +138,8 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         self.check_partials =check_partials
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
-
+        self.xs._set_up_dK_forms()
+        self.xs._set_up_dA_form()
 
     def evaluate(self,inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
@@ -138,7 +161,7 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
     
     def compute(self, inputs, outputs):
         print('compute beam matrix from warping function state')
-        mesh_geometry = self.xs.msh.geometry.x.copy()
+        # mesh_geometry = self.xs.msh.geometry.x.copy()
 
         if self.check_partials != 'w':
             #update boundary nodes:
@@ -162,74 +185,74 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         outputs['K'] = self.xs.K
         outputs['A'] = self.xs.A
 
-        #return mesh geometry to original state:
-        self.xs.msh.geometry.x[:] = mesh_geometry
+        # #return mesh geometry to original state:
+        # self.xs.msh.geometry.x[:] = mesh_geometry
     
-    def compute_derivatives(self, inputs, outputs, derivatives):
-        print('compute beam matrix derivatives...')
-        #update boundary nodes:
-        # if self.boundary_nodes is not None: 
-        #     self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+    # def compute_derivatives(self, inputs, outputs, derivatives):
+    #     print('compute beam matrix derivatives...')
+    #     #update boundary nodes:
+    #     # if self.boundary_nodes is not None: 
+    #     #     self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
         
-        # #update interior nodes
-        # if self.interior_nodes is not None: 
-        #     self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        # else: 
-        #     self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+    #     # #update interior nodes
+    #     # if self.interior_nodes is not None: 
+    #     #     self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+    #     # else: 
+    #     #     self.xs.msh.geometry.x[:,0:2]=inputs['xy']
         
-        # for i in range(6):
-        #     self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
-        #     self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+    #     # for i in range(6):
+    #     #     self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
+    #     #     self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
         
-        # self.xs._compute_xs_stiffness_matrix()
-        if self.check_partials != 'w':                
-            pKpx = self.xs.compute_pKpx()
-            derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
-            derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
+    #     # self.xs._compute_xs_stiffness_matrix()
+    #     if self.check_partials != 'w':                
+    #         pKpx = self.xs.compute_pKpx()
+    #         derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
+    #         derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
         
-            pApx = self.xs.compute_pApx()
-            derivatives['A','xy'] = pApx[self.xs.dofs_boundary]
-            derivatives['A','xy_interior'] = pApx[self.xs.dofs_interior]
-            
-        if self.check_partials != 'x':
-            pKpw = self.xs.compute_pKpw()
-            pKpl = self.xs.compute_pKpl()
-            derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
-            derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
-
-        # derivatives['A','xy'] = np.vstack([pApx[self.xs.dofs_x_boundary],
-        #                                 pApx[self.xs.dofs_y_boundary]]).T
-        # derivatives['A','xy_interior'] = np.vstack([pApx[self.xs.dofs_x_interior],
-        #                                 pApx[self.xs.dofs_y_interior]]).T
-    
-    # def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
-    #     # dxA = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
-    #     # dxB = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
-    #     # dwA = np.zeros_like(self.d_outputs['w_A'])
-    #     # dwB = np.zeros_like(self.d_outputs['w_B'])
-    #     # dlmbda = np.zeros_like(self.d_outputs['lmbda'])
-        
-    #     if self.check_partials != 'w':
-    #         num_spatial_dofs = self.xs.VX.dofmap.index_map_bs*self.xs.VX.dofmap.index_map.size_global
-    #         dx = np.zeros((num_spatial_dofs,))
-            
-    #         if len(np.nonzero(d_outputs['K'])[0])>0:
-    #             dx += self.xs._compute_pK_action(d_outputs['K'],
-    #                                             derivative_type='x')
-    #         if not np.isclose(d_outputs['A'][0],0):
-    #             dx += self.xs._compute_pA_action(d_outputs['A'])
-
-    #         d_inputs['xy'] = np.vstack([dx[self.xs.dofs_x_boundary],
-    #                                         dx[self.xs.dofs_y_boundary]]).T
-    #         d_inputs['xy_interior'] = np.vstack([dx[self.xs.dofs_x_interior],
-    #                                         dx[self.xs.dofs_y_interior]]).T
+    #         pApx = self.xs.compute_pApx()
+    #         derivatives['A','xy'] = pApx[self.xs.dofs_boundary]
+    #         derivatives['A','xy_interior'] = pApx[self.xs.dofs_interior]
             
     #     if self.check_partials != 'x':
-    #         if len(np.nonzero(d_outputs['K'])[0])>0:
-    #             d_inputs['w'] = self.xs._compute_pK_action(d_outputs['K'],
-    #                                                         derivative_type='w')
-    #             d_inputs['lmbda'] = self.xs._compute_pK_action(d_outputs['K'],
-    #                                                         derivative_type='l')
+    #         pKpw = self.xs.compute_pKpw()
+    #         pKpl = self.xs.compute_pKpl()
+    #         derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
+    #         derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
+
+    #     # derivatives['A','xy'] = np.vstack([pApx[self.xs.dofs_x_boundary],
+    #     #                                 pApx[self.xs.dofs_y_boundary]]).T
+    #     # derivatives['A','xy_interior'] = np.vstack([pApx[self.xs.dofs_x_interior],
+    #     #                                 pApx[self.xs.dofs_y_interior]]).T
+    
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
+        # dxA = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
+        # dxB = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
+        # dwA = np.zeros_like(self.d_outputs['w_A'])
+        # dwB = np.zeros_like(self.d_outputs['w_B'])
+        # dlmbda = np.zeros_like(self.d_outputs['lmbda'])
+        print('compute vjp:')
+        if self.check_partials != 'w':
+            num_spatial_dofs = self.xs.VX.dofmap.index_map_bs*self.xs.VX.dofmap.index_map.size_global
+            dx = np.zeros((num_spatial_dofs,))
+            
+            if len(np.nonzero(d_outputs['K'])[0])>0:
+                dx += self.xs._compute_pK_action(d_outputs['K'],
+                                                derivative_type='x')
+            if not np.isclose(d_outputs['A'][0],0):
+                dx += self.xs._compute_pA_action(d_outputs['A'])
+
+            d_inputs['xy'] = np.vstack([dx[self.xs.dofs_x_boundary],
+                                            dx[self.xs.dofs_y_boundary]]).T
+            d_inputs['xy_interior'] = np.vstack([dx[self.xs.dofs_x_interior],
+                                            dx[self.xs.dofs_y_interior]]).T
+            
+        if self.check_partials != 'x':
+            if len(np.nonzero(d_outputs['K'])[0])>0:
+                d_inputs['w'] = self.xs._compute_pK_action(d_outputs['K'],
+                                                            derivative_type='w')
+                d_inputs['lmbda'] = self.xs._compute_pK_action(d_outputs['K'],
+                                                            derivative_type='l')
             
 
         # print('input vals:')

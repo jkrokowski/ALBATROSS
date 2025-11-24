@@ -16,7 +16,7 @@ UPDATE: the shear stiffness constraint didn't work because element inversion is 
 maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
-N = 3
+N = 2
 W = .5
 H = .6
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -34,6 +34,7 @@ material = ALBATROSS.material.Material(name='unobtainium',
                             density=2700)
 
 xs = ALBATROSS.cross_section.CrossSection(domain,[material])
+xs.get_xs_stiffness_matrix()
 
 #get imp
 xy=domain.geometry.x[xs.boundary_nodes,0:2]
@@ -126,9 +127,9 @@ sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
 # recorder.visualize_adjacency_matrix()
-
+# dKdx = csdl.derivative(outputs_sec.K,xy)
 #uncommment this to check the total derivatives of the pipeline
-sim.check_totals(outputs_sec.K,xy)
+dKdx_check = sim.check_totals(outputs_sec.K,xy)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

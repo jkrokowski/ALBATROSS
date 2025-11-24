@@ -529,15 +529,6 @@ class Axial:
         d_residuals.setUp()
         d_outputs_vec = self.A_mat.createVecRight()
         d_outputs_vec.setUp()
-        # d_outputs_len=d_output_w.shape[0]
-
-        #TODO: for more sophisticated objective functions, we can 
-        # d_residuals_w = np.zeros_like(d_output_w)
-        # with d_outputs.localForm() as rhs_local:
-        #     rhs_local.set(0.0)
-        #     rhs_local[dof] = d_output
-        # with d_residuals.localForm() as lhs_local:
-        #     lhs_local.set(0.0)
 
         d_outputs_vec.array[:] = d_outputs
 

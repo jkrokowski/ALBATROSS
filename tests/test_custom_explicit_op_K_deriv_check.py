@@ -28,6 +28,7 @@ material = ALBATROSS.material.Material(name='unobtainium',
                             density=2700)
 
 xs = ALBATROSS.cross_section.CrossSection(domain,[material])
+xs.get_xs_stiffness_matrix()
 
 xy=domain.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
@@ -51,8 +52,8 @@ if check_partials != 'w':
 if check_partials != 'x':
     warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
     start = 0
-    end = 35
-    wf_num = 0
+    end = 108
+    wf_num = 3
     warping_slice = csdl.Variable(value = warping_input.value[start:end,wf_num])
 
     inputs.w = warping_input.set(csdl.slice[start:end,wf_num],warping_slice)
@@ -102,6 +103,7 @@ if check_partials == 'w':
     for i in range(36):
         print(i,np.linalg.norm(dKdw[i,:]-dKdw_FD[i,:]),np.linalg.norm(dKdw[i,:]),np.linalg.norm(dKdw_FD[i,:]))
     
+    print()
     # step_size=0.0001
     # # wf_num = 'w3'
     # dK1dwn_FD=np.load('dK1dw'+str(wf_num)+'_FD_dw='+str(step_size)+'.npy')

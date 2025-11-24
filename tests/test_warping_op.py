@@ -6,23 +6,14 @@ from dolfinx.io import XDMFFile
 from mpi4py import MPI
 import lsdo_function_spaces as lfs
 
-'''
-This optimization problem is not well-posed with just the bending stiffness maximization
-A potential way to counter this (without applying constraints on the boundary self-intersections)
-would be to add a shear stiffness constraint as well as the area constraint?
-the shear stiffness constraint prevents the "web" from necking down and self intersecting
 
-UPDATE: the shear stiffness constraint didn't work because element inversion is not handled well by the cross-section model
-maybe this needs to be "fixed" by the mesh smoothing?
-'''
-
-N = 10
+N = 2
 W = .5
 H = .6
 points = [[-W/2,-H/2],[W/2, H/2]]
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
-filename = 'mesh_motion_deriv_check'
+filename = 'warping_op_test'
 domain.name = filename
 # with XDMFFile(MPI.COMM_WORLD, "output/"+filename+".xdmf", "w") as xdmf:
 #     xdmf.write_mesh(domain)
@@ -34,6 +25,7 @@ material = ALBATROSS.material.Material(name='unobtainium',
                             density=2700)
 
 xs = ALBATROSS.cross_section.CrossSection(domain,[material])
+xs.get_xs_stiffness_matrix()
 
 #get imp
 xy=domain.geometry.x[xs.boundary_nodes,0:2]
@@ -47,16 +39,17 @@ xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_i
 xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
 xy.set_as_design_variable(lower=-1,upper=1,scaler=100)
 
-#=====mesh motion=======#
-inputs_mm = csdl.VariableGroup()
-inputs_mm.xy = xy
-inputs_mm.xy_interior = xy_interior
-meshSmoothing = ALBATROSS.csdl_utils.EllipticSmoothing(domain,
-                                                       xs.boundary_nodes,
-                                                       xs.interior_nodes,
-                                                       filename=filename)
-outputs_mm = meshSmoothing.evaluate(inputs_mm)
-outputs_mm.xy_interior.name = 'xy_interior'
+#===== warping function computation =======#
+inputs_w = csdl.VariableGroup()
+inputs_w.xy = xy
+inputs_w.xy_interior = xy_interior
+
+warping_model = ALBATROSS.csdl_utils.WarpingFunctionState(xs=xs,
+                        boundary_nodes=xs.boundary_nodes,
+                        interior_nodes=xs.interior_nodes)
+
+outputs_w = warping_model.evaluate(inputs_w)
+
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
@@ -64,9 +57,20 @@ outputs_mm.xy_interior.name = 'xy_interior'
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
+warping_slice = outputs_w.w.get(csdl.slice[1,0])
+dwdx_check = sim.check_totals(warping_slice,xy,step_size=0.001)
+print()
+
+# warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
+# start = 0
+# end = 108
+# wf_num = 3
+# warping_slice = csdl.Variable(value = warping_input.value[start:end,wf_num])
+
+# inputs.w = warping_input.set(csdl.slice[start:end,wf_num],warping_slice)
+# inputs.lmbda = csdl.Variable(value=np.vstack([xs.lmbdas[i].x.array for i in range(6)]).T)
+
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-dxIdxB = sim.check_totals(outputs_mm.xy_interior,xy)
-
-print()
+# sim.check_totals(outputs_sec.K,inputs.coeffs)
