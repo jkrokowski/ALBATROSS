@@ -13,9 +13,9 @@ H = 1
 points = [[-W/2,-H/2],[W/2, H/2]]
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
-domain.name = 'square_mesh_opt'
-with XDMFFile(MPI.COMM_WORLD, "output/square_mesh_opt.xdmf", "w") as xdmf:
-    xdmf.write_mesh(domain)
+domain.name = 'mesh_motion_check'
+# with XDMFFile(MPI.COMM_WORLD, "output/square_mesh_opt.xdmf", "w") as xdmf:
+#     xdmf.write_mesh(domain)
 
 # # radius = 1
 # # num_el = 40 #number of elements through wall thickness
@@ -138,7 +138,7 @@ sim.run()
 
 #TODO: need to figure out why check totals doesn't seem to affect FD, but does affect normal totals??
 # sim.check_totals(outputs_wf.w[:10,0],inputs.xy,step_size=0.0001,print_results=True) 
-dudx = sim.check_totals(outputs_mm.xy_interior,inputs.xy)
+dudx = sim.check_totals(outputs_mm.xy_interior,inputs.xy,step_size=0.05)
 # dwdx_FD = sim.compute_totals(outputs_wf.w[:10,0],inputs.xy,use_finite_difference=True,finite_difference_step_size=0.002)
 
 # sim.check_totals(outputs_wf.lmbda,inputs.xy,print_results=True)

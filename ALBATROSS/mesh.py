@@ -10,6 +10,120 @@ from ALBATROSS.utils import gmsh_to_xdmf,get_pts_and_cells
 import pyvista
 from petsc4py import PETSc
 
+class MeshMotion():
+     def __init__(self,msh,moved_nodes,nodes_to_move):
+          self.msh = msh
+          self.moved_nodes = moved_nodes
+          self.nodes_to_move = nodes_to_move
+          self.filename = msh.name
+          self.step = 0
+          # self.mode = 'lin_elas'
+
+          #write mesh:
+          with XDMFFile(MPI.COMM_WORLD, "output/"+self.filename+".xdmf", "w") as xdmf:
+               xdmf.write_mesh(self.msh)
+                    
+          c_el = msh.ufl_domain().ufl_coordinate_element()
+          self.V = fem.functionspace(msh, c_el)
+
+          self.uh = fem.Function(self.V)
+          self.uh.name = 'uh'
+          self.u_bc = fem.Function(self.V)
+          self.u = ufl.TrialFunction(self.V)
+          self.v = ufl.TestFunction(self.V)
+
+          self.x = ufl.SpatialCoordinate(msh)
+         
+          self.moved_dofs = []
+          self.dofs_to_move = []
+          for i in range(self.V.num_sub_spaces):
+               self.moved_dofs.extend(fem.locate_dofs_topological(self.V.sub(i),0,self.moved_nodes))
+               self.dofs_to_move.extend(fem.locate_dofs_topological(self.V.sub(i),0,self.nodes_to_move))
+
+          def eps(v):
+               return ufl.sym(ufl.grad(v))
+          
+          #declare artificial linear elastic parameters
+          E = 1
+          nu = 0.4  # a large poisson ratio improve the ability of the mesh to withstand crushing on the boundary
+          model = "plane_stress"
+
+          mu = E/2/(1+nu)
+          lmbda = E*nu/(1+nu)/(1-2*nu)
+          if model == "plane_stress":
+               lmbda = 2*mu*lmbda/(lmbda+2*mu)
+
+          def sigma(v):
+               return lmbda*ufl.tr(eps(v))*ufl.Identity(2) + 2.0*mu*eps(v)
+          self.a = ufl.inner(sigma(self.v), eps(self.u))*ufl.dx
+          self.L = ufl.inner(fem.Constant(msh, (0., 0.)), self.v)*ufl.dx
+
+          #set boundary conditions
+          bc = fem.dirichletbc(self.u_bc,self.moved_nodes)
+          bcs = [bc]
+
+          #set up solver
+          self.problem = fem.petsc.LinearProblem(self.a, self.L, bcs, self.uh)
+          
+
+     def smooth_mesh(self,x_new):
+          #update boundary conditions
+          self.u_bc
+          displacement = x_new - self.msh.geometry.x[self.moved_nodes,:2]
+          self.u_bc.x.array[self.moved_dofs] = displacement.T.flatten()
+          self.u_bc.x.scatter_forward()
+          
+          self.problem.solve()
+
+          deformation_array = self.uh.x.array.reshape((-1, self.msh.geometry.dim))
+          new_mesh_coords = self.msh.geometry.x[self.nodes_to_move, 0:2] + deformation_array[self.nodes_to_move,0:2]
+     
+          return new_mesh_coords
+     
+     def plot_current_mesh_state(self):
+          #TODO: need to not update the mesh here
+          self.msh.geometry.x[self.nodes_to_move,0:2] += self.uh.x.array.reshape((-1, self.msh.geometry.dim))[self.nodes_to_move,:]
+
+          #plot mesh
+          pyvista.global_theme.background = [255, 255, 255, 255]
+          pyvista.global_theme.font.color = 'black'
+          tdim = self.msh.topology.dim
+          topology, cell_types, geometry = plot.vtk_mesh(self.msh, tdim)
+          grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+          plotter = pyvista.Plotter()
+          plotter.add_mesh(grid, show_edges=True,opacity=0.25)
+          plotter.view_xy()
+          plotter.show_axes()
+          plotter.show_bounds()
+          if not pyvista.OFF_SCREEN:
+               plotter.show()
+          
+     
+     def get_derivatives(self):
+          #TODO: compute only on boundary nodes (currenly computed, then restricted)
+          #TODO: compute entries other than 0,0
+          #compute deriv of interior disp w.r.t. boundary nodes
+
+          #assemble the unmodified stiffness matrix (prior to boundary condition application where rows/columns are zeroed out)
+          A = fem.petsc.assemble_matrix(fem.form(self.a))
+          A.assemble()
+
+          Anp = A.getValues(range(A.getSize()[0]),range(A.getSize()[1]))
+
+          AII = Anp[self.dofs_to_move,:][:,self.dofs_to_move]
+
+          AIB = Anp[self.dofs_to_move,:][:,self.moved_dofs]
+          # J = np.linalg.inv(Anp)@Anp
+          duhdx = -np.linalg.inv(AII)@AIB
+          duhdx = duhdx[np.argsort(self.dofs_to_move),:][:,np.argsort(self.moved_dofs)]
+          return duhdx
+     
+     def write_mesh_deformation(self):
+          with XDMFFile(MPI.COMM_WORLD, "output/"+ self.filename+".xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
+               # xdmf.write_mesh(msh)
+               xdmf.write_function(self.uh,self.step)
+          self.step += 1
+
 def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False,mode='poisson',step=0,filename='xs'):
      '''Function to apply elliptic smoothing to a mesh
      given a prescribed boundary motion

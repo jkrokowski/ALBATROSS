@@ -13,7 +13,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 10 #number of quad elements per side on xc mesh
+N = 4 #number of quad elements per side on xc mesh
 W = .1 #xs width
 H = .1 #xs height
 A = W*H #xs area
@@ -31,8 +31,8 @@ points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 xs_msh = ALBATROSS.mesh.create_rectangle(points,[N,N])
 xs_filename = 'bending_stiffness_maximization'
 xs_msh.name = xs_filename
-with XDMFFile(MPI.COMM_WORLD, "output/"+xs_filename+".xdmf", "w") as xdmf:
-    xdmf.write_mesh(xs_msh)
+# with XDMFFile(MPI.COMM_WORLD, "output/"+xs_filename+".xdmf", "w") as xdmf:
+#     xdmf.write_mesh(xs_msh)
 
 #initialize material object
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
@@ -198,7 +198,7 @@ sim.run()
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-dddx = sim.check_totals(tip_displacement,xy)
+dddx = sim.check_totals(tip_displacement,xy,step_size=0.01)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

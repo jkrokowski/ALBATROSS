@@ -51,7 +51,7 @@ if check_partials != 'w':
 if check_partials != 'x':
     warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)
     start = 0
-    end = 108
+    end = 35
     wf_num = 0
     warping_slice = csdl.Variable(value = warping_input.value[start:end,wf_num])
 

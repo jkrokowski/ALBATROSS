@@ -16,7 +16,7 @@ UPDATE: the shear stiffness constraint didn't work because element inversion is 
 maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
-N = 10
+N = 3
 W = .5
 H = .6
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -128,7 +128,7 @@ sim.run()
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-# sim.check_totals(outputs_sec.K,inputs.coeffs)
+sim.check_totals(outputs_sec.K,xy)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

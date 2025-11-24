@@ -8,15 +8,11 @@ from mpi4py import MPI
 class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
     '''
     inputs: nodal positions of cross-sectional mesh'''
-    def __init__(self,xs,boundary_nodes=None,interior_nodes=None):
+    def __init__(self,xs,boundary_nodes,interior_nodes):
         super().__init__()
         self.xs = xs
-
-        if boundary_nodes is not None:
-            self.boundary_nodes = boundary_nodes
-
-        if interior_nodes is not None:
-            self.interior_nodes = interior_nodes
+        self.boundary_nodes = boundary_nodes
+        self.interior_nodes = interior_nodes
 
     def evaluate(self,inputs: csdl.VariableGroup):
         # assign method inputs to input dictionary
@@ -32,26 +28,24 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
     
     def solve_residual_equations(self, inputs, outputs):
         print("solve residual equations:")
+        mesh_geometry = self.xs.msh.geometry.x.copy()
+
         #update boundary nodes:
-        if self.boundary_nodes is not None: 
-            self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+        self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
         
         #update interior nodes
-        if self.interior_nodes is not None: 
-            self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        else: 
-            self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+        self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
 
-        # print('xy values (warping op):')
-        # print(inputs['xy'].flatten())
-        # print('xy mesh coords')
-        # print(self.xs.msh.geometry.x[self.xs.boundary_nodes,:2])
         #compute warping functions
         self.xs._get_warping_functions()
         
         outputs['w'] = np.vstack([self.xs.warping_functions[i].x.array for i in range(6)]).T
         outputs['lmbda'] = np.vstack([self.xs.lmbdas[i].x.array for i in range(6)]).T
-    
+
+        #return mesh geometry to original state:
+        self.xs.msh.geometry.x[:] = mesh_geometry
+
+
     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
         # print("apply_inverse_jacobian:")
         #TODO: do we need to update the inputs, etc (eg. does the mesh update need to happen here?)
@@ -120,12 +114,8 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         super().__init__()
         self.xs = xs
         self.check_partials =check_partials
-
-        if boundary_nodes is not None:
-            self.boundary_nodes = boundary_nodes
-
-        if interior_nodes is not None:
-            self.interior_nodes = interior_nodes
+        self.boundary_nodes = boundary_nodes
+        self.interior_nodes = interior_nodes
 
 
     def evaluate(self,inputs: csdl.VariableGroup):
@@ -148,34 +138,32 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
     
     def compute(self, inputs, outputs):
         print('compute beam matrix from warping function state')
+        mesh_geometry = self.xs.msh.geometry.x.copy()
+
         if self.check_partials != 'w':
             #update boundary nodes:
-            if self.boundary_nodes is not None: 
-                self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+            self.xs.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
 
             #update interior nodes
-            if self.interior_nodes is not None: 
-                self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-            else: 
-                self.xs.msh.geometry.x[:,0:2]=inputs['xy']
+            self.xs.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+
 
         if self.check_partials != 'x':
             for i in range(6):
                 self.xs.warping_functions[i].x.array[:] = inputs['w'][:,i]
-                self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+                self.xs.lmbdas[i].x.array[:] = inputs['lmbda'][:,i]    
+
         
         # self.xs.plot_mesh()
         self.xs._compute_xs_stiffness_matrix()
-
-        # print('xy values (xs op):')
-        # print(inputs['xy'].flatten())
-        # print('xy mesh coords')
-        # print(self.xs.msh.geometry.x[self.xs.boundary_nodes,:2])
 
         print('beam cross-sectional area:',self.xs.A)
         
         outputs['K'] = self.xs.K
         outputs['A'] = self.xs.A
+
+        #return mesh geometry to original state:
+        self.xs.msh.geometry.x[:] = mesh_geometry
     
     def compute_derivatives(self, inputs, outputs, derivatives):
         print('compute beam matrix derivatives...')
@@ -264,9 +252,15 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         self.domain = domain
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
-        self.step = 0.0
-        self.filename =filename
+        # self.step = 0.0
+        # self.filename =filename
         # self.original_boundary = self.domain.geometry.x[self.boundary_nodes,0:2]
+
+        #initialize mesh motion solver
+        self.mesh_motion = ALBATROSS.mesh.MeshMotion(self.domain,
+                                  self.boundary_nodes,
+                                  self.interior_nodes)
+        
 
     def evaluate(self, inputs: csdl.VariableGroup):
         #boundary node position inputs:
@@ -283,45 +277,50 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         return output
 
     def compute(self, inputs, outputs):
-        print(f'perform elliptic smoothing (step {self.step})')
+        print(f'perform elliptic smoothing (step {self.mesh_motion.step})')
         # displacement = inputs['xy']-inputs['xy_prev']
         # print('xy values (mesh motion op):')
         # print(inputs['xy'].flatten())
         # print('xy mesh coords')
         # print(self.domain.geometry.x[self.boundary_nodes,:2])
         # displacement = inputs['xy']-self.original_boundary
-        displacement = inputs['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
+        # displacement = inputs['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
+        xy_interior = self.mesh_motion.smooth_mesh(inputs['xy'])
 
-        #
-        xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
-                                                    self.boundary_nodes,
-                                                    displacement,
-                                                    self.interior_nodes,
-                                                    mode='lin_elas',
-                                                    plot_result=False,
-                                                    step=self.step,
-                                                    filename=self.filename)
-        self.step += 1.0
+        self.mesh_motion.write_mesh_deformation()
+        # self.mesh_motion.plot_current_mesh_state()
+        # xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
+        #                                             self.boundary_nodes,
+        #                                             displacement,
+        #                                             self.interior_nodes,
+        #                                             mode='lin_elas',
+        #                                             plot_result=True,
+        #                                             step=self.step,
+        #                                             filename=self.filename)
+        # self.step += 1.0
 
-        outputs['xy_interior']=xy_interior
+        outputs['xy_interior'] = xy_interior
 
     def compute_derivatives(self, inputs, outputs, derivatives):
         #returns displacement w.r.t to boundary nodes
 
-        # displacement = inputs['xy']-self.original_boundary
-        displacement = inputs['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
+        # # displacement = inputs['xy']-self.original_boundary
+        # displacement = inputs['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
 
-        xy_interior,duhdx = ALBATROSS.mesh.smooth_mesh(self.domain,
-                                                        self.boundary_nodes,
-                                                        displacement,
-                                                        self.interior_nodes,
-                                                        plot_result=False,
-                                                        get_deriv=True,
-                                                        mode='lin_elas')
+        # xy_interior,duhdx = ALBATROSS.mesh.smooth_mesh(self.domain,
+        #                                                 self.boundary_nodes,
+        #                                                 displacement,
+        #                                                 self.interior_nodes,
+        #                                                 plot_result=False,
+        #                                                 get_deriv=True,
+        #                                                 mode='lin_elas')
 
         # derivatives['xy_interior','xy'] = np.ones_like(xy_interior)
         # print('duhdx shape:')
         # print(duhdx.shape)
+
+        duhdx = self.mesh_motion.get_derivatives()
+
         derivatives['xy_interior','xy'] = duhdx
         # derivatives['xy_interior','xy'] = duhdx.reshape((xy_interior.flatten().shape[0],
         #                                                  inputs['xy'].flatten().shape[0]))
