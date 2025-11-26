@@ -36,7 +36,9 @@ recorder.start()
 
 #create interior node variable
 xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
-xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
+xy_full = csdl.Variable(value=xy,shape=xy.shape,name='xy')
+xy_corner = csdl.Variable(value=xy[0,:])
+xy = xy_full.set(csdl.slice[0,:],xy_corner)
 xy.set_as_design_variable(lower=-1,upper=1,scaler=100)
 
 #===== warping function computation =======#
@@ -56,9 +58,13 @@ outputs_w = warping_model.evaluate(inputs_w)
 
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
+# dout_w=np.random.rand(108)
+# eps = 1e-5
 
-warping_slice = outputs_w.w.get(csdl.slice[1,0])
-dwdx_check = sim.check_totals(warping_slice,xy,step_size=0.001)
+# xs.warping_functions[0].x.array+eps*dout_w
+
+warping_slice = outputs_w.w.get(csdl.slice[:10,0])
+dwdx_check = sim.check_totals(warping_slice,xy_corner,step_size=0.001)
 print()
 
 # warping_input = csdl.Variable(value=np.vstack([xs.warping_functions[i].x.array for i in range(6)]).T)

@@ -29,7 +29,7 @@ p2 = (L,0,0)
 #create cross-sectional mesh
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 xs_msh = ALBATROSS.mesh.create_rectangle(points,[N,N])
-xs_filename = 'bending_stiffness_maximization'
+xs_filename = 'beam_mass_minimization'
 xs_msh.name = xs_filename
 # with XDMFFile(MPI.COMM_WORLD, "output/"+xs_filename+".xdmf", "w") as xdmf:
 #     xdmf.write_mesh(xs_msh)
@@ -196,7 +196,7 @@ sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
 # recorder.visualize_adjacency_matrix()
-dddx = csdl.derivative(tip_displacement,xy)
+# dddx = csdl.derivative(tip_displacement,xy)
 #uncommment this to check the total derivatives of the pipeline
 dddx = sim.check_totals(tip_displacement,xy,step_size=0.01)
 

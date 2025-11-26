@@ -169,6 +169,7 @@ class CrossSection:
         #set up KSP solver
         if self.verbose:
             print('Computing warping functions....')
+        self._compile_forms()
         self._set_up_solver()
         self._solve_system() 
 
@@ -399,7 +400,6 @@ class CrossSection:
         F00 = self.F00
         a00 = self.a00
 
-        
         #construct constraint forms
         F01 = self._construct_constraint_form(lmbda,self.v)
         F10 = self._construct_constraint_form(self.mu,u)
@@ -409,33 +409,20 @@ class CrossSection:
         F =  [[F00,F01],[F10,None]]
         a = [[a00, a01], [a10, None]]
 
-        #construct RHS form vector with no body force (e.g. unchanged for each mode)
+        #construct RHS form with no body force (e.g. unchanged for each mode)
         f0 = fem.Constant(self.msh, default_scalar_type([0.0]*12)) 
         L0 = inner(self.v, f0) * self.dx
 
-        #assemble the RHS for mode i:
-        f1_list = []
-        for i in range(6):
-            f1_np = np.zeros((self.num_constraints,))
-            f1_np[i]= 1.0
-            f1_list.append(f1_np)
-        L1_list = [inner(fem.Constant(self.msh, default_scalar_type(f1)), self.mu) * self.dx for f1 in f1_list]
+        #assemble the constraint RHS: (for each mode solve,the corresponding i entry is = 1)
+        self.f1 = fem.Constant(self.msh, default_scalar_type(np.zeros((self.num_constraints,))))
+        L1 = inner(self.f1, self.mu) * self.dx
 
         #since we have different RHS's, return the list of L1's i
-        L = [L0,L1_list]
+        L = [L0,L1]
 
         self.F = F
         self.a_form = a
         self.L_form = L
-
-        # return a,L
-
-    # def _set_up_warping_functions(self):
-    #     self.warping_functions = []
-    #     self.lmbdas = []
-    #     for i in range(6):
-    #         self.warping_functions.append(self.u.copy())
-    #         self.lmbdas.append(self.lmbda.copy())
 
     def _assemble_block(self,block=[0,0]):
         '''
@@ -451,15 +438,19 @@ class CrossSection:
         petsc_vec = fem.petsc.assemble_vector(fem.form(self.L_form[1][vec_num]))
         return petsc_vec.array
     
-
-    def _set_up_solver(self):
-
+    def _compile_forms(self):
         #assemble matrix and vector
         # pRk/puk is the system stiffness matrix 
         self.pRkpuk_form = fem.form(self.a_form)
         self.pRkpuk = fem.petsc.assemble_matrix_block(self.pRkpuk_form)
         self.pRkpuk.assemble()
 
+        self.rhs_form = fem.form(self.L_form)
+
+        self.residual_PDE = self.F[0][0] + self.F[0][1] - self.L_form[0]
+        self.residual_constraint = self.F[1][0] - self.L_form[1]
+
+    def _set_up_solver(self):
         # set up the solver with the LHS
         ksp = PETSc.KSP().create(self.msh.comm)
         ksp.setOperators(self.pRkpuk)
@@ -475,15 +466,13 @@ class CrossSection:
         # self.warping_functions = []
         # self.lmbdas = []
         self.residuals = []
-        for idx_k,L1 in enumerate(self.L_form[1]):
-            #construct RHS form blocks
-            L0 = self.L_form[0]
-            L = [L0, L1]
-            L_compiled = fem.form(L)
+        bcs = []
+        for idx_k in range(6):
+            self.f1.value = 0           #zero out constraing mode rhs
+            self.f1.value[idx_k] = 1    #select mode 
 
-            bcs = []
-            b = fem.petsc.assemble_vector_block(L_compiled, self.pRkpuk_form, bcs=bcs)
-            xh = fem.petsc.create_vector_block(L_compiled)
+            b = fem.petsc.assemble_vector_block(self.rhs_form, self.pRkpuk_form, bcs=bcs)
+            xh = fem.petsc.create_vector_block(self.rhs_form)
 
             #solve the linear systesm
             self.solver.solve(b, xh)
@@ -501,27 +490,25 @@ class CrossSection:
             self.lmbda.x.scatter_forward()
 
             #save copies of the warping function state
-            # self.warping_functions.append(self.u.copy())
-            # self.lmbdas.append(self.lmbda.copy())
             self.warping_functions[idx_k].x.array[:] = self.u.x.array
             self.lmbdas[idx_k].x.array[:] = self.lmbda.x.array
 
-            # TODO TODO TODO: need to clean up the residual assembly to allow for proper sensitivity computation
-            # #TODO: currently, need to do this because we are using a ufl.TrialFunction() in the residual construction
-            # #       This can be re-written so that uh is used to construct the form, so that we don't have to repeatedly
-            # #       re-assemble a00,a10 or a01, just L0 and L1
-            # a00_form = self._construct_xs_form(uh,return_form=True)
-            # a01_form = self._construct_constraint_form(lmbdah,self.v)
-            # a10_form = self._construct_constraint_form(self.mu,uh)
+            # # TODO TODO TODO: need to clean up the residual assembly to allow for proper sensitivity computation
+            # # #TODO: currently, need to do this because we are using a ufl.TrialFunction() in the residual construction
+            # # #       This can be re-written so that uh is used to construct the form, so that we don't have to repeatedly
+            # # #       re-assemble a00,a10 or a01, just L0 and L1
+            # # a00_form = self._construct_xs_form(uh,return_form=True)
+            # # a01_form = self._construct_constraint_form(lmbdah,self.v)
+            # # a10_form = self._construct_constraint_form(self.mu,uh)
 
-            #main system residual
-            residual0 = self.F[0][0] + self.F[0][1] - L0
-            # residual00 = a00_form + a01_form - L0 
-            #lagrange multiplier system residual
-            # residual1 = a10_form - L1
-            residual1 = self.F[1][0] - L1
+            # #main system residual
+            # residual0 = self.F[0][0] + self.F[0][1] - L0
+            # # residual00 = a00_form + a01_form - L0 
+            # #lagrange multiplier system residual
+            # # residual1 = a10_form - L1
+            # residual1 = self.F[1][0] - L1
 
-            self.residuals.append((residual0,residual1))
+            # self.residuals.append((residual0,residual1))
 
 
     def _compute_xs_stiffness_matrix(self):             
@@ -983,6 +970,7 @@ class CrossSection:
             #     lhs_local.set(0.0)
 
             self.solver.solveTranspose(d_outputs,d_residuals)
+            # self.solver.solve(d_outputs,d_residuals)
             d_residuals_w[:,idx]= d_residuals.array[:d_outputs_len]
             d_residuals_lmbda[:,idx]= d_residuals.array[d_outputs_len:]
 
@@ -1018,12 +1006,18 @@ class CrossSection:
         d_residual_w_func = fem.Function(self.V)
         d_residual_l_func = fem.Function(self.LM)
         for idx in range(d_residuals_w.shape[1]):
-            #TODO: compile these forms outside this function so they don't have to be reassembled
+            #update rhs vector value
+            self.f1.value = 0
+            self.f1.value[idx]=1
+
+            #select warping function value for mode
+            self.u.x.array[:] = self.warping_functions[idx].x.array
+
             d_residual_w_func.x.array[:] = d_residuals_w[:,idx]
-            dinputs_w_test = fem.petsc.assemble_vector(fem.form(ufl.derivative(ufl.action(self.residuals[idx][0],d_residual_w_func),self.x,self.dX)))
+            dinputs_w_test = fem.petsc.assemble_vector(fem.form(ufl.derivative(ufl.action(self.residual_PDE,d_residual_w_func),self.x,self.dX)))
             
             d_residual_l_func.x.array[:] = d_residuals_lmbda[:,idx]
-            dinputs_l_test = fem.petsc.assemble_vector(fem.form(ufl.derivative(ufl.action(self.residuals[idx][1],d_residual_l_func),self.x,self.dX)))
+            dinputs_l_test = fem.petsc.assemble_vector(fem.form(ufl.derivative(ufl.action(self.residual_constraint,d_residual_l_func),self.x,self.dX)))
 
             dRdx_dr += dinputs_w_test.array
             dRdx_dr += dinputs_l_test.array
