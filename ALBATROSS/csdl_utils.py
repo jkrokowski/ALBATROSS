@@ -161,7 +161,7 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
     
     def compute(self, inputs, outputs):
         print('compute beam matrix from warping function state')
-        # mesh_geometry = self.xs.msh.geometry.x.copy()
+        mesh_geometry = self.xs.msh.geometry.x.copy()
 
         if self.check_partials != 'w':
             #update boundary nodes:
@@ -185,8 +185,8 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         outputs['K'] = self.xs.K
         outputs['A'] = self.xs.A
 
-        # #return mesh geometry to original state:
-        # self.xs.msh.geometry.x[:] = mesh_geometry
+        #return mesh geometry to original state:
+        self.xs.msh.geometry.x[:] = mesh_geometry
     
     # def compute_derivatives(self, inputs, outputs, derivatives):
     #     print('compute beam matrix derivatives...')
@@ -232,6 +232,8 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         # dwB = np.zeros_like(self.d_outputs['w_B'])
         # dlmbda = np.zeros_like(self.d_outputs['lmbda'])
         print('compute vjp:')
+        mesh_geometry = self.xs.msh.geometry.x.copy()
+        
         if self.check_partials != 'w':
             num_spatial_dofs = self.xs.VX.dofmap.index_map_bs*self.xs.VX.dofmap.index_map.size_global
             dx = np.zeros((num_spatial_dofs,))
@@ -254,19 +256,8 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
                 d_inputs['lmbda'] = self.xs._compute_pK_action(d_outputs['K'],
                                                             derivative_type='l')
             
-
-        # print('input vals:')
-        # print(inputs['xy'])
-        # print('mesh coords:')
-        # print(self.xs.msh.geometry.x[:,0:2])
-        
-        #declare derivatives
-        
-        # derivatives['K', 'xy'] = pKpx[:,np.concatenate([self.xs.dofs_x_boundary,self.xs.dofs_y_boundary])]
-        # derivatives['K', 'xy'] = np.hstack([pKpx[:,self.xs.dofs_x_boundary],
-        #                                 pKpx[:,self.xs.dofs_y_boundary]]) #return (36 x num_boundary_nodes*2)
-        # derivatives['K', 'xy_interior'] = np.hstack([pKpx[:,self.xs.dofs_x_interior],
-        #                                 pKpx[:,self.xs.dofs_y_interior]]) #return (36 x num_interior_nodes*2)
+        #return mesh geometry to original state:
+        self.xs.msh.geometry.x[:] = mesh_geometry
 
 class EllipticSmoothing(csdl.CustomExplicitOperation):
 
@@ -937,102 +928,37 @@ class BeamMass(csdl.CustomExplicitOperation):
         derivatives['M','A'] = np.array([rho*L])
 
 
-# # custom cross-sectional model
-# class CrossSection(csdl.CustomExplicitOperation):
+class MeshQuality(csdl.CustomExplicitOperation):
+    def __init__(self,msh,boundary_nodes,interior_nodes):
+        super().__init__()
 
-#     def __init__(self, 
-#                  domain,
-#                  xs_analysis_type,
-#                  material_type,
-#                  material_name,
-#                  mech_props,
-#                  boundary_nodes=None,
-#                  interior_nodes=None):
+        self.msh = msh
+        self.boundary_nodes = boundary_nodes
+        self.interior_nodes = interior_nodes
+
+        self.mesh_quality = ALBATROSS.mesh.MeshQuality(self.msh,
+                                                       self.boundary_nodes,
+                                                       self.interior_nodes)
         
-#         super().__init__()
 
-#         self.domain = domain
-#         self.xs_analysis_type = xs_analysis_type
-#         self.material_type = material_type
-#         self.material_name =material_name
-#         self.mech_props = mech_props
+    def evaluate(self,inputs: csdl.VariableGroup):
+        self.declare_input('xy',inputs.xy)
+        self.declare_input('xy_interior',inputs.xy_interior)
 
-#         self.material = ALBATROSS.material.Material(name=self.material_name,
-#                             mat_type=self.material_type,
-#                             mech_props=self.mech_props,
-#                             density=2700)
-        
-#         if boundary_nodes is not None:
-#             self.boundary_nodes = boundary_nodes
+        outputs = csdl.VariableGroup()
+        outputs.Q = self.create_output('Q',(1,))
 
-#         if interior_nodes is not None:
-#             self.interior_nodes = interior_nodes
-
-#         self.xs = ALBATROSS.cross_section.CrossSection(self.domain,[self.material])
-
-#     def evaluate(self, inputs: csdl.VariableGroup):
-#         # assign method inputs to input dictionary
-#         self.declare_input('xy',inputs.xy)
-#         self.declare_input('xy_interior',inputs.xy_interior)
-        
-#         # declare output variables
-#         if self.xs_analysis_type == 'TS':
-#             shape = (6,6)
-#         elif self.xs_analysis_type == 'EB':
-#             shape = (4,4)
-#         K = self.create_output('K', shape)
-#         A = self.create_output('A',(1,))
-
-#         # construct output of the model
-#         output = csdl.VariableGroup()
-#         output.K = K
-
-#         output.A = A
-
-#         return output
+        return outputs
     
-#     def compute(self, inputs, outputs):     
-#         #update boundary nodes:
-#         if self.boundary_nodes is not None: 
-#             self.domain.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
-        
-#         #update interior nodes
-#         if self.interior_nodes is not None: 
-#             self.domain.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        
-#         else: 
-#             self.domain.geometry.x[:,0:2]=inputs['xy']
-        
-#         if self.xs_analysis_type == 'TS':
-#             self.xs.get_xs_stiffness_matrix()
-#         elif self.xs_analysis_type == 'EB':
-#             self.xs.get_xs_stiffness_matrix_EB()
-#         outputs['K'] = self.xs.K
-#         outputs['A'] = self.xs.A
+    
+    def compute(self,inputs,outputs):
+        self.mesh_quality.get_mesh_metric(inputs['xy'],inputs['xy_interior'])
+        outputs['Q'] = self.mesh_quality.Q
+        print('mesh quality metric: ',self.mesh_quality.Q)
 
-#     def compute_derivatives(self, inputs, outputs_vals, derivatives):
-#         #update boundary nodes:
-#         if self.boundary_nodes is not None: 
-#             self.domain.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
-        
-#         #update interior nodes
-#         if self.interior_nodes is not None: 
-#             self.domain.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
-        
-#         else: 
-#             self.domain.geometry.x[:,0:2]=inputs['xy']
-        
-#         if self.xs_analysis_type == 'TS':
-#             self.xs.get_xs_stiffness_matrix()
-#             self.xs.compute_xs_stiffness_matrix_sensitivities()
-#             #TODO: need to restrict to just derivatives on boundary
-#             if self.boundary_nodes is not None: 
-#                 # derivatives['K', 'xy'] = xs.dKdx_boundary
-#                 derivatives['K', 'xy'] = self.xs.dKdx_boundary.reshape((36,inputs['xy'].flatten().shape[0]))
-#             else: 
-#                 derivatives['K', 'xy'] = self.xs.dKdx
-#             # derivatives['K', 'xy'] = xs.dKdx.reshape((36,xy.flatten().shape[0]))
-#             # derivatives['K', 'xy'] = xs.dKdx.reshape((xy.flatten().shape[0],36))
-#         elif self.xs_analysis_type == 'EB':
-#             self.xs.get_xs_stiffness_matrix_EB()
-#             self.xs.compute_xs_stiffness_matrix_sensitivities_EB()
+
+    def compute_derivatives(self, inputs, outputs, derivatives):
+        self.mesh_quality.get_derivatives(inputs['xy'],inputs['xy_interior'])
+        dQdx = self.mesh_quality.dQdx
+        derivatives['Q', 'xy'] = dQdx[self.mesh_quality.dofs_boundary]
+        derivatives['Q', 'xy_interior'] = dQdx[self.mesh_quality.dofs_interior]

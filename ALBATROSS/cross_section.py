@@ -2526,7 +2526,7 @@ class CoupledCrossSection:
         #================== solve constrained system for each mode ==================#           
         residuals = []
         L1_list = self.XSs[0].L_form[1] #all global constraints are identical
-        for idx_l,L1 in enumerate(L1_list):
+        for idx_l in range(6):
             b1 = fem.petsc.assemble_vector(fem.form(L1))
             self.system_RHS_vectors[-1] = b1
 

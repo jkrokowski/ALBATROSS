@@ -68,7 +68,6 @@ class MeshMotion():
 
      def smooth_mesh(self,x_new):
           #update boundary conditions
-          self.u_bc
           displacement = x_new - self.msh.geometry.x[self.moved_nodes,:2]
           self.u_bc.x.array[self.moved_dofs] = displacement.T.flatten()
           self.u_bc.x.scatter_forward()
@@ -123,6 +122,85 @@ class MeshMotion():
                # xdmf.write_mesh(msh)
                xdmf.write_function(self.uh,self.step)
           self.step += 1
+
+
+class MeshQuality():
+     def __init__(self,msh,moved_nodes,nodes_to_move):
+          self.msh = msh
+          self.moved_nodes = moved_nodes
+          self.nodes_to_move = nodes_to_move
+          self.filename = msh.name
+          self.step = 0
+
+          self.VX = fem.functionspace(self.msh, ('CG',1,(2,)))
+          self.v = ufl.TestFunction(self.VX)
+          self.x = ufl.SpatialCoordinate(self.msh)
+          self.dX = ufl.Argument(self.VX,2)
+          self.u = fem.Function(self.VX)
+          self.Jref_ufl = ufl.Jacobian(self.msh)
+          self.detJref_ufl = ufl.JacobianDeterminant(self.msh)
+
+          self.moved_dofs = []
+          self.dofs_to_move = []
+          for i in range(self.VX.num_sub_spaces):
+               self.moved_dofs.extend(fem.locate_dofs_topological(self.VX.sub(i),0,self.moved_nodes))
+               self.dofs_to_move.extend(fem.locate_dofs_topological(self.VX.sub(i),0,self.nodes_to_move))
+          
+          #label nodes and provide dofs to xy mapping:
+          self.all_nodes = mesh.locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
+          self.boundary_nodes = mesh.locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
+          self.interior_nodes = self.all_nodes[~np.isin(self.all_nodes, self.boundary_nodes)]
+          self.dofs_x_boundary = fem.locate_dofs_topological(self.VX.sub(0),0,self.boundary_nodes)
+          self.dofs_y_boundary = fem.locate_dofs_topological(self.VX.sub(1),0,self.boundary_nodes)
+          self.dofs_x_interior = fem.locate_dofs_topological(self.VX.sub(0),0,self.interior_nodes)
+          self.dofs_y_interior = fem.locate_dofs_topological(self.VX.sub(1),0,self.interior_nodes)
+          self.dofs_boundary = np.sort(np.concatenate([self.dofs_x_boundary,self.dofs_y_boundary]))
+          self.dofs_interior = np.sort(np.concatenate([self.dofs_x_interior,self.dofs_y_interior]))
+    
+
+          self.X = self.x + self.u
+          self.J = ufl.grad(self.X)
+          detJ_ufl = ufl.det(self.J)
+          alpha = fem.Constant(self.msh,10.0)  # controls sharpness of weight
+          w = ufl.exp(-alpha * detJ_ufl) #increase weight where jacobian determinant is small/negative
+          self.N_ufl = w*detJ_ufl*ufl.dx
+          self.D_ufl = w*ufl.dx
+
+          #set up metric forms:
+          self.N_form = fem.form(self.N_ufl)
+          self.D_form = fem.form(self.D_ufl)
+
+          #set up derivative forms:
+          self.dNdx_form = fem.form(ufl.derivative(self.N_ufl,self.x,self.dX))
+          self.dDdx_form = fem.form(ufl.derivative(self.D_ufl,self.x,self.dX))
+
+     def get_mesh_metric(self,x_boundary_new,x_interior_new):
+
+          displacement_boundary = x_boundary_new - self.msh.geometry.x[self.moved_nodes,:2]
+          displacement_interior = x_interior_new - self.msh.geometry.x[self.nodes_to_move,:2]
+          self.u.x.array[self.moved_dofs] = displacement_boundary.T.flatten()
+          self.u.x.array[self.dofs_to_move] = displacement_interior.T.flatten()
+          self.u.x.scatter_forward()
+
+          N = fem.assemble_scalar(self.N_form)
+          D = fem.assemble_scalar(self.D_form)
+          self.Q = N / D
+          
+     def get_derivatives(self,x_boundary_new,x_interior_new):
+
+          displacement_boundary = x_boundary_new - self.msh.geometry.x[self.moved_nodes,:2]
+          displacement_interior = x_interior_new - self.msh.geometry.x[self.nodes_to_move,:2]
+          self.u.x.array[self.moved_dofs] = displacement_boundary.T.flatten()
+          self.u.x.array[self.dofs_to_move] = displacement_interior.T.flatten()
+          self.u.x.scatter_forward()
+
+          N = fem.assemble_scalar(self.N_form)
+          D = fem.assemble_scalar(self.D_form)
+          dNdx = fem.petsc.assemble_vector(self.dNdx_form)
+          dDdx = fem.petsc.assemble_vector(self.dDdx_form)
+
+          self.dQdx = (D * dNdx - N * dDdx ) / D**2
+
 
 def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False,mode='poisson',step=0,filename='xs'):
      '''Function to apply elliptic smoothing to a mesh

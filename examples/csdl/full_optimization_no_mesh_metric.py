@@ -13,9 +13,9 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 50 #number of quad elements per side on xc mesh
-W = .099 #xs width
-H = .099 #xs height
+N = 15 #number of quad elements per side on xc mesh
+W = .1 #xs width
+H = .1 #xs height
 A = W*H #xs area
 L = 20 
 
@@ -93,7 +93,7 @@ recorder.start()
 #create geometry variables for cross-section:
 xy_interior = csdl.Variable(value=xy_interior,shape=xy_interior.shape,name='xy_interior')
 xy = csdl.Variable(value=xy,shape=xy.shape,name='xy')
-xy.set_as_design_variable(lower=-.05,upper=.05,scaler=500)
+xy.set_as_design_variable(lower=-1,upper=1,scaler=500)
 
 #create csdl variables for tip load force:
 
@@ -169,19 +169,6 @@ outputs_mass = mass_model.evaluate(inputs_mass)
 
 beam_mass = outputs_mass.M
 
-#======= mesh quality constraint ==========#
-inputs_mq = csdl.VariableGroup()
-inputs_mq.xy = xy
-inputs_mq.xy_interior = outputs_mm.xy_interior
-
-mesh_quality = ALBATROSS.csdl_utils.MeshQuality(xs_msh,
-                                                boundary_nodes=xs.boundary_nodes,
-                                                interior_nodes=xs.interior_nodes)
-
-outputs_mq = mesh_quality.evaluate(inputs_mq)
-
-mesh_metric = outputs_mq.Q
-
 with csdl.namespace('Objective'):
     f = beam_mass
     f.add_name('beam_mass')
@@ -192,10 +179,15 @@ with csdl.namespace('Deflection constraint'):
     g1.add_name('g1')
     g1.set_as_constraint(lower=-.3) # constraint
 
-with csdl.namespace('Mesh Quality constraint'):
-    g2 = mesh_metric
-    g2.add_name('g2')
-    g2.set_as_constraint(lower=0.01) # constraint
+# with csdl.namespace('Objective'):
+#     f = -tip_displacement
+#     f.add_name('tip_deflection')
+#     f.set_as_objective()
+
+# with csdl.namespace('Shear constraint'):
+#     g2 = K[2,2]
+#     g2.add_name('g2')
+#     g2.set_as_constraint(lower=4) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
