@@ -13,7 +13,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 50 #number of quad elements per side on xc mesh
+N = 2 #number of quad elements per side on xc mesh
 W = .099 #xs width
 H = .099 #xs height
 A = W*H #xs area
@@ -28,14 +28,7 @@ p2 = (L,0,0)
 
 #create cross-sectional mesh
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
-# xs_msh = ALBATROSS.mesh.create_rectangle(points,[N,N])
-
-#cross-section mesh definition
-radius = 0.05
-num_el = 30 #number of elements through thickness
-
-xs_msh = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
-
+xs_msh = ALBATROSS.mesh.create_rectangle(points,[N,N])
 xs_filename = 'beam_mass_minimization'
 xs_msh.name = xs_filename
 # with XDMFFile(MPI.COMM_WORLD, "output/"+xs_filename+".xdmf", "w") as xdmf:
@@ -49,7 +42,6 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 #initialize and run cross-sectional analysis
 xs = ALBATROSS.cross_section.CrossSection(xs_msh,[unobtainium])
-# xs.plot_mesh()
 xs.get_xs_stiffness_matrix()
 xs_list = [xs]
 
@@ -198,12 +190,12 @@ with csdl.namespace('Objective'):
 with csdl.namespace('Deflection constraint'):
     g1 = tip_displacement
     g1.add_name('g1')
-    g1.set_as_constraint(lower=-.35) # constraint
+    g1.set_as_constraint(lower=-.3) # constraint
 
 with csdl.namespace('Mesh Quality constraint'):
     g2 = mesh_metric
     g2.add_name('g2')
-    g2.set_as_constraint(lower=0.05) # constraint
+    g2.set_as_constraint(lower=0.01) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
@@ -211,10 +203,7 @@ with csdl.namespace('Mesh Quality constraint'):
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
-# recorder.visualize_adjacency_matrix()
-# dddx = csdl.derivative(tip_displacement,xy)
-#uncommment this to check the total derivatives of the pipeline
-# dddx = sim.check_totals(tip_displacement,xy,step_size=0.001)
+dQdx = sim.check_totals(mesh_metric,xy,step_size=0.000001)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

@@ -171,8 +171,10 @@ class MeshQuality():
           self.D_form = fem.form(self.D_ufl)
 
           #set up derivative forms:
-          self.dNdx_form = fem.form(ufl.derivative(self.N_ufl,self.x,self.dX))
-          self.dDdx_form = fem.form(ufl.derivative(self.D_ufl,self.x,self.dX))
+          # self.dNdx_form = fem.form(ufl.derivative(self.N_ufl,self.x,self.dX))
+          # self.dDdx_form = fem.form(ufl.derivative(self.D_ufl,self.x,self.dX))
+          self.dNdx_form = fem.form(ufl.derivative(self.N_ufl,self.u))
+          self.dDdx_form = fem.form(ufl.derivative(self.D_ufl,self.u))
 
      def get_mesh_metric(self,x_boundary_new,x_interior_new):
 
@@ -199,7 +201,7 @@ class MeshQuality():
           dNdx = fem.petsc.assemble_vector(self.dNdx_form)
           dDdx = fem.petsc.assemble_vector(self.dDdx_form)
 
-          self.dQdx = (D * dNdx - N * dDdx ) / D**2
+          self.dQdx = (D * dNdx.array - N * dDdx.array ) / D**2
 
 
 def smooth_mesh(msh, moved_nodes, displacement, nodes_to_move,plot_result=False,get_deriv=False,mode='poisson',step=0,filename='xs'):
