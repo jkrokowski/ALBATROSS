@@ -63,7 +63,7 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 
 #================= initialize coupled cross-section ===========#
 TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
-
+TXS_nm.get_xs_stiffness_matrix()
 TXS_nm.plot_meshes()
 
 filename_C = 'mortar_mesh'
@@ -304,7 +304,7 @@ K = outputs_sec.K
 # A = outputs_sec.A
 # A.name = 'area'
 
-dK_dxw=csdl.derivative(outputs_sec.K,dx_w)
+# dK_dxw=csdl.derivative(outputs_sec.K,dx_w)
 
 with csdl.namespace('Objective'):
     f = -K[5,5]
@@ -332,7 +332,7 @@ sim.run()
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-# sim.check_totals(outputs_sec.K,dx_w)
+sim.check_totals(outputs_sec.K,dx_w)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

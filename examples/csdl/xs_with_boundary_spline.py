@@ -18,7 +18,7 @@ UPDATE: the shear stiffness constraint didn't work because element inversion is 
 maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
-N = 10
+N = 40
 W = .5
 H = .6
 points = [[-W/2,-H/2],[W/2, H/2]]
@@ -38,7 +38,7 @@ material = ALBATROSS.material.Material(name='unobtainium',
 xs = ALBATROSS.cross_section.CrossSection(domain,[material])
 xs.get_xs_stiffness_matrix()
 
-#get imp
+#boundary points
 xy = domain.geometry.x[xs.boundary_nodes,0:2]
 xy_interior = domain.geometry.x[xs.interior_nodes,0:2]
 
@@ -63,31 +63,51 @@ recorder.start()
 
 #=====FIT BOUNDARY B-SPLINE ========#
 #TODO: need to check on the errors in compute_basis_matrix() in the b_spline_space
-num_parametric = 30
-bspline_degree=3
-boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
-parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+1)])
-boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[0:1,:]]) #duplicate the start/endpoint
-boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
-coeffs = boundary_spline_coeffs.value
-
 # num_parametric = 30
 # bspline_degree=3
-# num_knots = num_parametric+(bspline_degree-1)*2
-# knots = np.linspace(0,1,num_parametric+(bspline_degree-1)*2)
-# boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,),knots=knots)
-# parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+bspline_degree)])
-# boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[list(xs.boundary_ordering)][:3,:]]) #duplicate the start/endpoints
+# boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
+# parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+1)])
+# boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[0:1,:]]) #duplicate the start/endpoint
 # boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
 # coeffs = boundary_spline_coeffs.value
+
+
+# num_parametric = 100
+# bspline_degree=3
+# boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,))
+# parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+bspline_degree)])
+# boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[list(xs.boundary_ordering)][:3,:]]) #duplicate the first 3 start points as the endpoints
+# boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
+# coeffs = boundary_spline_coeffs.value
+
+# NOTE: modifying the knot vector for a peridoic b-spline doesn't work well since LSDO b-splines is not configured for periodic use
+num_parametric = 30
+bspline_degree=3
+num_knots = num_parametric+(bspline_degree-1)*2
+knots = np.linspace(0,1,num_parametric+(bspline_degree-1)*2)
+boundary_spline_space = lfs.BSplineSpace(1,(bspline_degree,),(num_parametric,),knots=knots)
+parametric_coords = np.array([(i,) for i in np.linspace(0,1,xs.boundary_nodes.shape[0]+bspline_degree)])
+boundary_points = csdl.concatenate([xy[list(xs.boundary_ordering)],xy[list(xs.boundary_ordering)][:3,:]]) #duplicate the start/endpoints
+boundary_spline_coeffs = boundary_spline_space.fit(values = boundary_points,parametric_coordinates= parametric_coords)
+coeffs = boundary_spline_coeffs.value
 
 # =======evaluate b-spline for boundary points ======#
 inputs = csdl.VariableGroup()
 inputs.coeffs = csdl.Variable(value=coeffs,name='boundary spline coeffs')
 inputs.coeffs.set_as_design_variable(lower=-.75,upper=.75,scaler=100)
 boundary_spline = lfs.Function(boundary_spline_space,inputs.coeffs,name='boundary_spline')
-xy_boundary = boundary_spline.evaluate(parametric_coords)[list(xs.inverse_boundary_ordering)]
+
+spline_eval = boundary_spline.evaluate(parametric_coords)
+xy_boundary = spline_eval.get(csdl.slice[list(xs.inverse_boundary_ordering)])
 xy_boundary.name = 'xy'
+Pstart = inputs.coeffs.get(csdl.slice[:3,])
+Pend = inputs.coeffs.get(csdl.slice[-3:,])
+# C0 = spline_eval.get(csdl.slice[0,:])
+# C1 = spline_eval.get(csdl.slice[-1,:])
+# #get endpoint derivatives
+# Cprime0 = boundary_spline.evaluate(np.array([[0.0]]))
+# Cprime1 = boundary_spline.evaluate(np.array([[1.0]]))
+
 # xy_boundary.set_as_design_variable(lower=-1,upper=1,scaler=1000)
 
 #create interior node variable
@@ -192,11 +212,19 @@ with csdl.namespace('Mesh Quality constraint'):
     g2.add_name('g2')
     g2.set_as_constraint(lower=0.05) # constraint
 
+with csdl.namespace('Periodic Constraint'):
+    g3 = csdl.norm(Pstart-Pend) 
+    g3.add_name('g3')
+    tol = 1e5
+    g3.set_as_constraint(upper=tol,lower=-tol)
+
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
 
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
+
+# sim.check_totals(mesh_metric,inputs.coeffs,step_size=0.0001)
 
 # recorder.visualize_adjacency_matrix()
 

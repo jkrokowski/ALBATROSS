@@ -17,7 +17,7 @@ maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
 #=================== mesh construction ==================#
-N = 2
+N = 1
 offset = 1
 
 h_to_f = 10
@@ -63,8 +63,8 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 
 #================= initialize coupled cross-section ===========#
 TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
-
-# TXS_nm.plot_meshes()
+TXS_nm.get_xs_stiffness_matrix()
+TXS_nm.plot_meshes()
 
 filename_C = 'mortar_mesh'
 with XDMFFile(MPI.COMM_WORLD, "output/"+filename_C+".xdmf", "w") as xdmf:
@@ -87,11 +87,11 @@ recorder.start()
 
 #create csdl variables
 xy_A_interior = csdl.Variable(value=xy_A_interior,shape=xy_A_interior.shape,name='xy_interior_A')
-# xy_A = csdl.Variable(value=xy_A,shape=xy_A.shape,name='xy_A')
-xy_A_sub = csdl.Variable(value=xy_A[43,:2])
-xy_A_full = csdl.Variable(value=xy_A)
-xy_A = xy_A_full.set(csdl.slice[43, :2], xy_A_sub)
-xy_A.name='xy_A'
+xy_A = csdl.Variable(value=xy_A,shape=xy_A.shape,name='xy_A')
+# xy_A_sub = csdl.Variable(value=xy_A[43,:2])
+# xy_A_full = csdl.Variable(value=xy_A)
+# xy_A = xy_A_full.set(csdl.slice[43, :2], xy_A_sub)
+# xy_A.name='xy_A'
 # xy_A.set_as_design_variable(lower=-1,upper=1,scaler=100)
 
 xy_B_interior = csdl.Variable(value=xy_B_interior,shape=xy_B_interior.shape,name='xy_interior_B')
@@ -295,43 +295,43 @@ inputs_sec.xy_B = xy_B
 inputs_sec.xy_B_interior = xy_B_interior
 # inputs_sec.xy_C = inputs_mm_C.xy
 # inputs_sec.xy_C_interior = outputs_mm_C.xy_interior
-inputs_sec.w_A = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].warping_functions[i].x.array for i in range(6)]).T)
+
+#make w_A slice for checking partials
+warping_input = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].warping_functions[i].x.array for i in range(6)]).T)
+start = 0
+end = 20
+wf_num = 0
+warping_slice = csdl.Variable(value = warping_input.value[start:end,wf_num])
+inputs_sec.w_A= warping_input.set(csdl.slice[start:end,wf_num],warping_slice)
+
+# inputs_sec.w_A = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].warping_functions[i].x.array for i in range(6)]).T)
 inputs_sec.w_B = csdl.Variable(value=np.vstack([TXS_nm.XSs[1].warping_functions[i].x.array for i in range(6)]).T)
 inputs_sec.lmbda = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].lmbdas[i].x.array for i in range(6)]).T)
 
+# #check full operation
+# section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
+#                                                                   collision=(0,1))
 
+
+#check partials of K w.r.t. x
 section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
                                                                   collision=(0,1),
-                                                                  check_partials='w')
+                                                                  check_partials='x')
+
+# #check partials of K w.r.t. w and l
+# section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
+#                                                                   collision=(0,1),
+#                                                                   check_partials='w')
 
 outputs_sec = section_model.evaluate(inputs_sec)
 
 K = outputs_sec.K
-# K.name = 'stiffness_mat'
-# A = outputs_sec.A
-# A.name = 'area'
-
-
-
-dK11dx = csdl.derivative(K[0,0],xy_A)
-pKpx = TXS_nm.XSs[0].compute_pKpx()
-pKpw = TXS_nm.XSs[0].compute_pKpw()
 
 
 with csdl.namespace('Objective'):
     f = -K[5,5]
     f.add_name('max_bending_stiffness')
     f.set_as_objective()
-
-# with csdl.namespace('Area constraint'):
-#     g1 = K[0,0]
-#     g1.add_name('g1')
-#     g1.set_as_constraint(upper=35,lower=25) # constraint
-
-# with csdl.namespace('Shear constraint'):
-#     g2 = K[2,2]
-#     g2.add_name('g2')
-#     g2.set_as_constraint(lower=4) # constraint
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
@@ -341,8 +341,16 @@ sim.run()
 
 # recorder.visualize_adjacency_matrix()
 
-#uncommment this to check the total derivatives of the pipeline
-sim.check_totals(outputs_sec.K,dx_w)
+#uncommment this to check the derivatives of the pipeline w.r.t. various components
+# dKdxA=sim.check_totals(outputs_sec.K,xy_A,step_size = 0.0001)
+# dKdxB=sim.check_totals(outputs_sec.K,xy_B,step_size = 0.0001)
+
+# dKdwA=sim.check_totals(outputs_sec.K,warping_slice,step_size = 0.0001)
+
+dKdwA=sim.check_totals(outputs_sec.K,inputs_sec.w_A,step_size = 0.0001)
+dKdwB=sim.check_totals(outputs_sec.K,inputs_sec.w_B,step_size = 0.0001)
+dKdlmbda=sim.check_totals(outputs_sec.K,inputs_sec.lmbda,step_size = 0.0001) 
+
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

@@ -379,33 +379,40 @@ class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
     
     def compute(self, inputs, outputs):
         print('compute beam matrix from warping function state')
-        #update foreground mesh:
+        foreground_geometry = self.xs.XSs[self.mesh_id].msh.geometry.x.copy()
+        mortar_geometry = self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x.copy()
+
+        #FOREGROUND MESH
         #update boundary nodes:
         self.xs.XSs[self.mesh_id].msh.geometry.x[self.foreground_boundary,0:2]=inputs['xy_foreground']
         #update interior nodes
         self.xs.XSs[self.mesh_id].msh.geometry.x[self.foreground_interior,0:2]=inputs['xy_interior_foreground']
         
-        #update foreground mesh:
+        #MORTAR MESH
         #update boundary nodes:
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.mortar_boundary,0:2]=inputs['xy_mortar']
         #update interior nodes
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.mortar_interior,0:2]=inputs['xy_interior_mortar']
 
-        #get the interpolation matrix:
-        #TODO: this loops over each collision and reconstruct the interpolation matrix each time, 
-        #       this can be made more efficient
-        self.xs._construct_interpolation_operators()
+        #get the interpolation matrix from the foreground mesh to the mortar mesh:
+        P_petsc = self.xs._construct_interpolation_operator(self.collision,self.mesh_id)
 
-        if self.collision.index(self.mesh_id) == 0:
-            P_petsc = self.xs.collisions[self.collision].PA
-        elif self.collision.index(self.mesh_id) == 1:
-            P_petsc = self.xs.collisions[self.collision].PB
+        # if self.collision.index(self.mesh_id) == 0:
+        #     P_petsc = self.xs.collisions[self.collision].PA
+        # elif self.collision.index(self.mesh_id) == 1:
+        #     P_petsc = self.xs.collisions[self.collision].PB
 
         outputs['P'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(P_petsc)
-    
+
+        #return mesh geometry to original state:
+        self.xs.XSs[self.mesh_id].msh.geometry.x[:] = foreground_geometry
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[:] = mortar_geometry
+
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
         print('computing interpolation matrix derivatives...')
-        
+        foreground_geometry = self.xs.XSs[self.mesh_id].msh.geometry.x.copy()
+        mortar_geometry = self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x.copy()
+
         #TODO: this is a sketch, these matrices are both unassembled and unexpanded
         conn_A = self.xs.XSs[self.collision[0]].V.sub(0).sub(0).collapse()[0].dofmap.list
         conn_C = self.xs.collisions[self.collision].fxn_space.sub(0).sub(0).collapse()[0].dofmap.list
@@ -433,7 +440,10 @@ class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
         d_inputs['xy_mortar'] = dxC[self.xs.collisions[self.collision].mortar_mesh.boundary_nodes]
         d_inputs['xy_interior_mortar'] = dxC[self.xs.collisions[self.collision].mortar_mesh.interior_nodes]
         
-        
+        #return mesh geometry to original state:
+        self.xs.XSs[self.mesh_id].msh.geometry.x[:] = foreground_geometry
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[:] = mortar_geometry
+
         # dPdx_A  = ALBATROSS.nonmatching_utils.derivative_of_interpolation_matrix_nonmatching_meshes(target_space,
         #                                                                                             source_space,
         #                                                                                             wrt='FROM')
@@ -452,6 +462,7 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         self.mesh_id = mesh_id
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
+        self.xs.XSs[self.mesh_id]._compile_component_vjp_forms()
 
     def evaluate(self,inputs: csdl.VariableGroup):
         self.declare_input('xy',inputs.xy)
@@ -466,6 +477,8 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         return outputs
 
     def compute(self,inputs,outputs):
+        geometry = self.xs.XSs[self.mesh_id].msh.geometry.x.copy()
+
         #update boundary nodes:
         self.xs.XSs[self.mesh_id].msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
 
@@ -482,6 +495,9 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         outputs['K'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(K_petsc)
         outputs['C'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(C_petsc)
 
+        #return mesh geometry to original state:
+        self.xs.XSs[self.mesh_id].msh.geometry.x[:] = geometry
+
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
         
         '''
@@ -495,15 +511,19 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         # and fem.petsc.assemble_vector()
         print("getting system component derivatives!")
 
+        geometry = self.xs.XSs[self.mesh_id].msh.geometry.x.copy()
+
         #return the two vectors for the 
-        pKpxT_dK = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[0][0],
-                                                                            d_outputs['K'],
-                                                                            self.xs.XSs[self.mesh_id].V)
-        #TODO: this needs to have the proper functions (not square, so test != trial function)
-        pCpxT_dC = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[1][0],
-                                                                            d_outputs['C'],
-                                                                            test_space = self.xs.XSs[self.mesh_id].LM,
-                                                                            trial_space = self.xs.XSs[self.mesh_id].V)
+        # pKpxT_dK = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[0][0],
+        #                                                                     d_outputs['K'],
+        #                                                                     self.xs.XSs[self.mesh_id].V)
+        # #TODO: this needs to have the proper functions (not square, so test != trial function)
+        # pCpxT_dC = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[1][0],
+        #                                                                     d_outputs['C'],
+        #                                                                     test_space = self.xs.XSs[self.mesh_id].LM,
+        #                                                                     trial_space = self.xs.XSs[self.mesh_id].V)
+        pKpxT_dK = self.xs.XSs[self.mesh_id]._compute_vjp_dA00dx(d_outputs['K'])
+        pCpxT_dC = self.xs.XSs[self.mesh_id]._compute_vjp_dA10dx(d_outputs['C'])
 
         d_inputs_full = pKpxT_dK + pCpxT_dC
 
@@ -511,8 +531,11 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
                                         d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_boundary]]).T
         d_inputs['xy_interior'] = np.vstack([d_inputs_full[self.xs.XSs[self.mesh_id].dofs_x_interior],
                                                  d_inputs_full[self.xs.XSs[self.mesh_id].dofs_y_interior]]).T
-        
-         
+
+        #return mesh geometry to original state:
+        self.xs.XSs[self.mesh_id].msh.geometry.x[:] = geometry        
+        print("DONE getting system component derivatives!")
+
 
 class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
     '''
@@ -523,6 +546,7 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         self.collision = collision
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
+        self.xs._compile_coupling_vjp_forms(self.collision)
 
     def evaluate(self,inputs: csdl.VariableGroup):
         self.declare_input('xy',inputs.xy)
@@ -538,6 +562,9 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         return outputs
 
     def compute(self,inputs,outputs):
+
+        geometry = self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x.copy()
+
         #update boundary nodes:
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
 
@@ -554,23 +581,32 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         outputs['MC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(MC_petsc)
         outputs['SC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(SC_petsc)
 
+        #return mesh geometry to original state:
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[:] = geometry
+
+
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
         
         '''
         Derivatives of M_C and S_C w.r.t. the spatial coordinates
         '''
         print('getting coupling component derivatives:')
+        geometry = self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x.copy()
 
         #return the two vectors for the 
-        pMCpxT_dMC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].MC_form,
-                                                                            self.collision,
-                                                                            d_outputs['MC'],
-                                                                            test_space = self.xs.collisions[self.collision].fxn_space)
+        # pMCpxT_dMC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].MC_form,
+        #                                                                     self.collision,
+        #                                                                     d_outputs['MC'],
+        #                                                                     test_space = self.xs.collisions[self.collision].fxn_space)
         
-        pSCpxT_dSC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].SC_form,
-                                                                            self.collision,
-                                                                            d_outputs['SC'],
-                                                                            test_space = self.xs.collisions[self.collision].fxn_space)
+        # pSCpxT_dSC = self.xs._compute_vjp_component_spatial(self.xs.collisions[self.collision].SC_form,
+        #                                                                     self.collision,
+        #                                                                     d_outputs['SC'],
+        #                                                                     test_space = self.xs.collisions[self.collision].fxn_space)
+
+        pMCpxT_dMC = self.xs._compute_vjp_dMC(d_outputs['MC'],self.collision)
+                
+        pSCpxT_dSC = self.xs._compute_vjp_dSC(d_outputs['SC'],self.collision)
 
         d_inputs_full = pMCpxT_dMC + pSCpxT_dSC
 
@@ -578,6 +614,9 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
                                         d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_y_boundary]]).T
         d_inputs['xy_interior'] = np.vstack([d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_x_interior],
                                                  d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_y_interior]]).T
+        
+        #return mesh geometry to original state:
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[:] = geometry
 
 
 class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
@@ -586,7 +625,9 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         self.xs = xs
         self.check_partials = check_partials
         self.collision = collision
-        
+        for xs in self.xs.XSs:
+            xs._set_up_dK_forms()
+            # xs._set_up_dA_form()
 
 
     def evaluate(self,inputs: csdl.VariableGroup):
@@ -615,6 +656,9 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
     
     def compute(self, inputs, outputs):
         print('compute beam matrix from warping function state')
+        mesh0_geometry = self.xs.XSs[self.collision[0]].msh.geometry.x.copy()
+        mesh1_geometry = self.xs.XSs[self.collision[1]].msh.geometry.x.copy()
+
         if self.check_partials != 'w':
 
             #UPDATE FOREGROUND MESHES GEOMETRY:
@@ -643,6 +687,11 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
 
         outputs['K'] = self.xs.K
         # outputs['A'] = self.xs.A
+
+        #return mesh geometry to original state:
+        self.xs.XSs[self.collision[0]].msh.geometry.x[:] = mesh0_geometry
+        self.xs.XSs[self.collision[1]].msh.geometry.x[:] = mesh1_geometry
+
     
     def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
         # dxA = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
@@ -650,6 +699,9 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         # dwA = np.zeros_like(self.d_outputs['w_A'])
         # dwB = np.zeros_like(self.d_outputs['w_B'])
         # dlmbda = np.zeros_like(self.d_outputs['lmbda'])
+        print("getting coupled beam matrix derivatives...")
+        mesh0_geometry = self.xs.XSs[self.collision[0]].msh.geometry.x.copy()
+        mesh1_geometry = self.xs.XSs[self.collision[1]].msh.geometry.x.copy()
         
         if self.check_partials != 'w':
             dxA = self.xs._compute_pK_action(d_outputs['K'],
@@ -658,6 +710,10 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
             dxB = self.xs._compute_pK_action(d_outputs['K'],
                                             mesh_id=self.collision[1],
                                             derivative_type='x')
+            # dxA = self.xs.XSs[self.collision[0]]._compute_pK_action(d_outputs['K'],
+            #                                 derivative_type='x')
+            # dxB = self.xs.XSs[self.collision[1]]._compute_pK_action(d_outputs['K'],
+            #                                 derivative_type='x')
 
             d_inputs['xy_A'] = np.vstack([dxA[self.xs.XSs[self.collision[0]].dofs_x_boundary],
                                             dxA[self.xs.XSs[self.collision[0]].dofs_y_boundary]]).T
@@ -679,6 +735,16 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
             d_inputs['lmbda'] = self.xs._compute_pK_action(d_outputs['K'],
                                                         mesh_id=self.collision[0],
                                                         derivative_type='l')
+            # d_inputs['w_A'] = self.xs.XSs[self.collision[0]]._compute_pK_action(d_outputs['K'],
+            #                                             derivative_type='w')
+            # d_inputs['w_B'] = self.xs.XSs[self.collision[1]]._compute_pK_action(d_outputs['K'],
+            #                                             derivative_type='w')
+            # d_inputs['lmbda'] = self.xs.XSs[self.collision[0]]._compute_pK_action(d_outputs['K'],
+            #                                             derivative_type='l')
+            
+
+        self.xs.XSs[self.collision[0]].msh.geometry.x[:] = mesh0_geometry
+        self.xs.XSs[self.collision[1]].msh.geometry.x[:] = mesh1_geometry
 
     # def compute_derivatives(self, inputs, outputs, derivatives):
     #     print('compute beam matrix derivatives...')

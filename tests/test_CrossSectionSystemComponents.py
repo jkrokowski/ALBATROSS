@@ -17,13 +17,13 @@ maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
 #=================== mesh construction ==================#
-N = 1
+N = 2
 offset = 1
 
 h_to_f = 6
 w_to_w = 6
 
-m1,n1 = N*h_to_f,N
+m1,n1 = N*h_to_f+offset,N
 m2,n2 = N,N*w_to_w+offset
 
 H = 1
@@ -63,7 +63,7 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 
 #================= initialize coupled cross-section ===========#
 TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
-
+TXS_nm.get_xs_stiffness_matrix()
 TXS_nm.plot_meshes()
 
 filename_C = 'mortar_mesh'
@@ -177,12 +177,14 @@ C_Aii = C_A[:2,:2]
 # K_Aii = K_A[3,3]
 
 #these seem to match well :)
-dK00dx00 = csdl.derivative(K_Aii,xy_A)
-dK00dx00_FD = sim.compute_totals(K_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
+# dK00dx00 = csdl.derivative(K_Aii,xy_A)
+# dK00dx00_FD = sim.compute_totals(K_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
+dK00dx00_FD = sim.check_totals(K_Aii,xy_A,step_size=0.0001)
 
 # #these seem to match well :)
-dC00dx00 = csdl.derivative(C_Aii,xy_A)
-dC00dx00_FD = sim.compute_totals(C_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
+# dC00dx00 = csdl.derivative(C_Aii,xy_A)
+# dC00dx00_FD = sim.compute_totals(C_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
+dC00dx00_FD = sim.check_totals(C_Aii,xy_A,step_size=0.0001)
 
 
 #THIS IS A BAD IDEA, TOO MANY VALUES ( (N X N )X M sized matrix)

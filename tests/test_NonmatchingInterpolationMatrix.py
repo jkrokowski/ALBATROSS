@@ -17,13 +17,13 @@ maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
 #=================== mesh construction ==================#
-N = 1
+N = 2
 offset = 1
 
-h_to_f = 6
-w_to_w = 6
+h_to_f = 10
+w_to_w = 10
 
-m1,n1 = N*h_to_f,N
+m1,n1 = N*h_to_f-offset,N
 m2,n2 = N,N*w_to_w+offset
 
 H = 1

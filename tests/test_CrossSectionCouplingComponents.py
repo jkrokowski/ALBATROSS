@@ -63,7 +63,7 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 
 #================= initialize coupled cross-section ===========#
 TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e4)
-
+TXS_nm.get_xs_stiffness_matrix()
 TXS_nm.plot_meshes()
 
 filename_C = 'mortar_mesh'
@@ -261,12 +261,14 @@ sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
 #this check seems good :)
-dMiidxC = csdl.derivative(M_Cii,xy_C)
-dMiidxC_FD = sim.compute_totals(M_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
+# dMiidxC = csdl.derivative(M_Cii,xy_C)
+# dMiidxC_FD = sim.compute_totals(M_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
+dMiidxC_FD = sim.check_totals(M_Cii,xy_C,step_size=0.000001)
 
 #this check seems good :)
-dSiidxC = csdl.derivative(S_Cii,xy_C)
-dSiidxC_FD = sim.compute_totals(S_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
+# dSiidxC = csdl.derivative(S_Cii,xy_C)
+# dSiidxC_FD = sim.compute_totals(S_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
+dSiidxC_FD = sim.check_totals(S_Cii,xy_C,step_size=0.000001)
 
 
 

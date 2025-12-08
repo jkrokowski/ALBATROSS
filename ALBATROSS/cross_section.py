@@ -434,8 +434,10 @@ class CrossSection:
         return mat
     
     
-    def _return_rhs_vec(self,vec_num=0):
-        petsc_vec = fem.petsc.assemble_vector(fem.form(self.L_form[1][vec_num]))
+    def _return_rhs_vec(self,mode=0):
+        self.f1.value = 0
+        self.f1.value[mode] = 1
+        petsc_vec = fem.petsc.assemble_vector(fem.form(self.L_form[1]))
         return petsc_vec.array
     
     def _compile_forms(self):
@@ -465,7 +467,7 @@ class CrossSection:
         # self.solution_vectors= []
         # self.warping_functions = []
         # self.lmbdas = []
-        self.residuals = []
+        # self.residuals = []
         bcs = []
         for idx_k in range(6):
             self.f1.value = 0           #zero out constraing mode rhs
@@ -1034,6 +1036,73 @@ class CrossSection:
 
         return dRdx_dr
     
+    def _compile_component_vjp_forms(self):
+        print("compiling system component derivatives....")
+        self.u_j = fem.Function(self.V)
+        self.v_j = fem.Function(self.V)
+
+        self.l_j = fem.Function(self.LM)
+
+        A00_form = self.a_form[0][0]
+        A10_form = self.a_form[1][0]
+
+        self.pA00px_form = fem.form(ufl.derivative(ufl.action(ufl.action(A00_form,self.u_j),self.v_j),self.x,self.dX))
+        self.pA10px_form = fem.form(ufl.derivative(ufl.action(ufl.action(A10_form,self.u_j),self.l_j),self.x,self.dX))
+
+        print("DONE compiling system component derivatives....")
+
+    def _compute_vjp_dA00dx(self,d_output):
+        d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
+        d_input = np.zeros(d_inputs_size)
+
+        u_j = self.u_j 
+        v_j = self.v_j
+        
+        for j in np.unique(np.nonzero(d_output)[1]):
+            u_j.x.array[:] = 0.0
+            u_j.x.array[j] = 1.0                
+
+            v_j.x.array[:] = d_output[:, j]     # column j = coefficients Λ_{ij}
+
+            #this only computes the scalar value, needs to be done with the spatial derivative
+            # fem.assemble_scalar(fem.form(ufl.action(ufl.action(self.a_form[0][0],u_j),v_j)))
+
+            #TODO: update to use the actual passed form and function spaces
+            #i barely understand this myself, but we start with a bilinear form, then we compute the "double-action", 
+            # this gives us a form (scalar), then we take the spatial derivative of that and add to the d_inputs vec
+
+            vec = fem.assemble_vector(self.pA00px_form)
+            d_input += vec.array
+
+        return d_input
+
+
+    def _compute_vjp_dA10dx(self,d_output):
+        d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
+        d_input = np.zeros(d_inputs_size)
+
+        u_j = self.u_j 
+        l_j = self.l_j
+
+        for j in np.unique(np.nonzero(d_output)[1]):
+            u_j.x.array[:] = 0.0
+            u_j.x.array[j] = 1.0                
+
+            l_j.x.array[:] = d_output[:, j]     # column j = coefficients Λ_{ij}
+
+            #this only computes the scalar value, needs to be done with the spatial derivative
+            # fem.assemble_scalar(fem.form(ufl.action(ufl.action(self.a_form[0][0],u_j),v_j)))
+
+            #TODO: update to use the actual passed form and function spaces
+            #i barely understand this myself, but we start with a bilinear form, then we compute the "double-action", 
+            # this gives us a form (scalar), then we take the spatial derivative of that and add to the d_inputs vec
+
+            vec = fem.assemble_vector(self.pA10px_form)
+            d_input += vec.array
+
+        return d_input
+        
+    
     def _compute_vjp_component_spatial(self,form,d_output,test_space ,trial_space = None):
         
         # dFdx = ufl.derivative(form,self.x,self.dX)
@@ -1304,6 +1373,7 @@ class CrossSection:
         return self.pApx.array
     
     def _set_up_dK_forms(self):
+        print('compiling cross-sectional stiffness matrix forms...')
         self.W_1 = fem.Constant(self.msh,np.zeros((6,6)))
         self.W_2 = fem.Constant(self.msh,np.zeros((6,6)))
             
@@ -1324,8 +1394,11 @@ class CrossSection:
         self.dKdw_form = []
         self.dKdl_form = []
         for idx_k in range(6):
+            print('Mode ',idx_k)
             self.dKdw_form.append(fem.form(ufl.derivative(self.dK_form,XS.warping_functions[idx_k])))
             self.dKdl_form.append(fem.form(ufl.derivative(self.dK_form,XS.lmbdas[idx_k])))
+        
+        print('DONE compiling cross-sectional stiffness matrix forms...')
 
 
         
@@ -1362,7 +1435,7 @@ class CrossSection:
             # d_form = 0
 
             d_inputs = np.zeros((XS.V.dofmap.index_map_bs*XS.V.dofmap.index_map.size_global,6))
-            indices_i,indices_j = np.nonzero(dK)
+            # indices_i,indices_j = np.nonzero(dK)
             #loop over warping functions:
             for idx_k in range(6):
                 # for idx_i in range(6):
@@ -1378,7 +1451,7 @@ class CrossSection:
             # d_form = 0
 
             d_inputs = np.zeros((XS.LM.dofmap.index_map_bs*XS.LM.dofmap.index_map.size_global,6))
-            indices_i,indices_j = np.nonzero(dK)
+            # indices_i,indices_j = np.nonzero(dK)
             #loop over lagrange multipliers:
             for idx_k in range(6):
             #     for idx_i in range(6):
@@ -2088,7 +2161,7 @@ class CoupledCrossSection:
         self._apply_coupling()
 
         #construct block system
-        self._construct_block_system()
+        self._set_up_solver()
 
         #solve for the warping functions
         self._solve_coupled_system()
@@ -2126,7 +2199,7 @@ class CoupledCrossSection:
 
         self.system_LHS_forms = system_forms
         self.system_RHS_forms = [xs.L_form[0] for xs in self.XSs]
-        self.system_RHS_forms.append(None)
+        self.system_RHS_forms.append(self.XSs[0].L_form[1])
     
     def _get_system_sizes(self):
         
@@ -2160,7 +2233,8 @@ class CoupledCrossSection:
         for idx_i,system_RHS_form in enumerate(self.system_RHS_forms[:-1]):
             b0i = fem.petsc.assemble_vector(fem.form(system_RHS_form))
             self.system_RHS_vectors.append(b0i)
-        self.system_RHS_vectors.append(None)
+        self.b1_form_assembled = fem.form(self.system_RHS_forms[-1])
+        self.system_RHS_vectors.append(fem.petsc.assemble_vector(self.b1_form_assembled))
 
     def _find_overlap(self):
         '''
@@ -2313,6 +2387,13 @@ class CoupledCrossSection:
 
             self.collisions[collision].PA = get_interpolation_matrix(VC,self.XSs[collision[0]].V,mixed=True)
             self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V,mixed=True)
+    
+    
+    def _construct_interpolation_operator(self,collision,mesh_id):
+        VC = self.collisions[collision].fxn_space
+
+        return get_interpolation_matrix(VC,self.XSs[collision[mesh_id]].V,mixed=True)
+    
 
     def _construct_mortar_forms(self):
         for collision in self.collisions:
@@ -2481,10 +2562,13 @@ class CoupledCrossSection:
                     self.system_matrices[idx_i][idx_j].axpy(scale,self.collisions[msh_indices].Sij[a_num][b_num])
     
 
-    def _construct_block_system(self):
+    def _set_up_solver(self):
         #Set up the full block system
         self.system_mat = PETSc.Mat()
         self.system_mat.createNest(self.system_matrices)
+
+        # #set up rhs vector form
+        # self.b1_form = fem.form(self.XSs[0].L_form[1])
 
         # set up the solver with the LHS
         self.solver = PETSc.KSP().create(self.meshes[0].comm)
@@ -2527,8 +2611,10 @@ class CoupledCrossSection:
         residuals = []
         L1_list = self.XSs[0].L_form[1] #all global constraints are identical
         for idx_l in range(6):
-            b1 = fem.petsc.assemble_vector(fem.form(L1))
-            self.system_RHS_vectors[-1] = b1
+            self.XSs[0].f1.value = 0
+            self.XSs[0].f1.value[idx_l] = 1
+            
+            self.system_RHS_vectors[-1].array[:] = fem.petsc.assemble_vector(self.b1_form_assembled).array
 
             #TODO: Lucky us, no special BCS to apply rn, may change if there were any elastic foundations, etc
             b = PETSc.Vec().createNest(self.system_RHS_vectors)
@@ -2589,6 +2675,77 @@ class CoupledCrossSection:
 
 
         return
+    
+    def _compile_coupling_vjp_forms(self,collision):
+        print('compling coupling forms...')
+        self.collisions[collision].u_j = fem.Function(self.collisions[collision].fxn_space)
+        self.collisions[collision].v_j = fem.Function(self.collisions[collision].fxn_space)
+        
+        x = self.collisions[collision].mortar_mesh.x
+        dX = self.collisions[collision].mortar_mesh.dX
+        u_j = self.collisions[collision].u_j 
+        v_j = self.collisions[collision].v_j 
+        M_C_form = self.collisions[collision].MC_form
+        S_C_form = self.collisions[collision].SC_form
+
+        self.collisions[collision].pMCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(M_C_form,u_j),v_j),x,dX))
+        self.collisions[collision].pSCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(S_C_form,u_j),v_j),x,dX))
+        print('DONE compling coupling forms')
+
+
+    def _compute_vjp_dMC(self,d_output,collision):
+        VX = self.collisions[collision].mortar_mesh.VX
+        d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
+        d_input = np.zeros(d_inputs_size)
+
+        u_j = self.collisions[collision].u_j 
+        v_j = self.collisions[collision].v_j
+
+        for j in np.unique(np.nonzero(d_output)[1]):
+            u_j.x.array[:] = 0.0
+            u_j.x.array[j] = 1.0                
+
+            v_j.x.array[:] = d_output[:, j]     # column j = coefficients Λ_{ij}
+
+            #this only computes the scalar value, needs to be done with the spatial derivative
+            # fem.assemble_scalar(fem.form(ufl.action(ufl.action(self.a_form[0][0],u_j),v_j)))
+
+            #TODO: update to use the actual passed form and function spaces
+            #i barely understand this myself, but we start with a bilinear form, then we compute the "double-action", 
+            # this gives us a form (scalar), then we take the spatial derivative of that and add to the d_inputs vec
+
+
+            vec = fem.assemble_vector(self.collisions[collision].pMCpx_form)
+            d_input += vec.array
+
+        return d_input
+    
+    def _compute_vjp_dSC(self,d_output,collision):
+        VX = self.collisions[collision].mortar_mesh.VX
+        d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
+        d_input = np.zeros(d_inputs_size)
+
+        u_j = self.collisions[collision].u_j 
+        v_j = self.collisions[collision].v_j
+
+        for j in np.unique(np.nonzero(d_output)[1]):
+            u_j.x.array[:] = 0.0
+            u_j.x.array[j] = 1.0                
+
+            v_j.x.array[:] = d_output[:, j]     # column j = coefficients Λ_{ij}
+
+            #this only computes the scalar value, needs to be done with the spatial derivative
+            # fem.assemble_scalar(fem.form(ufl.action(ufl.action(self.a_form[0][0],u_j),v_j)))
+
+            #TODO: update to use the actual passed form and function spaces
+            #i barely understand this myself, but we start with a bilinear form, then we compute the "double-action", 
+            # this gives us a form (scalar), then we take the spatial derivative of that and add to the d_inputs vec
+
+
+            vec = fem.assemble_vector(self.collisions[collision].pSCpx_form)
+            d_input += vec.array
+
+        return d_input
     
 
     def _compute_vjp_component_spatial(self,form,collision,d_output,test_space ,trial_space = None):
@@ -2791,7 +2948,7 @@ class CoupledCrossSection:
     #         d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
 
     #         return d_inputs.array
-    
+
     def _compute_pK_action(self,dK,mesh_id=0,derivative_type='x'):
         '''
         compute the action of the seed dK on the input based on derivative_type
@@ -2803,51 +2960,72 @@ class CoupledCrossSection:
         K2inv = self.K2inv
         K2 = self.K2
 
-        #get K1 and K2 adjoint loads
+        #get K1 and K2 adjoint loads for the full coupled matrix
         W_1 = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
         W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
 
         if derivative_type == 'x':
-            d_form = 0
+            # d_form = 0
             
-            for idx_i,idx_j in np.argwhere(W_1):
-                d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-            for idx_i,idx_j in np.argwhere(W_2):
-                d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+            # for idx_i,idx_j in np.argwhere(W_1):
+            #     d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+            # for idx_i,idx_j in np.argwhere(W_2):
+            #     d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
-            d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
+            # d_inputs = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.x,XS.dX)))
+
+            # return d_inputs.array
+
+            #update xs adjoint load weights
+            XS.W_1.value = W_1
+            XS.W_2.value = W_2
+            
+            #assemble vector
+            d_inputs = fem.petsc.assemble_vector(XS.dKdx_form)
 
             return d_inputs.array
         
         if derivative_type == 'w':
-            d_form = 0
+            # d_form = 0
 
             d_inputs = np.zeros((XS.V.dofmap.index_map_bs*XS.V.dofmap.index_map.size_global,6))
-            indices_i,indices_j = np.nonzero(dK)
+            # indices_i,indices_j = np.nonzero(dK)
             #loop over warping functions:
             for idx_k in range(6):
-                for idx_i,idx_j in np.argwhere(W_1):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                for idx_i,idx_j in np.argwhere(W_2):
-                    d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+                # for idx_i,idx_j in np.argwhere(W_1):
+                #     d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                # for idx_i,idx_j in np.argwhere(W_2):
+                #     d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
-                d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.warping_functions[idx_k])))
+                # d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.warping_functions[idx_k])))
+                
+                #update xs adjoint load weights
+                XS.W_1.value = W_1
+                XS.W_2.value = W_2
+
+                d_inputs[:,idx_k] = fem.petsc.assemble_vector(XS.dKdw_form[idx_k]).array
 
             return d_inputs
         
         if derivative_type == 'l':
-            d_form = 0
+            # d_form = 0
 
             d_inputs = np.zeros((XS.LM.dofmap.index_map_bs*XS.LM.dofmap.index_map.size_global,6))
-            indices_i,indices_j = np.nonzero(dK)
+            # indices_i,indices_j = np.nonzero(dK)
             #loop over lagrange multipliers:
             for idx_k in range(6):
-                for idx_i,idx_j in np.argwhere(W_1):
-                    d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                for idx_i,idx_j in np.argwhere(W_2):
-                    d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
+                # for idx_i,idx_j in np.argwhere(W_1):
+                #     d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
+                # for idx_i,idx_j in np.argwhere(W_2):
+                #     d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
 
-                d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
+                # d_inputs[:,idx_k] = fem.petsc.assemble_vector(fem.form(ufl.derivative(d_form,XS.lmbdas[idx_k])))
+                
+                #update xs adjoint load weights
+                XS.W_1.value = W_1
+                XS.W_2.value = W_2
+
+                d_inputs[:,idx_k] = fem.petsc.assemble_vector(XS.dKdl_form[idx_k]).array
 
             return d_inputs
 

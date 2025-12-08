@@ -19,13 +19,13 @@ F = .001
 #beam endpoint locations
 p1 = (0,0,0)
 p2 = (L,0,0)
-N = 2
+N = 1
 offset = 1
 
 h_to_f = 10
 w_to_w = 10
 
-m1,n1 = N*h_to_f,N
+m1,n1 = N*h_to_f+offset,N
 m2,n2 = N,N*w_to_w+offset
 
 H = 1
@@ -144,7 +144,7 @@ xy_C_interior = csdl.Variable(value=xy_C_interior,shape=xy_C_interior.shape,name
 xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
 
 #web translation parameter
-dx_w = csdl.Variable(value=-.45)
+dx_w = csdl.Variable(value=-.44)
 dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
 
 #=====mesh motion=======#
@@ -381,7 +381,7 @@ with csdl.namespace('Objective'):
     f.set_as_objective()
 
 # with csdl.namespace('Deflection constraint'):
-#     g1 = tip_displacement
+#     g1 = tip_displacementtip_displacement
 #     g1.add_name('g1')
 #     g1.set_as_constraint(lower=-.3) # constraint
 
@@ -394,7 +394,7 @@ sim.run()
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-# sim.check_totals(outputs_sec.K,dx_w)
+sim.check_totals(tip_displacement,dx_w,step_size=0.00001)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
