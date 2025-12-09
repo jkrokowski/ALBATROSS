@@ -1002,7 +1002,7 @@ class CrossSection:
         #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
         # this is actually pretty straightfoward using UFL when you get around to it
 
-        #this looks somethings like:
+        #this looks something like:
         
         
         d_residual_w_func = fem.Function(self.V)
@@ -2417,9 +2417,11 @@ class CoupledCrossSection:
             # self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V,mixed=True)
 
             #construct displacement term (penalty weighted mass matrix)
-            MC_form = self.nu_u * inner(uC, vC) * dx_C
-            MC = fem.petsc.assemble_matrix(fem.form(MC_form))
+            MC_ufl = self.nu_u * inner(uC, vC) * dx_C
+            MC_form = fem.form(MC_ufl)
+            MC = fem.petsc.assemble_matrix(MC_form)
             MC.assemble()
+            self.collisions[collision].MC_ufl = MC_ufl
             self.collisions[collision].MC_form = MC_form
             self.collisions[collision].MC = MC
 
@@ -2446,10 +2448,12 @@ class CoupledCrossSection:
             sigma_vc =  as_tensor(C_C[i,j,k,l]*eps_vC[k,l],(i,j))
 
             #traction stiffness matrix:
-            S_C_form = self.nu_t * dot(dot(sigma_c,n3),dot(sigma_vc,n3))*ds
-            S_C = fem.petsc.assemble_matrix(fem.form(S_C_form))
+            SC_ufl = self.nu_t * dot(dot(sigma_c,n3),dot(sigma_vc,n3))*ds
+            SC_form = fem.form(SC_ufl)
+            S_C = fem.petsc.assemble_matrix(SC_form)
             S_C.assemble()
-            self.collisions[collision].SC_form = S_C_form
+            self.collisions[collision].SC_ufl = SC_ufl
+            self.collisions[collision].SC_form = SC_form
             self.collisions[collision].S_C = S_C
 
 
@@ -2457,14 +2461,13 @@ class CoupledCrossSection:
         for collision in self.collisions:
             #assemble area term:
             MC_form = self.collisions[collision].MC_form 
-            MC = fem.petsc.assemble_matrix(fem.form(MC_form))
+            MC = fem.petsc.assemble_matrix(MC_form)
             MC.assemble()
-            # self.collisions[collision].MC_form = MC_form
             self.collisions[collision].MC = MC
 
             #assemble boundary term:
-            S_C_form = self.collisions[collision].SC_form 
-            S_C = fem.petsc.assemble_matrix(fem.form(S_C_form))
+            SC_form = self.collisions[collision].SC_form 
+            S_C = fem.petsc.assemble_matrix(SC_form)
             S_C.assemble()
             # self.collisions[collision].SC_form = S_C_form
             self.collisions[collision].S_C = S_C
@@ -2600,12 +2603,12 @@ class CoupledCrossSection:
     
     def _solve_coupled_system(self):
         #create functions for solution for each region
-        for xs_num,xs in enumerate(self.XSs):
-            #create the warping function and the lagrange multiplier vectors
-            xs.uh = fem.Function(xs.V, name="u_"+str(xs_num))
-            xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num))
-            xs.warping_functions = []
-            xs.lmbdas = []
+        # for xs_num,xs in enumerate(self.XSs):
+        #     #create the warping function and the lagrange multiplier vectors
+        #     xs.uh = fem.Function(xs.V, name="u_"+str(xs_num))
+        #     xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num))
+        #     # xs.warping_functions = []
+        #     # xs.lmbdas = []
 
         #================== solve constrained system for each mode ==================#           
         residuals = []
@@ -2638,10 +2641,12 @@ class CoupledCrossSection:
                 # xs.uh = fem.Function(xs.V, name="u_"+str(xs_num)+"_"+str(idx_l))
                 # xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num)+"_"+str(idx_l))
 
-                xs.uh.x.array[: len(x_local[xs_num])] = x_local[xs_num]
-                xs.lmbdah.x.array[: len(x_local[-1])] = x_local[-1]
-                xs.warping_functions.append(xs.uh.copy())
-                xs.lmbdas.append(xs.lmbdah.copy())
+                # xs.uh.x.array[: len(x_local[xs_num])] = x_local[xs_num]
+                # xs.lmbdah.x.array[: len(x_local[-1])] = x_local[-1]
+                # xs.warping_functions.append(xs.uh.copy())
+                # xs.lmbdas.append(xs.lmbdah.copy())
+                xs.warping_functions[idx_l].x.array[:] = x_local[xs_num]
+                xs.lmbdas[idx_l].x.array[:] = x_local[-1]
             # uh.x.scatter_forward()
             # lmbdah.x.scatter_forward()
 
@@ -2685,11 +2690,11 @@ class CoupledCrossSection:
         dX = self.collisions[collision].mortar_mesh.dX
         u_j = self.collisions[collision].u_j 
         v_j = self.collisions[collision].v_j 
-        M_C_form = self.collisions[collision].MC_form
-        S_C_form = self.collisions[collision].SC_form
+        MC_ufl= self.collisions[collision].MC_ufl
+        SC_ufl = self.collisions[collision].SC_ufl
 
-        self.collisions[collision].pMCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(M_C_form,u_j),v_j),x,dX))
-        self.collisions[collision].pSCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(S_C_form,u_j),v_j),x,dX))
+        self.collisions[collision].pMCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(MC_ufl,u_j),v_j),x,dX))
+        self.collisions[collision].pSCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(SC_ufl,u_j),v_j),x,dX))
         print('DONE compling coupling forms')
 
 

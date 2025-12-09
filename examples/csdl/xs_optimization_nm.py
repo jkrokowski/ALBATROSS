@@ -17,13 +17,13 @@ maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
 #=================== mesh construction ==================#
-N = 2
+N = 1
 offset = 1
 
-h_to_f = 10
-w_to_w = 10
+h_to_f = 6
+w_to_w = 6
 
-m1,n1 = N*h_to_f,N
+m1,n1 = N*h_to_f+offset,N
 m2,n2 = N,N*w_to_w+offset
 
 H = 1
@@ -332,7 +332,7 @@ sim.run()
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-sim.check_totals(outputs_sec.K,dx_w)
+dKdxw = sim.check_totals(outputs_sec.K,dx_w)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')

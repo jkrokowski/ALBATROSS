@@ -179,12 +179,12 @@ C_Aii = C_A[:2,:2]
 #these seem to match well :)
 # dK00dx00 = csdl.derivative(K_Aii,xy_A)
 # dK00dx00_FD = sim.compute_totals(K_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
-dK00dx00_FD = sim.check_totals(K_Aii,xy_A,step_size=0.0001)
+dK00dx00_FD = sim.check_totals(K_Aii,xy_A,step_size=0.000001)
 
 # #these seem to match well :)
 # dC00dx00 = csdl.derivative(C_Aii,xy_A)
 # dC00dx00_FD = sim.compute_totals(C_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
-dC00dx00_FD = sim.check_totals(C_Aii,xy_A,step_size=0.0001)
+dC00dx00_FD = sim.check_totals(C_Aii,xy_A,step_size=0.000001)
 
 
 #THIS IS A BAD IDEA, TOO MANY VALUES ( (N X N )X M sized matrix)

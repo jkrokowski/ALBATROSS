@@ -17,13 +17,13 @@ maybe this needs to be "fixed" by the mesh smoothing?
 '''
 
 #=================== mesh construction ==================#
-N = 2
+N = 1
 offset = 1
 
 h_to_f = 10
 w_to_w = 10
 
-m1,n1 = N*h_to_f-offset,N
+m1,n1 = N*h_to_f+offset,N
 m2,n2 = N,N*w_to_w+offset
 
 H = 1
@@ -222,7 +222,7 @@ nzC = list(np.nonzero(P_A.value)[0])
 nzA = list(np.nonzero(P_A.value)[1])
 
 start = 0
-stop = 30
+stop = 5
 num_nz= stop- start
 P_Aii = P_A[nzC[start:stop],nzA[start:stop]]
 dP_Adx_A = csdl.derivative(P_Aii,xy_A)
@@ -231,8 +231,8 @@ dP_Adx_C = csdl.derivative(P_Aii,xy_C)
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
-dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.000001)
-dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
+dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.00000001)
+dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.00000001)
 
 #we actually expect some issues here with the x_A mesh nodes derivatives, since some motions can move the 
 print('derivatives w.r.t. x_A')
@@ -290,11 +290,11 @@ sim.run()
 
 #this check seems good :)
 dMiidxC = csdl.derivative(M_Cii,xy_C)
-dMiidxC_FD = sim.compute_totals(M_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
+dMiidxC_FD = sim.compute_totals(M_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.0000001)
 
 #this check seems good :)
 dSiidxC = csdl.derivative(S_Cii,xy_C)
-dSiidxC_FD = sim.compute_totals(S_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
+dSiidxC_FD = sim.compute_totals(S_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.0000001)
 
 
 

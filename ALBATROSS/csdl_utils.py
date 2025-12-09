@@ -413,10 +413,18 @@ class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
         foreground_geometry = self.xs.XSs[self.mesh_id].msh.geometry.x.copy()
         mortar_geometry = self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x.copy()
 
-        #TODO: this is a sketch, these matrices are both unassembled and unexpanded
-        conn_A = self.xs.XSs[self.collision[0]].V.sub(0).sub(0).collapse()[0].dofmap.list
-        conn_C = self.xs.collisions[self.collision].fxn_space.sub(0).sub(0).collapse()[0].dofmap.list
+        #FOREGROUND MESH
+        #update boundary nodes:
+        self.xs.XSs[self.mesh_id].msh.geometry.x[self.foreground_boundary,0:2]=inputs['xy_foreground']
+        #update interior nodes
+        self.xs.XSs[self.mesh_id].msh.geometry.x[self.foreground_interior,0:2]=inputs['xy_interior_foreground']
         
+        #MORTAR MESH
+        #update boundary nodes:
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.mortar_boundary,0:2]=inputs['xy_mortar']
+        #update interior nodes
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.mortar_interior,0:2]=inputs['xy_interior_mortar']
+
         #need to loop over subspaces and accumulate the effect of the d_outputs entries :)
         #get subspace portion of d_outputs:
         #subspace and subsubspace numbers should match between A and C
@@ -462,6 +470,10 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         self.mesh_id = mesh_id
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
+
+        #construct forms of uncoupled problem
+        self.xs.XSs[self.mesh_id]._construct_xs_form()
+        self.xs.XSs[self.mesh_id]._construct_KKT_forms()
         self.xs.XSs[self.mesh_id]._compile_component_vjp_forms()
 
     def evaluate(self,inputs: csdl.VariableGroup):
@@ -485,10 +497,6 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         #update interior nodes
         self.xs.XSs[self.mesh_id].msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
 
-        #construct forms for uncoupled problem
-        self.xs.XSs[self.mesh_id]._construct_xs_form()
-        self.xs.XSs[self.mesh_id]._construct_KKT_forms()
-
         K_petsc = self.xs.XSs[self.mesh_id]._assemble_block([0,0])
         C_petsc = self.xs.XSs[self.mesh_id]._assemble_block([1,0])
         
@@ -504,15 +512,16 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
         Derivatives of K and C w.r.t. the spatial coordinates
         in reverse mode, this is derivative of outputs w.r.t. d_inputs
         '''
-
-        # we can do this in an entirely matrix free manner using the ufl.derivative(), 
-        # then constructing a field with the d_inputs array
-        # then, use ufl.action(ufl.adjoint(FORM),d_inputs_function)
-        # and fem.petsc.assemble_vector()
         print("getting system component derivatives!")
 
         geometry = self.xs.XSs[self.mesh_id].msh.geometry.x.copy()
 
+        #update boundary nodes:
+        self.xs.XSs[self.mesh_id].msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+
+        #update interior nodes
+        self.xs.XSs[self.mesh_id].msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
+        
         #return the two vectors for the 
         # pKpxT_dK = self.xs.XSs[self.mesh_id]._compute_vjp_component_spatial(self.xs.XSs[self.mesh_id].a_form[0][0],
         #                                                                     d_outputs['K'],
@@ -534,6 +543,7 @@ class CrossSectionSystemComponents(csdl.CustomExplicitOperation):
 
         #return mesh geometry to original state:
         self.xs.XSs[self.mesh_id].msh.geometry.x[:] = geometry        
+
         print("DONE getting system component derivatives!")
 
 
@@ -547,6 +557,7 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
         self.xs._compile_coupling_vjp_forms(self.collision)
+        self.xs._construct_mortar_forms()
 
     def evaluate(self,inputs: csdl.VariableGroup):
         self.declare_input('xy',inputs.xy)
@@ -571,8 +582,6 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         #update interior nodes
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
 
-        #construct forms for uncoupled problem
-        self.xs._construct_mortar_forms()
         self.xs._assemble_mortar_matrices()
 
         MC_petsc = self.xs.collisions[self.collision].MC
@@ -603,6 +612,12 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         #                                                                     self.collision,
         #                                                                     d_outputs['SC'],
         #                                                                     test_space = self.xs.collisions[self.collision].fxn_space)
+        
+        #update boundary nodes:
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.boundary_nodes,0:2]=inputs['xy']
+
+        #update interior nodes
+        self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.interior_nodes,0:2]=inputs['xy_interior']
 
         pMCpxT_dMC = self.xs._compute_vjp_dMC(d_outputs['MC'],self.collision)
                 
@@ -704,6 +719,14 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
         mesh1_geometry = self.xs.XSs[self.collision[1]].msh.geometry.x.copy()
         
         if self.check_partials != 'w':
+            #UPDATE FOREGROUND MESHES GEOMETRY:
+            self.xs.XSs[self.collision[0]].msh.geometry.x[self.xs.XSs[self.collision[0]].boundary_nodes,0:2]=inputs['xy_A']
+            self.xs.XSs[self.collision[0]].msh.geometry.x[self.xs.XSs[self.collision[0]].interior_nodes,0:2]=inputs['xy_A_interior']
+            
+            self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].boundary_nodes,0:2]=inputs['xy_B']
+            self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].interior_nodes,0:2]=inputs['xy_B_interior']
+
+            
             dxA = self.xs._compute_pK_action(d_outputs['K'],
                                             mesh_id=self.collision[0],
                                             derivative_type='x')
@@ -726,6 +749,14 @@ class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
                                             dxB[self.xs.XSs[self.collision[1]].dofs_y_interior]]).T
 
         if self.check_partials != 'x':
+            for i in range(6):
+                self.xs.XSs[self.collision[0]].warping_functions[i].x.array[:] = inputs['w_A'][:,i]
+                self.xs.XSs[self.collision[0]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+                
+                self.xs.XSs[self.collision[1]].warping_functions[i].x.array[:] = inputs['w_B'][:,i]
+                self.xs.XSs[self.collision[1]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
+        
+            
             d_inputs['w_A'] = self.xs._compute_pK_action(d_outputs['K'],
                                                         mesh_id=self.collision[0],
                                                         derivative_type='w')

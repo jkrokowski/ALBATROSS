@@ -20,10 +20,10 @@ maybe this needs to be "fixed" by the mesh smoothing?
 N = 1
 offset = 1
 
-h_to_f = 10
-w_to_w = 10
+h_to_f = 6
+w_to_w = 6
 
-m1,n1 = N*h_to_f,N
+m1,n1 = N*h_to_f+offset,N
 m2,n2 = N,N*w_to_w+offset
 
 H = 1
@@ -299,7 +299,7 @@ inputs_sec.xy_B_interior = xy_B_interior
 #make w_A slice for checking partials
 warping_input = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].warping_functions[i].x.array for i in range(6)]).T)
 start = 0
-end = 20
+end = 100
 wf_num = 0
 warping_slice = csdl.Variable(value = warping_input.value[start:end,wf_num])
 inputs_sec.w_A= warping_input.set(csdl.slice[start:end,wf_num],warping_slice)
@@ -316,7 +316,7 @@ inputs_sec.lmbda = csdl.Variable(value=np.vstack([TXS_nm.XSs[0].lmbdas[i].x.arra
 #check partials of K w.r.t. x
 section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
                                                                   collision=(0,1),
-                                                                  check_partials='x')
+                                                                  check_partials='w')
 
 # #check partials of K w.r.t. w and l
 # section_model = ALBATROSS.csdl_utils.CoupledBeamMatrixFromWarping(xs=TXS_nm,
@@ -345,11 +345,11 @@ sim.run()
 # dKdxA=sim.check_totals(outputs_sec.K,xy_A,step_size = 0.0001)
 # dKdxB=sim.check_totals(outputs_sec.K,xy_B,step_size = 0.0001)
 
-# dKdwA=sim.check_totals(outputs_sec.K,warping_slice,step_size = 0.0001)
+dKdwA=sim.check_totals(outputs_sec.K,warping_slice,step_size = 0.00000001)
 
 dKdwA=sim.check_totals(outputs_sec.K,inputs_sec.w_A,step_size = 0.0001)
-dKdwB=sim.check_totals(outputs_sec.K,inputs_sec.w_B,step_size = 0.0001)
-dKdlmbda=sim.check_totals(outputs_sec.K,inputs_sec.lmbda,step_size = 0.0001) 
+KdwB=sim.check_totals(outputs_sec.K,inputs_sec.w_B,step_size = 0.0001)
+dKdlmbda=sim.check_totals(outputs_sec.K,inputs_sec.lmbda,step_size = 0.0001)
 
 
 # print('current K:      ', sim[K])

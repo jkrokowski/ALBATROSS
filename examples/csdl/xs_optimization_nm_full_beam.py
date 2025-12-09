@@ -14,12 +14,12 @@ import lsdo_function_spaces as lfs
 L = 20 
 
 #define tip load magnitude 
-F = .001 
+F = 1.0 
 
 #beam endpoint locations
 p1 = (0,0,0)
 p2 = (L,0,0)
-N = 1
+N = 3
 offset = 1
 
 h_to_f = 10
@@ -144,7 +144,7 @@ xy_C_interior = csdl.Variable(value=xy_C_interior,shape=xy_C_interior.shape,name
 xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
 
 #web translation parameter
-dx_w = csdl.Variable(value=-.44)
+dx_w = csdl.Variable(value=-.12)
 dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
 
 #=====mesh motion=======#
@@ -376,7 +376,7 @@ tip_displacement.name = 'tip_deflection'
 # beam_mass = outputs_mass.M
 
 with csdl.namespace('Objective'):
-    f = -tip_displacement
+    f = -csdl.absolute(tip_displacement,rho=10000)
     # f.add_name('lateral_deflection')
     f.set_as_objective()
 
@@ -394,7 +394,7 @@ sim.run()
 # recorder.visualize_adjacency_matrix()
 
 #uncommment this to check the total derivatives of the pipeline
-sim.check_totals(tip_displacement,dx_w,step_size=0.00001)
+# sim.check_totals(tip_displacement,dx_w,step_size=0.00001)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
