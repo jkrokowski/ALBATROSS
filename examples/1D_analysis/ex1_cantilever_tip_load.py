@@ -85,6 +85,9 @@ CantileverBeam.solve()
 #compute beam mass:
 CantileverBeam.get_mass()
 
+CantileverBeam.write_deformation()
+
+
 #################################################################
 ######### POSTPROCESSING, TESTING & VISUALIZATION ############
 #################################################################

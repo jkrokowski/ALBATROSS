@@ -26,6 +26,9 @@ from ALBATROSS.petsc_utils import convert_petsc_to_numpy
 from ALBATROSS.utils import get_pts_and_cells
 from ALBATROSS.mesh import beam_interval_mesh_3D
 
+from dolfinx.io import XDMFFile
+from mpi4py import MPI
+
 from petsc4py import PETSc
 
 class BeamAxis:
@@ -82,6 +85,11 @@ class Axial:
         self.a1 /= sqrt(dot(self.a1, self.a1))
 
         self.compute_local_axes()
+
+        self.step = 0
+
+        with XDMFFile(MPI.COMM_WORLD, "output/"+self.domain.name+".xdmf", "w") as xdmf:
+            xdmf.write_mesh(self.domain)
     
     def elastic_energy(self):
         self.Sig = self.generalized_stresses(self.v)
@@ -480,6 +488,12 @@ class Axial:
 
         return Reactions
     
+
+    def write_deformation(self):
+        with XDMFFile(MPI.COMM_WORLD, "output/"+ self.domain.name+".xdmf", "a") as xdmf:
+            # xdmf.write_mesh(msh)
+            xdmf.write_function(self.w.sub(0),self.step)
+        self.step += 1
 
 
     #========== derivative computations ============#

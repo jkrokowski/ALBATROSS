@@ -956,6 +956,8 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         self.beam.solve()
         print('beam deflection: ',self.beam.w.x.array[self.output_dofs])
         outputs['d']  = self.beam.w.x.array
+        
+        self.beam.write_deformation()
     
     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
         # for mode = rev:
