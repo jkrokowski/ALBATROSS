@@ -88,7 +88,7 @@ class Axial:
 
         self.step = 0
 
-        with XDMFFile(MPI.COMM_WORLD, "output/"+self.domain.name+".xdmf", "w") as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, "output/"+self.domain.name+".xdmf", "w", encoding=XDMFFile.Encoding.HDF5) as xdmf:
             xdmf.write_mesh(self.domain)
     
     def elastic_energy(self):
@@ -490,9 +490,14 @@ class Axial:
     
 
     def write_deformation(self):
-        with XDMFFile(MPI.COMM_WORLD, "output/"+ self.domain.name+".xdmf", "a") as xdmf:
+        u = self.w.sub(0).collapse()
+        u.name = 'displacement'
+        theta = self.w.sub(1).collapse()
+        theta.name = 'rotation'
+        with XDMFFile(MPI.COMM_WORLD, "output/"+ self.domain.name+".xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
             # xdmf.write_mesh(msh)
-            xdmf.write_function(self.w.sub(0),self.step)
+            xdmf.write_function(u,self.step)
+            xdmf.write_function(theta,self.step)
         self.step += 1
 
 
