@@ -261,7 +261,7 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
 
 class EllipticSmoothing(csdl.CustomExplicitOperation):
 
-    def __init__(self,domain,boundary_nodes,interior_nodes,filename='xs'):
+    def __init__(self,domain,boundary_nodes,interior_nodes,filename='xs',directory='output/'):
         super().__init__()
         self.domain = domain
         self.boundary_nodes = boundary_nodes
@@ -273,7 +273,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         #initialize mesh motion solver
         self.mesh_motion = ALBATROSS.mesh.MeshMotion(self.domain,
                                   self.boundary_nodes,
-                                  self.interior_nodes)
+                                  self.interior_nodes,
+                                  directory=directory)
         
 
     def evaluate(self, inputs: csdl.VariableGroup):
@@ -983,6 +984,22 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         # return super().compute_derivatives(inputs, outputs, derivatives)
     
         # derivatives['M'] = inputs['A']*
+
+class SectionPropertyMapper(csdl.CustomExplicitOperation):
+    def __init__(self,beam,section_list):
+        super().__init__()
+        self.beam = beam
+        self.section_list = section_list
+        self.num_sections = len(section_list)
+
+    def evaluate(self):
+        return super().evaluate()
+    
+    def compute(self, inputs, outputs):
+        return super().compute(inputs, outputs)
+    
+    def compute_jacvec_product(self, inputs, outputs, derivatives, d_inputs, d_outputs, mode):
+        return super().compute_jacvec_product(inputs, outputs, derivatives, d_inputs, d_outputs, mode)
 
 
 class BeamMass(csdl.CustomExplicitOperation):

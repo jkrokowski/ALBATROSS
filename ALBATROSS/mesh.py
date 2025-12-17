@@ -11,16 +11,17 @@ import pyvista
 from petsc4py import PETSc
 
 class MeshMotion():
-     def __init__(self,msh,moved_nodes,nodes_to_move):
+     def __init__(self,msh,moved_nodes,nodes_to_move,directory='output/'):
           self.msh = msh
           self.moved_nodes = moved_nodes
           self.nodes_to_move = nodes_to_move
           self.filename = msh.name
           self.step = 0
+          self.directory = directory
           # self.mode = 'lin_elas'
 
           #write mesh:
-          with XDMFFile(MPI.COMM_WORLD, "output/"+self.filename+".xdmf", "w") as xdmf:
+          with XDMFFile(MPI.COMM_WORLD, self.directory+self.filename+".xdmf", "w") as xdmf:
                xdmf.write_mesh(self.msh)
                     
           c_el = msh.ufl_domain().ufl_coordinate_element()
@@ -118,7 +119,7 @@ class MeshMotion():
           return duhdx
      
      def write_mesh_deformation(self):
-          with XDMFFile(MPI.COMM_WORLD, "output/"+ self.filename+".xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
+          with XDMFFile(MPI.COMM_WORLD, self.directory+ self.filename+".xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
                # xdmf.write_mesh(msh)
                xdmf.write_function(self.uh,self.step)
           self.step += 1

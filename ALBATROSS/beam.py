@@ -22,7 +22,7 @@ class Beam(Axial):
     Class that combines both 1D and 2D analysis
     '''
 
-    def __init__(self,beam_axis,xs_info,xs_type='EBPE',segment_type='CONSTANT'):
+    def __init__(self,beam_axis,xs_info,directory='output/',xs_type='EBPE',segment_type='CONSTANT'):
         '''
         beam_axis: object containing axial mesh (used for 1D analysis) 
             and cross-section positioning mesh (used to locate xs's along the
@@ -43,6 +43,7 @@ class Beam(Axial):
         '''
         self.axial_mesh = beam_axis.axial_mesh
         self.axial_pos_mesh = beam_axis.axial_pos_mesh
+        self.directory = directory
 
         #define rotation matrices for rotating between beam reference axis and xs reference frame
         #note: 
@@ -101,7 +102,7 @@ class Beam(Axial):
             print("please use one of the documented methods")
         
         print("Initializing Axial Model (1D Analysis)")
-        super().__init__(self.axial_mesh,self.k,self.o)
+        super().__init__(self.axial_mesh,self.k,self.o,self.directory)
 
         print("Computing Elastic Energy...")
         self.elastic_energy()

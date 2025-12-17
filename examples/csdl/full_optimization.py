@@ -161,11 +161,6 @@ outputs_beam = beam_model.evaluate(inputs_beam)
 #  = csdl.Variable(shape=(1,))
 tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs[2]])
 tip_displacement.name = 'tip_deflection'
-# dddK = csdl.derivative(outputs_beam.d,inputs_beam.K)
-
-# dddxy = csdl.derivative(tip_displacement,xy)
-
-# dAdxy = csdl.derivative(outputs_sec.A,xy)
 
 #======= beam mass ==========#
 inputs_mass = csdl.VariableGroup()

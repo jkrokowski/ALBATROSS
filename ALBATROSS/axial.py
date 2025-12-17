@@ -56,12 +56,13 @@ class Axial:
     beam_props: 2-tensor (6x6) function defining beam properties along span
     '''
 
-    def __init__(self,domain,k,orientation):
+    def __init__(self,domain,k,orientation,directory='output/'):
         #import domain, function, and beam properties
         self.domain = domain
         self.beam_element = LinearTimoshenkoElement(domain)
         self.eleDOFs = 6
         self.k = k
+        self.directory = directory
 
         self.dx = Measure('dx',self.domain)
         self.dx_shear = Measure('dx',self.domain,metadata={"quadrature_scheme":"default", "quadrature_degree": 1})
@@ -88,7 +89,7 @@ class Axial:
 
         self.step = 0
 
-        with XDMFFile(MPI.COMM_WORLD, "output/"+self.domain.name+".xdmf", "w", encoding=XDMFFile.Encoding.HDF5) as xdmf:
+        with XDMFFile(MPI.COMM_WORLD,self.directory+self.domain.name+".xdmf", "w", encoding=XDMFFile.Encoding.HDF5) as xdmf:
             xdmf.write_mesh(self.domain)
     
     def elastic_energy(self):
@@ -494,7 +495,7 @@ class Axial:
         u.name = 'displacement'
         theta = self.w.sub(1).collapse()
         theta.name = 'rotation'
-        with XDMFFile(MPI.COMM_WORLD, "output/"+ self.domain.name+".xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, self.directory+ self.domain.name+".xdmf", "a", encoding=XDMFFile.Encoding.HDF5) as xdmf:
             # xdmf.write_mesh(msh)
             xdmf.write_function(u,self.step)
             xdmf.write_function(theta,self.step)
@@ -544,6 +545,7 @@ class Axial:
         return d_inputs   
 
     def apply_inverse_jacobian(self,d_outputs):
+        #this approach works as long as we don't have RHS value that depend on the state
         d_residuals = self.A_mat.createVecLeft()
         d_residuals.setUp()
         d_outputs_vec = self.A_mat.createVecRight()

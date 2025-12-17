@@ -37,8 +37,8 @@ num_el = 10 #number of elements through thickness
 
 xs_msh = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 
-xs_filename = 'beam_mass_minimization'
-xs_msh.name = xs_filename
+filename = 'beam_mass_min_w_bndry_spline'
+xs_msh.name = filename
 # with XDMFFile(MPI.COMM_WORLD, "output/"+xs_filename+".xdmf", "w") as xdmf:
 #     xdmf.write_mesh(xs_msh)
 
@@ -135,7 +135,7 @@ inputs_mm.xy_interior = xy_interior
 meshSmoothing = ALBATROSS.csdl_utils.EllipticSmoothing(xs_msh,
                                                        xs.boundary_nodes,
                                                        xs.interior_nodes,
-                                                       filename=xs_filename)
+                                                       filename=filename)
 outputs_mm = meshSmoothing.evaluate(inputs_mm)
 
 #===== warping function computation =======#
@@ -266,7 +266,7 @@ from modopt import CSDLAlphaProblem
 from modopt import PySLSQP
 
 # Instantiate your problem using the csdl Simulator object and name your problem
-prob = CSDLAlphaProblem(problem_name='beam_mass_minimization',simulator=sim)
+prob = CSDLAlphaProblem(problem_name=filename,simulator=sim)
 
 # optimizer = SLSQP(prob,recording=True,solver_options={'ftol':1e-8, 'maxiter':20})
 optimizer = PySLSQP(prob,recording=True,solver_options={'maxiter':100,'acc':1e-6,'iprint':2})
