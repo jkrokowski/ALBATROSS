@@ -18,7 +18,7 @@ import numpy as np
 # m1,n1 = 10,1
 # m2,n2 = 1,9
 
-N = 4
+N = 28
 offset = 0
 
 m1,n1 = N*10+offset,N
@@ -28,7 +28,6 @@ H = 1
 W = 1
 tf = .1
 tw = .1
-
 
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
 # mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1)
@@ -48,7 +47,6 @@ mesh_1.geometry.x[:, 1] *= W
 
 mesh_1.name = 'w'
 
-
 meshes= [mesh_0,mesh_1]
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
@@ -59,11 +57,11 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledXSProblem(XSs,pen=1e10)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e1,pen_t=1e2)
 
 TXS_nm.plot_meshes()
 
-TXS_nm.get_xs_stiffness_matrix(correction=None)
+TXS_nm.get_xs_stiffness_matrix()
 
 TXS_nm.plot_warping_fxns()
 
@@ -173,3 +171,10 @@ print(np.linalg.norm(abs_diff))
 
 print("Relative Frobenius Norm of Absolute Difference:")
 print(np.linalg.norm(abs_diff)/np.linalg.norm(TXS.K))
+
+print("energy norm:")
+from scipy.linalg import eigh
+
+lam = eigh(abs_diff,TXS.K,eigvals_only=True)
+print(np.max(np.abs(lam)))
+print()

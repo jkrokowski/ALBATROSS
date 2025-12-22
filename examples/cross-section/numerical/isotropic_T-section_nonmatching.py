@@ -47,7 +47,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e4)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e0,pen_t=1)
 TXS_nm.plot_meshes()
 
 #identify meshes:

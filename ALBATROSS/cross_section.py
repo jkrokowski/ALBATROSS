@@ -2096,7 +2096,7 @@ class CrossSection:
 class CoupledCrossSection:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
         compute combined beam cross-sectional properties'''
-    def __init__(self,XSs,pen=1e2):
+    def __init__(self,XSs,pen_u=1e2,pen_t=1):
         
         #assign cross-sections objects to regions 
         self.XSs = XSs
@@ -2105,7 +2105,8 @@ class CoupledCrossSection:
         self.num_meshes = len(self.meshes)
         
         #base penalty parameter
-        self.pen = pen
+        self.pen_u = pen_u
+        self.pen_t = pen_t
 
         #adjust penalty based on average mesh size
         self._set_penalty_values()
@@ -2133,8 +2134,8 @@ class CoupledCrossSection:
             h_avg = XS.mesh_size 
             print(f'average cell size: {h_avg}')
             h_avg_list.append(h_avg)
-        self.nu_u = self.pen / np.average(h_avg_list)**2
-        self.nu_t = 1
+        self.nu_u = (self.pen_u * self.XSs[0].materials[0].E) / np.average(h_avg_list)**2
+        self.nu_t = (self.pen_t * self.XSs[0].materials[0].E) / np.average(h_avg_list)
         return
     
 
