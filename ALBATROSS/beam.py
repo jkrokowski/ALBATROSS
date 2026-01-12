@@ -483,7 +483,7 @@ class Beam(Axial):
 
         for xs_id,nodal_coord in zip(xs_ids,nodal_coords):
             xs = self.xs_list[xs_id]
-            xsdisp = fem.Function(xs.recovery_V)
+            xsdisp = fem.Function(xs.V_u)
             [u_local,theta_local] = self.get_local_disp([nodal_coord])
             centroid = np.array([[0,0,0]]).T
             # centroid = np.array([[xs.yavg,xs.zavg,0]]).T

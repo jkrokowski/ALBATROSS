@@ -235,7 +235,7 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
         mesh_geometry = self.xs.msh.geometry.x.copy()
         
         if self.check_partials != 'w':
-            num_spatial_dofs = self.xs.VX.dofmap.index_map_bs*self.xs.VX.dofmap.index_map.size_global
+            num_spatial_dofs = self.xs.V_x.dofmap.index_map_bs*self.xs.V_x.dofmap.index_map.size_global
             dx = np.zeros((num_spatial_dofs,))
             
             if len(np.nonzero(d_outputs['K'])[0])>0:

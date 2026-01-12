@@ -1,12 +1,12 @@
-#simple example of cross-sectional analysis of an isotropic symmetric box:
+#simple example of cross-sectional analysis of an isotropic T-section:
 import ALBATROSS
-
+from dolfinx.io import XDMFFile
 import numpy as np
 
 #create mesh
 N = 2
-H = .75
-W= 1
+H = 1.0
+W= 1.0
 tf = 0.1
 tw = 0.1
 
@@ -62,15 +62,41 @@ print(E*I2)
 print("Computed bending stiffness 2:")
 print(TXS.K[5,5])
 
-np.save(f"T_section_K_n_{N}.npy", TXS.K)
+# np.save(f"T_section_K_n_{N}.npy", TXS.K)
 
 from dolfinx import io
 from mpi4py import MPI
 with io.XDMFFile(MPI.COMM_WORLD, f"output/{domain.name}.xdmf", "w") as xdmf:
         xdmf.write_mesh(domain)
 
-TXS.compute_pKpx()
+#demonstration of displacement and stress recovery for unit forces and moments applied to the cross-section
+TXS.setup_recovery()
+disps = []
+stresses = []
+von_mises_list = []
+for i,reaction in enumerate(['axial','shear_x','shear_y','torsion','bending_x','bending_y']):
+    reactions = np.zeros((6,))
+    reactions[i]=1
+    disp = TXS.recover_displacement(reactions)
+    disp.name = reaction
+    disps.append(disp)
 
-TXS.compute_xs_stiffness_matrix_sensitivities()
+    stress = TXS.recover_stress(reactions)
+    stress.name = 'sigma_'+ reaction
+    stresses.append(stress)
 
-TXS.plot_sensitivities()
+    von_mises = TXS.get_von_mises(reactions)
+    von_mises.name = 'von_mises_'+ reaction
+    von_mises_list.append(von_mises)
+    
+with XDMFFile(MPI.COMM_WORLD, "output/"+domain.name+".xdmf", "w") as xdmf:
+    xdmf.write_mesh(domain)
+with XDMFFile(MPI.COMM_WORLD, "output/"+domain.name+".xdmf", "a") as xdmf:
+    # xdmf.write_function(disps[0],0.0)
+    # xdmf.write_function(stresses[0],0.0)
+    for fxn in disps:
+        xdmf.write_function(fxn,0.0)
+    for fxn in stresses:
+        xdmf.write_function(fxn,0.0)
+    for fxn in von_mises_list:
+        xdmf.write_function(fxn,0.0)

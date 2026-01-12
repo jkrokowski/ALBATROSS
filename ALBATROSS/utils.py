@@ -9,11 +9,84 @@ from scipy.sparse import csc_matrix,csr_matrix
 import meshio
 from scipy.spatial import cKDTree
 from dolfinx.geometry import bb_tree,compute_collisions_points,compute_colliding_cells
-from ufl import TestFunction,TrialFunction,inner,dx
+from ufl import TestFunction,TrialFunction,inner,dx,as_vector
 from dolfinx.fem.petsc import assemble_matrix,assemble_vector,apply_lifting,set_bc
-from dolfinx.fem import form
+from dolfinx import fem
 from petsc4py import PETSc
 
+
+def proj_expr(expr,V):
+     return
+
+def _orthonormalize_rbm(self,fxn,verbose=False):
+     V = fxn.function_space
+     x = self.x
+     dx  = self.dx
+
+     #Rigid Body Modes expression (3D)
+     rbms = [
+          fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((1.0,0.0,0.0))),V.element.interpolation_points()),
+          fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,1.0,0.0))),V.element.interpolation_points()),
+          fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,0.0,1.0))),V.element.interpolation_points()),
+          fem.Expression(as_vector([0,-x[1],x[0]]),V.element.interpolation_points())#,
+          # fem.Expression(ufl.as_vector([x[1],0,0]),V.element.interpolation_points()),
+          # fem.Expression(ufl.as_vector([-x[0],0,0]),V.element.interpolation_points())
+     ]
+
+     # List of functions to orthogonalise
+     vx = fem.Function(V)
+     vy = fem.Function(V)
+     vz = fem.Function(V)
+     vrx = fem.Function(V)
+     # vry = fem.Function(V)
+     # vrz = fem.Function(V)
+     vx.interpolate(rbms[0])
+     vy.interpolate(rbms[1])
+     vz.interpolate(rbms[2])
+     vrx.interpolate(rbms[3])
+     # vry.interpolate(rbms[4])
+     # vrz.interpolate(rbms[5])
+
+     # v = list((vx,vy,vz,vrx,vry,vrz))
+     v = list((vx,vy,vz,vrx))
+
+     # GS Projection
+     def proj(u, v):
+          res = fem.assemble_scalar(fem.form(inner(u, v)*dx))/fem.assemble_scalar(fem.form(inner(u, u)*dx)) * u.vector.array
+          return res
+
+     # GS orthogonalisation
+     def ortho(v):
+          xi = [None]*len(v)
+          xi[0] = v[0]
+          for j in range(1, len(xi)):
+               xi[j] = fem.Function(V)
+               xi[j].vector.array = v[j].vector.array - sum(proj(xi[i], v[j]) for i in range(j))
+          return xi
+     
+     xi = ortho(v)
+
+     # Orthonormalised vector basis
+     e = [fem.Function(V) for i in range(len(v))]
+     for i,xi_ in enumerate(xi):
+          e[i].vector.array = xi_.vector.array/fem.assemble_scalar(fem.form(inner(xi_, xi_)*dx))**0.5
+     
+     new_fxn = fem.Function(V)
+     new_fxn.vector.array  = fxn.vector.array - sum(proj(e_, fxn) for e_ in e)
+
+     if verbose is True:
+          print("orthonormalisation test:")
+          for i in range(len(xi)):
+               for j in range(i+1):
+                    print(f"inner(e[{i}], e[{j}])*dx {fem.assemble_scalar(fem.form(inner(e[i], e[j])*dx))}")
+
+          print(f"u norm {fxn.vector.norm(2)}, u_star norm {new_fxn.vector.norm(2)}")
+          print(f"orthogonalisation of u_star with rigid body modes test:")
+          for j in range(len(v)):
+               print(f"(rbms[{j}], u_star) = {fem.assemble_scalar(fem.form(inner(new_fxn, v[j])*dx))}")
+
+     return new_fxn
+        
 def get_vtx_to_dofs(domain,V):
      '''
      solution from https://fenicsproject.discourse.group/t/application-of-point-forces-mapping-vertex-indices-to-corresponding-dofs/9646
@@ -194,10 +267,10 @@ def project(v, target_func, bcs=[]):
     L = inner(v, w) * dx
 
     # Assemble linear system
-    A = assemble_matrix(form(a), bcs)
+    A = assemble_matrix(fem.form(a), bcs)
     A.assemble()
-    b = assemble_vector(form(L))
-    apply_lifting(b, [form(a)], [bcs])
+    b = assemble_vector(fem.form(L))
+    apply_lifting(b, [fem.form(a)], [bcs])
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
     set_bc(b, bcs)
 

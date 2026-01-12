@@ -1,14 +1,17 @@
 #simple example of cross-sectional analysis of an isotropic square:
 import ALBATROSS
 import numpy as np
+from dolfinx.io import XDMFFile
+from mpi4py import MPI
 
 #cross-section mesh definition
-N = 200 #number of quad elements per side
+N = 20 #number of quad elements per side
 W = .5 #square height  
-H = .6 #square depth
+H = .5 #square depth
 points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
 domain = ALBATROSS.mesh.create_rectangle(points,[N,N])
+domain.name = 'ex1_square'
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
@@ -19,13 +22,13 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 squareXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])
 
 #show me what you got
-# squareXS.plot_mesh()
+squareXS.plot_mesh()
 
 #compute the stiffness matrix
 squareXS.get_xs_stiffness_matrix()
     
 #show the warping functions
-# squareXS.plot_warping_fxns()
+squareXS.plot_warping_fxns()
 
 #plot the warping strains (calcuated from warping functions) 
 # for i in range(3):sq  
@@ -52,7 +55,59 @@ I = (W*H**3)/12
 print(E*I)
 print("Computed bending stiffness:")
 print(squareXS.K[4,4])
-# exit()
+
+#demonstration of displacement and stress recovery for unit forces and moments applied to the cross-section
+squareXS.setup_recovery()
+disps = []
+stresses = []
+von_mises_list = []
+for i,reaction in enumerate(['axial','shear_x','shear_y','torsion','bending_x','bending_y']):
+    reactions = np.zeros((6,))
+    reactions[i]=1
+    disp = squareXS.recover_displacement(reactions)
+    disp.name = reaction
+    disps.append(disp)
+
+    stress = squareXS.recover_stress(reactions)
+    stress.name = 'sigma_'+ reaction
+    stresses.append(stress)
+
+    von_mises = squareXS.get_von_mises(reactions)
+    von_mises.name = 'von_mises_'+ reaction
+    von_mises_list.append(von_mises)
+    
+with XDMFFile(MPI.COMM_WORLD, "output/"+domain.name+".xdmf", "w") as xdmf:
+    xdmf.write_mesh(domain)
+with XDMFFile(MPI.COMM_WORLD, "output/"+domain.name+".xdmf", "a") as xdmf:
+    # xdmf.write_function(disps[0],0.0)
+    # xdmf.write_function(stresses[0],0.0)
+    for fxn in disps:
+        xdmf.write_function(fxn,0.0)
+    for fxn in stresses:
+        xdmf.write_function(fxn,0.0)
+    for fxn in von_mises_list:
+        xdmf.write_function(fxn,0.0)
+
+
+#improve displacement plotting:
+#   define the "reaction" force for each mode as a unit vector in each direction
+#   get the specific warping functions for each mode from the fundamental wapring function solutions
+#   define displacement as the u_bar expression
+#   interpolate this expression for the u_bar to a function and save
+
+# improve stress plotting:
+#   define the "reaction" force for each mode as a unit vector in each direction
+#   get the stress expression from the stress expression defined in the begining of the process
+#   interpolate this stress expression to a stress function and save
+
+#there is a difference in a unit "force/moment applied" vs a "unit mode":
+#   in some cases these will look similar (especially when the section is symmetrical)
+#   however, in general a unit "force/moment" that is applied will show no coupling (as warping functions combine linearly to reproduce this mode)
+#   but, a single warping function will not perfectly correspond to a deformation mode except in the symmetric, isotropic case
+
+
+
+
 pApx = squareXS.compute_pApx()
 
 pKpx = squareXS.compute_pKpx()

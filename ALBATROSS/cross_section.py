@@ -59,6 +59,9 @@ class CrossSection:
 
         #number of materials
         self.num_mat = len(self.materials)
+
+        #number of warping functions
+        self.n_w = 6
         
         #indices
         self.i,self.j,self.k,self.l=indices(4)
@@ -103,11 +106,10 @@ class CrossSection:
         
         #spatial coordinate and facet normals
         self.x = SpatialCoordinate(self.msh)
-        self.VX = functionspace(self.msh,("CG",self.degree,(self.tdim,)))
+        self.V_x = functionspace(self.msh,("CG",self.degree,(self.tdim,)))
         #TODO: argument number is hard coded, may need to adjust based on form 
-        self.dX = Argument(self.VX,2) #direction for spatial derivative, 
+        self.dX = Argument(self.V_x,2) #direction for spatial derivative, 
         self.n = FacetNormal(self.msh)
-
         
         #compute cross-sectional area and linear density (used for body forces)
         self.A = assemble_scalar(form(1.0*self.dx))
@@ -125,17 +127,21 @@ class CrossSection:
         self.yavg = assemble_scalar(form(self.x[0]*self.dx))/self.A
         self.zavg = assemble_scalar(form(self.x[1]*self.dx))/self.A
 
-        #vectorfunctionspace for initializing displacement functions
-        self.recovery_V = functionspace(self.msh,('CG',self.degree,(self.d,)))
+        #vectorfunctionspace for displacement functions
+        self.V_u = functionspace(self.msh,('CG',self.degree,(self.d,)))
+
+        #function space for stress output:
+        self.V_sigma = functionspace(self.msh,('DG',0,(self.d,self.d)))
+        self.V_vm = functionspace(self.msh, ("DG", 0))
 
         #label nodes and provide dofs to xy mapping:
         self.all_nodes = mesh.locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
         self.boundary_nodes = mesh.locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         self.interior_nodes = self.all_nodes[~np.isin(self.all_nodes, self.boundary_nodes)]
-        self.dofs_x_boundary = fem.locate_dofs_topological(self.VX.sub(0),0,self.boundary_nodes)
-        self.dofs_y_boundary = fem.locate_dofs_topological(self.VX.sub(1),0,self.boundary_nodes)
-        self.dofs_x_interior = fem.locate_dofs_topological(self.VX.sub(0),0,self.interior_nodes)
-        self.dofs_y_interior = fem.locate_dofs_topological(self.VX.sub(1),0,self.interior_nodes)
+        self.dofs_x_boundary = fem.locate_dofs_topological(self.V_x.sub(0),0,self.boundary_nodes)
+        self.dofs_y_boundary = fem.locate_dofs_topological(self.V_x.sub(1),0,self.boundary_nodes)
+        self.dofs_x_interior = fem.locate_dofs_topological(self.V_x.sub(0),0,self.interior_nodes)
+        self.dofs_y_interior = fem.locate_dofs_topological(self.V_x.sub(1),0,self.interior_nodes)
         self.dofs_boundary = np.sort(np.concatenate([self.dofs_x_boundary,self.dofs_y_boundary]))
         self.dofs_interior = np.sort(np.concatenate([self.dofs_x_interior,self.dofs_y_interior]))
     
@@ -185,14 +191,14 @@ class CrossSection:
         print("DONE computing Beam Constitutive Matrix") 
 
     def _set_up_fxnspace_and_fxns(self):
-        # Construct Displacement Coefficient mixed function space
-        self.Ve = element("CG",self.msh.topology.cell_name(),self.degree,shape=(self.d,))
-        self.V = functionspace(self.msh, mixed_element(4*[self.Ve]))
+        # Construct warping function mixed function space
+        e_w = element("CG",self.msh.topology.cell_name(),self.degree,shape=(self.d,))
+        self.V_w = functionspace(self.msh, mixed_element(4*[e_w]))
         
         #displacement and test functions
-        self.u = Function(self.V)
-        self.v = TestFunction(self.V)
-        self.du = TrialFunction(self.V)
+        self.u = Function(self.V_w)
+        self.v = TestFunction(self.V_w)
+        self.du = TrialFunction(self.V_w)
 
         #displacement coefficient trial functions
         self.ubar,self.uhat,self.utilde,self.ubreve=split(self.u)
@@ -214,15 +220,15 @@ class CrossSection:
 
         #construct lagrange multpliers
         self.num_constraints=30
-        self.LM = create_real_functionspace(self.msh, value_shape=(self.num_constraints,))
+        self.V_lm = create_real_functionspace(self.msh, value_shape=(self.num_constraints,))
 
         #lagrange multipliers
-        self.lmbda = Function(self.LM)
-        self.mu = TestFunction(self.LM)
-        self.dlmbda = TrialFunction(self.LM)
+        self.lmbda = Function(self.V_lm)
+        self.mu = TestFunction(self.V_lm)
+        self.dlmbda = TrialFunction(self.V_lm)
 
         #get maps from block vectors ---> warping function & lagrange multiplier vectors
-        self.maps = [(self.V.dofmap.index_map, self.V.dofmap.index_map_bs), (self.LM.dofmap.index_map, self.LM.dofmap.index_map_bs)]
+        self.maps = [(self.V_w.dofmap.index_map, self.V_w.dofmap.index_map_bs), (self.V_lm.dofmap.index_map, self.V_lm.dofmap.index_map_bs)]
         
         #set up the warping functions:
         self.warping_functions = []
@@ -480,10 +486,7 @@ class CrossSection:
             self.solver.solve(b, xh)
             xh.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
-            # #populate the warping function and the lagrange multiplier vectors
-            # uh = fem.Function(self.V, name="u"+str(idx_k))
-            # lmbdah = fem.Function(self.LM,name="lmbda"+str(idx_k))
-
+            #populate the warping function and the lagrange multiplier vectors
             x_local = get_local_vectors(xh, self.maps)
             self.u.x.array[: len(x_local[0])] = x_local[0]
             self.lmbda.x.array[: len(x_local[1])] = x_local[1]
@@ -494,24 +497,6 @@ class CrossSection:
             #save copies of the warping function state
             self.warping_functions[idx_k].x.array[:] = self.u.x.array
             self.lmbdas[idx_k].x.array[:] = self.lmbda.x.array
-
-            # # TODO TODO TODO: need to clean up the residual assembly to allow for proper sensitivity computation
-            # # #TODO: currently, need to do this because we are using a ufl.TrialFunction() in the residual construction
-            # # #       This can be re-written so that uh is used to construct the form, so that we don't have to repeatedly
-            # # #       re-assemble a00,a10 or a01, just L0 and L1
-            # # a00_form = self._construct_xs_form(uh,return_form=True)
-            # # a01_form = self._construct_constraint_form(lmbdah,self.v)
-            # # a10_form = self._construct_constraint_form(self.mu,uh)
-
-            # #main system residual
-            # residual0 = self.F[0][0] + self.F[0][1] - L0
-            # # residual00 = a00_form + a01_form - L0 
-            # #lagrange multiplier system residual
-            # # residual1 = a10_form - L1
-            # residual1 = self.F[1][0] - L1
-
-            # self.residuals.append((residual0,residual1))
-
 
     def _compute_xs_stiffness_matrix(self):             
         #unpacking values
@@ -595,18 +580,6 @@ class CrossSection:
         x1,x2 = self.x[0],self.x[1]
 
         ubar_r = cross(as_vector([0,x1,x2]),ubar)
-        # gradubar = grad(ubar)
-
-
-        # disp_grad =  as_tensor([[uhat[0], gradubar[0,0], gradubar[0,1]],
-        #                     [uhat[1], gradubar[1,0], gradubar[1,1]],
-        #                     [uhat[2], gradubar[2,0], gradubar[2,1]],
-        #                 ])
-        # disp_grad =  as_tensor([[0, gradubar[0,0], gradubar[0,1]],
-        #                     [0, gradubar[1,0], gradubar[1,1]],
-        #                     [0, gradubar[2,0], gradubar[2,1]],
-        #                 ])
-        # w = disp_grad + disp_grad.T
         
         U = [ ubar[0],      # translation x
             ubar[1],        # translation y
@@ -614,11 +587,6 @@ class CrossSection:
             ubar_r[0],      # rotation about x
             ubar_r[1],      # rotation about y #NOTE: THIS IS a RIGID rotation, 
             ubar_r[2]      # rotation about z
-            # gradubar[0,0],      # rotation about y (infinitesimal)
-            # gradubar[0,1],      # rotation about z  (infinitesimal)
-            # w[0,1],
-            # w[0,2],
-            # w[1,2]
             ]
 
         return U
@@ -700,159 +668,6 @@ class CrossSection:
     def _compute_mesh_size(self):
         h_expr = ufl.CellDiameter(self.msh)
         self.mesh_size = fem.assemble_scalar(fem.form(h_expr*self.dx))/self.A
-
-    # def _assemble_system_matrix(self,residual = None):
-        # if residual is None:
-        #     self.system_mat = petsc.assemble_matrix(form(self.Residual))
-        #     self.system_mat.assemble()
-        # else:
-        #     system_mat = petsc.assemble_matrix(form(residual))
-        #     system_mat.assemble()
-        #     return system_mat
-
-
-    # def _get_modes(self):
-        
-    #     m,n1=self.system_mat.getSize()
-    #     if self.verbose:
-    #         print('Computing QR factorization')
-    #     Acsr = csr_matrix(self.system_mat.getValuesCSR()[::-1], shape=self.system_mat.size)
-        
-    #     #perform QR factorization and store as struct in householder form
-    #     QR= sparseqr.qr_factorize( Acsr.transpose() )
-
-    #     #build matrix of unit vectors for selecting last 12 columns
-    #     X = np.zeros((m,12))
-    #     for i in range(12):
-    #         X[m-1-i,11-i]=1
-
-    #     #perform matrix multiplication implicitly to construct orthogonal nullspace basis
-    #     self.sols = sparseqr.qmult(QR,X)
-    #     # Q,_ = np.linalg.qr(Acsr.transpose().toarray())
-    #     # self.sols  = Q[:,-12:]
-    #     self.sparse_sols = sparseify(self.sols,sparse_format='csc')
-    #     # self.sols = self.sparse_sols.toarray()
-
-    # def _decouple_modes(self,basis_matrix_only=False):
-    #     #this is a change of basis operation from the standard R^12 basis to
-    #     #   the basis defined by the 6 rigid body modes and the 6 elastic modes
-    #     #
-    #     #the change of basis matrix can be easily computed by simply evaluating
-    #     #   the functions defining the rigid+elastic basis at all the dofs
-    #     x = self.x
-    #     dx = self.dx
-    #     C = self.C
-    #     #indices
-    #     i,j,k,l=self.i,self.j,self.k,self.l
-    #     a,B = self.a,self.B
-
-    #     # get collapsed subspace and maps from subspaces to parent space 
-    #     UBAR,self.ubar_vtx_to_dof = self.V.sub(0).collapse()
-    #     UHAT,self.uhat_vtx_to_dof = self.V.sub(1).collapse()
-    #     _,self.utilde_vtx_to_dof = self.V.sub(2).collapse()
-    #     _,self.ubreve_vtx_to_dof = self.V.sub(3).collapse()
-
-    #     #GET UBAR AND UHAT RELATED MODES
-    #     ubar_modes = self.sols[self.ubar_vtx_to_dof,:]
-    #     uhat_modes = self.sols[self.uhat_vtx_to_dof,:]
-
-    #     #CONSTRUCT FUNCTION FOR UBAR AND UHAT SOLUTIONS GIVEN EACH MODE
-    #     ubar_mode = Function(UBAR)
-    #     uhat_mode = Function(UHAT)
-
-    #     #INITIALIZE DECOUPLING MATRIX (12X12)
-    #     self.mat = np.zeros((6,12))
-
-    #     #HERES THE NEW APPROACH:
-    #     #what we want is the set of warping functions Nbar and Nhat
-    #     # the other warping functions have no effect on the beam stiffness matrix or sensitivities
-    #     # so we'll first extract ubar and uhat
-    #     # then we'll use the gram-schmidt process to factor out the rigid body modes from ubar
-    #     # rigid body translation and displacement only affect ubar, no other warping function
-    #     # so... we can orthogonalize ubar and explicitly construct a reduced basis transformation matrix M_e
-    #     # that only considers the elastic modes, which we can decouple with a 6x6 matrix in the same manner as below
-                
-    #     #LOOP THROUGH MAT'S COLUMN (EACH MODE IS A COLUMN OF MAT):
-    #     for mode in range(self.mat.shape[1]):
-    #         #construct function from mode
-    #         ubar_mode.vector.array = ubar_modes[:,mode]
-    #         uhat_mode.vector.array = uhat_modes[:,mode]
-          
-    #         #get stress from warping functions
-    #         sigma = self.warping2stress(ubar_mode,uhat_mode)
-
-    #         #relevant components of stress tensor
-    #         sigma11 = sigma[0,0]
-    #         sigma12 = sigma[1,0]
-    #         sigma13 = sigma[2,0]
-
-    #         #integrate stresses over cross-section at "root" of beam and construct xs load vector
-    #         P1 = assemble_scalar(form(sigma11*dx))
-    #         V2 = assemble_scalar(form(sigma12*dx))
-    #         V3 = assemble_scalar(form(sigma13*dx))
-            
-    #         T1 = assemble_scalar(form( (((x[0])*(sigma13)) - ((x[1])*(sigma12)))*dx))
-    #         M2 = assemble_scalar(form((x[1])*(sigma11)*dx))          
-    #         M3 = assemble_scalar(form(-(x[0])*(sigma11)*dx))  
-            
-    #         # AVERAGE FORCE (COMPUTED WITH UBAR AND UHAT)
-    #         self.mat[0,mode]=P1
-    #         self.mat[1,mode]=V2
-    #         self.mat[2,mode]=V3   
-
-    #         #AVERAGE MOMENTS (COMPUTED WITH UBAR AND UHAT)
-    #         self.mat[3,mode]=T1
-    #         self.mat[4,mode]=M2
-    #         self.mat[5,mode]=M3
-
-    #     if basis_matrix_only is False:
-    #         mat_sparse = sparseify(self.mat,sparse_format='csc')
-
-    #         # self.sols_decoup = (self.sparse_sols.dot(inv(mat_sparse))).toarray()
-    #         # self.sols_decoup = self.sols@np.linalg.inv(mat)
-    #         # self.sols_decoup = self.sols@self.mat.T
-    #         # ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
-    #         # sparse_sols = sparseify(self.sols[ubar_uhat_dofs,:])
-    #         # # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
-    #         # self.sols_decoup = sparse_sols.dot(mat_sparse.T).toarray()
-
-    #         ubar_uhat_dofs = np.concatenate([self.ubar_vtx_to_dof,self.uhat_vtx_to_dof])
-    #         # # self.sols_decoup = self.sols[ubar_uhat_dofs,:]@self.mat.T
-    #         # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())[ubar_uhat_dofs,:]
-    #         # self.sols_decoup = (self.sparse_sols.dot(mat_sparse.T).toarray())
-
-    #         #USING PSEUDOINVERSE
-    #         mat_pinv = sparseify(np.linalg.pinv(mat_sparse.toarray()))
-
-    #         # print(f"condition number of basis transformation:{np.linalg.cond(self.mat)}")
-    #         self.sols_decoup = self.sparse_sols.dot(mat_pinv).toarray()
-    #         # self.sols_decoup=mat@self.sols
-    #         print()
-
-
-    # def _build_elastic_solution_modes(self):
-    #     #Initialize a tensor element and mixed tensor function space 
-    #     # for the elastic solution modes
-    #     Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,6))
-    #     self.N_space = functionspace(self.msh,mixed_element(2*[Ne]))
-    #     self.N = Function(self.N_space)
-        
-    #     #extract portions of elastic solution mode function related to each warping fxn
-    #     self.N_bar, self.N_hat = self.N.split() 
-
-    #     #get map of function dofs 
-    #     N_bar_vtx_to_dofs = self.N_space.sub(0).collapse()[1]
-    #     N_hat_vtx_to_dofs = self.N_space.sub(1).collapse()[1]
-    #     # N_tilde_vtx_to_dofs = self.N_space.sub(2).collapse()[1]
-    #     # N_breve_vtx_to_dofs = self.N_space.sub().collapse()[1]
-
-    #     #get separate elastic solution mode values
-    #     N_bar_vals = sparseify(self.sols_decoup[self.ubar_vtx_to_dof,:]).toarray().flatten()
-    #     N_hat_vals = sparseify(self.sols_decoup[self.uhat_vtx_to_dof,:]).toarray().flatten()
-        
-    #     #populate elastic solution modes to elastic solution mode function
-    #     self.N_bar.vector.array[N_bar_vtx_to_dofs] = N_bar_vals
-    #     self.N_hat.vector.array[N_hat_vtx_to_dofs] = N_hat_vals
 
     def _get_stiffness_contribution(self,dx=None):             
         #unpacking values
@@ -994,7 +809,7 @@ class CrossSection:
         d_residuals_lmbda_vec = PETSc.Vec().createSeq(d_residuals_lmbda_vec_size, comm=PETSc.COMM_SELF)
         
         #set up output vector sizes
-        d_inputs_vec_size = self.VX.dofmap.index_map_bs*self.VX.dofmap.index_map.size_global
+        d_inputs_vec_size = self.V_x.dofmap.index_map_bs*self.V_x.dofmap.index_map.size_global
         d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
         
         dRdx_dr = np.zeros(d_inputs_vec_size)
@@ -1005,8 +820,8 @@ class CrossSection:
         #this looks something like:
         
         
-        d_residual_w_func = fem.Function(self.V)
-        d_residual_l_func = fem.Function(self.LM)
+        d_residual_w_func = fem.Function(self.V_w)
+        d_residual_l_func = fem.Function(self.V_lm)
         for idx in range(d_residuals_w.shape[1]):
             #update rhs vector value
             self.f1.value = 0
@@ -1038,10 +853,10 @@ class CrossSection:
     
     def _compile_component_vjp_forms(self):
         print("compiling system component derivatives....")
-        self.u_j = fem.Function(self.V)
-        self.v_j = fem.Function(self.V)
+        self.u_j = fem.Function(self.V_w)
+        self.v_j = fem.Function(self.V_w)
 
-        self.l_j = fem.Function(self.LM)
+        self.l_j = fem.Function(self.V_lm)
 
         A00_form = self.a_form[0][0]
         A10_form = self.a_form[1][0]
@@ -1052,7 +867,7 @@ class CrossSection:
         print("DONE compiling system component derivatives....")
 
     def _compute_vjp_dA00dx(self,d_output):
-        d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
+        d_inputs_size = self.V_x.dofmap.index_map_bs * self.V_x.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
 
         u_j = self.u_j 
@@ -1078,7 +893,7 @@ class CrossSection:
 
 
     def _compute_vjp_dA10dx(self,d_output):
-        d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
+        d_inputs_size = self.V_x.dofmap.index_map_bs * self.V_x.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
 
         u_j = self.u_j 
@@ -1120,7 +935,7 @@ class CrossSection:
         # dFormdx = ufl.derivative(form,self.x,self.dX)
 
 
-        d_inputs_size = self.VX.dofmap.index_map_bs * self.VX.dofmap.index_map.size_global
+        d_inputs_size = self.V_x.dofmap.index_map_bs * self.V_x.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
         
         if trial_space==None:
@@ -1210,10 +1025,10 @@ class CrossSection:
         # self.pKpx = term1 + self.A**2 * term2
 
         # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
-        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
+        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.V_x.value_size)
         # indices_to=[]
-        # for i in range(self.VX.num_sub_spaces):
-        #     _,map_to = self.VX.sub(i).collapse()
+        # for i in range(self.V_x.num_sub_spaces):
+        #     _,map_to = self.V_x.sub(i).collapse()
         #     indices_to.extend(map_to)
         # self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
 
@@ -1287,10 +1102,10 @@ class CrossSection:
             # self.pKpw[:,:,idx3,] = - self.A**2 * np.einsum("ij,jkl,km->iml", self.K2inv,self.pK2pw,self.K2inv)
               
         # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
-        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
+        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.V_x.value_size)
         # indices_to=[]
-        # for i in range(self.VX.num_sub_spaces):
-        #     _,map_to = self.VX.sub(i).collapse()
+        # for i in range(self.V_x.num_sub_spaces):
+        #     _,map_to = self.V_x.sub(i).collapse()
         #     indices_to.extend(map_to)
         # self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
 
@@ -1351,10 +1166,10 @@ class CrossSection:
             self.pKpl[:,start:stop] = (self.A**2 * term2).reshape((36,lm_len))
                
         # #get map from vtx to dofs to restrict to boundary (this only works for CG1)
-        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
+        # self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.V_x.value_size)
         # indices_to=[]
-        # for i in range(self.VX.num_sub_spaces):
-        #     _,map_to = self.VX.sub(i).collapse()
+        # for i in range(self.V_x.num_sub_spaces):
+        #     _,map_to = self.V_x.sub(i).collapse()
         #     indices_to.extend(map_to)
         # self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
 
@@ -1434,7 +1249,7 @@ class CrossSection:
         if derivative_type == 'w':
             # d_form = 0
 
-            d_inputs = np.zeros((XS.V.dofmap.index_map_bs*XS.V.dofmap.index_map.size_global,6))
+            d_inputs = np.zeros((XS.V_w.dofmap.index_map_bs*XS.V_w.dofmap.index_map.size_global,6))
             # indices_i,indices_j = np.nonzero(dK)
             #loop over warping functions:
             for idx_k in range(6):
@@ -1450,7 +1265,7 @@ class CrossSection:
         if derivative_type == 'l':
             # d_form = 0
 
-            d_inputs = np.zeros((XS.LM.dofmap.index_map_bs*XS.LM.dofmap.index_map.size_global,6))
+            d_inputs = np.zeros((XS.V_lm.dofmap.index_map_bs*XS.V_lm.dofmap.index_map.size_global,6))
             # indices_i,indices_j = np.nonzero(dK)
             #loop over lagrange multipliers:
             for idx_k in range(6):
@@ -1481,75 +1296,16 @@ class CrossSection:
             d_inputs = dA*fem.petsc.assemble_vector(self.dAdx_form)
             
             return d_inputs
-        
-    # def compute_spatial_totals(self):
-    #     args = self.residuals[0][0].arguments()
-    #     n = max(a.number() for a in args) if args else -1
-    #     self.dX = Argument(self.VX,n+1)
-        
-    #     #for K1 
-    #     self.dK1dx = []
-    #     #set up matrices and vectors for reuse:
-    #     dK1ijdRk = self.pRkpuk.createVecLeft()
-    #     dK1ijdRk.setUp()
-
-    #     pK1ijpuk = self.pRkpuk.createVecRight()
-
-    #     #TODO: replace these two outer loops with the derivatives w.r.t. the contracted beam constitutive matrix K_s
-    #     for idx_i in range(6):
-    #         dK1dx_row = []
-    #         for idx_j in range(6):
-    #             #Kij form
-    #             K1ij=self.K1_form[idx_i][idx_j]
-
-    #             #compute K1 spatial partials
-    #             dK1ijdx = self._compute_spatial_partials(K1ij)
-        
-    #             for idx_k in range(6):
-    #                 #compute K1 function partials (stack function+lagrange multipliers)
-    #                 pK1ijpw = self._compute_function_partials(K1ij,self.warping_functions[idx_k])
-    #                 pK1ijpl = self._compute_function_partials(K1ij,self.lmbdas[idx_k])
-                    
-    #                 #set up RHS of adjoint solve:
-    #                 with pK1ijpuk.localForm() as rhs_local:
-    #                     rhs_local.set(0.0)
-    #                     pK1ijpw_len=pK1ijpw.getSize()
-    #                     rhs_local[:pK1ijpw_len] = pK1ijpw.array
-    #                     rhs_local[pK1ijpw_len:] = pK1ijpl.array
-    #                 pK1ijpuk.assemble()
-    #                 pK1ijpuk.scale(-1.0)
-
-    #                 #compute totals of K1 w.r.t. residual by solving adjoint system ( FE stiffness mat,spatial partials, and function partials) 
-    #                 self.solver.solveTranspose(pK1ijpuk, dK1ijdRk)
-
-    #                 #compute residual spatial partials  (stack function+lagrange multipliers)
-
-
-    #                 #compute implicit contribution with vec-mat product
-    #                 # += dK1ijdRk @  pRkpx to the implicit effect from mode k
-    #                 pRkpx.multTranspose(dK1ijdRk,pK1ijpuk_dukdx)
-    #                 dK1ijdx.aypx(1.0,pK1ijpuk_dukdx)
-
-    #             dK1dx_row.append(dK1ijdx)
-    #     self.dK1dx.append(dK1dx_row)
-
-
-    #     #repeat ^^^^ for K2
-    #     self.dK2dx = []
-
-    #     #then apply chain rule for dKdx
-
-
 
     #TODO: NEED TO UPDATE WITH ADJOINT SENSITIVITY CODE (REQUIRES FIXES TO RESIDUAL ASSEMBLY)
     def compute_xs_stiffness_matrix_sensitivities(self):
         #TODO: combine EB and TS sensitivities...
         args = self.K1_form[0][0].arguments()
         n = max(a.number() for a in args) if args else -1
-        dX = Argument(self.VX,n+1)
+        dX = Argument(self.V_x,n+1)
         # n = max(a.number() for a in args) if args else -1
-        # du2 = Argument(self.VX,n+1)
-        # du = Argument(self.VX,0) #there are no arguments in any of these forms?
+        # du2 = Argument(self.V_x,n+1)
+        # du = Argument(self.V_x,0) #there are no arguments in any of these forms?
         self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,dX)
                             for idx2 in range(6)] 
                                 for idx1 in range(6)]
@@ -1611,10 +1367,10 @@ class CrossSection:
         self.dKdx = term1 + term2 + term3 
                
         #get map from vtx to dofs to restrict to boundary (this only works for CG1)
-        self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.VX.value_size)
+        self.boundary_dof_to_vertex_map = np.tile(np.arange(self.msh.geometry.x.shape[0]),self.V_x.value_size)
         indices_to=[]
-        for i in range(self.VX.num_sub_spaces):
-            _,map_to = self.VX.sub(i).collapse()
+        for i in range(self.V_x.num_sub_spaces):
+            _,map_to = self.V_x.sub(i).collapse()
             indices_to.extend(map_to)
         self.boundary_dof_to_vertex_map = self.boundary_dof_to_vertex_map[np.argsort(indices_to)]
 
@@ -1626,66 +1382,99 @@ class CrossSection:
         
         self.dKdx_boundary = self.dKdx[:,:,boundary_indices]
 
-         
-    # def warping2strain(self,ubar,uhat):
-    #     gradubar=grad(ubar)
+    def setup_recovery(self):
+        """
+        Build expressions from ufl and appropriate functionspaces for
+        displacement and stress recovery.
 
-    #     #derivatives of displacement
-    #     #this is known from our displacement expression
-    #     dubxdx = uhat[0]
-    #     dubxdy = uhat[1]
-    #     dubxdz = uhat[2]
-    #     dubydx = gradubar[0,0]
-    #     dubydy = gradubar[1,0]
-    #     dubydz = gradubar[2,0]
-    #     dubzdx = gradubar[0,1]
-    #     dubzdy = gradubar[1,1]
-    #     dubzdz = gradubar[2,1]
+        This must be called ONCE after cross-section analysis.
+        """
 
-    #     #form ufl displacement for grad(u_i)
-    #     gradu = as_tensor([[dubxdx,dubxdy,dubxdz],
-    #                     [dubydx,dubydy,dubydz],
-    #                     [dubzdx,dubzdy,dubzdz]])
-        
-    #     #ensure that strains are symmetric
-    #     # eps = 0.5 * (gradu + gradu.T)
-    #     eps = gradu
+        #TODO: conceptually, these are the same warping coefficients as the ones used for the ufl.varibles
+        # warping coefficients (load-dependent, symbolic)
+        self.warping_coeffs = fem.Constant(self.msh, np.zeros(self.n_w))
 
-    #     return eps 
+        # --- Warping displacement expression ---
+        # u_w(x) = sum_i c_i * phi_i(x)
+        self.w_ufl = dot(self.warping_coeffs, as_tensor(self.warping_functions))
+        #TODO: mixed element has to be handled differently
+        # self.w_expr = Expression(self.w_ufl, self.V_w.element.interpolation_points())
 
-    # def warping2stress(self,ubar,uhat):
-    #     i,j,k,l=self.i,self.j,self.k,self.l
-    #     eps = self.warping2strain(ubar,uhat)
+        #NOTE: this uses a frame transformation to translate the beam axis to the X (Z used in beam sectional analysis) 
+        # setup the displacement expression (from the ubar warping function)
+        self.u_ufl = as_tensor([self.w_ufl[1],
+                                 self.w_ufl[2],
+                                 self.w_ufl[0]])
+        self.u_expr = Expression(self.u_ufl,self.V_u.element.interpolation_points())
 
-    #     stress = as_tensor(self.C[i,j,k,l]*eps[k,l],(i,j))
-        
-    #     return stress 
+        #TODO: need to make sure that the stresses frame is properly translated
+        # Strain and stress expressions
+        self.eps_ufl = self.warping2strain(self.w_ufl,0)
+        self.sigma_ufl = self.warping2stress(self.w_ufl,0)
+        self.sigma_expr = Expression(self.sigma_ufl,self.V_sigma.element.interpolation_points())
+
+
+        s = self.sigma_ufl - 1. / 3 * tr(self.sigma_ufl) * Identity(self.sigma_ufl.ufl_shape[0])
+        self.von_Mises_ufl = sqrt(3. / 2 * inner(s, s))
+        self.von_Mises_expr = Expression(self.von_Mises_ufl, self.V_vm.element.interpolation_points())
+
+        # # --- Stress projection (L2) ---
+        # sigma_trial = ufl.TrialFunction(self.V_sigma)
+        # tau = ufl.TestFunction(self.V_sigma)
+
+        # a_sigma = ufl.inner(sigma_trial, tau) * ufl.dx
+        # L_sigma = ufl.inner(self.sigma_expr, tau) * ufl.dx
+
+        # self._stress_problem = fem.petsc.LinearProblem(
+        #     a_sigma,
+        #     L_sigma,
+        #     petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+        # )
+
+    def coeff_from_reactions(self,reactions:np.ndarray):
+        assert(reactions.shape==(6,))
+
+        return self.K1inv@reactions
     
-    # def warping2loads(self,ubar,uhat):
+    
+    def recover_displacement(self, reactions):
+        '''     
+        :param reactions: the 6 sectional forces and moments from the 1d solution
+        
+        :return: function describing sectional displacement
+        '''
+        self.warping_coeffs.value = self.coeff_from_reactions(reactions)
+
+        u = fem.Function(self.V_u)
+        u.interpolate(self.u_expr)
+        return u
+    
 
     def recover_stress(self,reactions):
-        c = self.K1inv@reactions
-
-        c_const=Constant(self.msh,PETSc.ScalarType(c))
-        # ubar = dot(self.N_bar,c_const)
-        # uhat = dot(self.N_hat,c_const)
-        # utilde = dot(self.N_tilde,c_const)
-        # ubreve = dot(self.N_breve,c_const)
-        u_c = dot(c_const,as_tensor(self.warping_functions))
-
-        stress = self.warping2stress(u_c,0)
-        return stress
-
-    def get_von_mises_stress(self,stress):
-        #deviatoric stress
-        s = stress - 1. / 3 * tr(stress) * Identity(stress.ufl_shape[0])
-        von_Mises = sqrt(3. / 2 * inner(s, s))
-        V_von_mises = functionspace(self.msh, ("DG", 0))
-        stress_expr = Expression(von_Mises, V_von_mises.element.interpolation_points())
-        stresses = Function(V_von_mises)
-        stresses.interpolate(stress_expr)
+        '''     
+        :param reactions: the 6 sectional forces and moments from the 1d solution
         
-        return stresses
+        :return: function describing sectional displacement
+        '''
+        self.warping_coeffs.value = self.coeff_from_reactions(reactions)
+
+        sigma = fem.Function(self.V_sigma)
+        sigma.interpolate(self.sigma_expr)
+        return sigma
+
+    def get_von_mises(self,reactions):
+        '''
+        Given the sectional reaction forces/moments, return a function with the von Mises stress
+        
+        inputs: reaction forces/moments
+        
+        '''
+        self.warping_coeffs.value = self.coeff_from_reactions(reactions)
+
+        von_Mises = Function(self.V_vm)
+        von_Mises.interpolate(self.von_Mises_expr)
+        
+        return von_Mises
 
     def getXSMassMatrix(self):
         #compute xs mass properties:
@@ -1714,7 +1503,7 @@ class CrossSection:
             #plot mesh
             tdim = self.msh.topology.dim
             
-            V0,V0_to_V = self.V.sub(0).collapse()
+            V0,V0_to_V = self.V_w.sub(0).collapse()
             topology, cell_types, geom = plot.vtk_mesh(V0)
             grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
             
@@ -1781,7 +1570,7 @@ class CrossSection:
             strain_to_plot = fem.Function(Vstrain)
             strain_to_plot.interpolate(strain_component)
             
-            V0,V0_to_V = self.V.sub(0).collapse()
+            V0,V0_to_V = self.V_w.sub(0).collapse()
             topology, cell_types, geom = plot.vtk_mesh(V0)
             grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
 
@@ -1829,269 +1618,6 @@ class CrossSection:
         plotter.show_bounds()
         if not pyvista.OFF_SCREEN:
             plotter.show()
-    
-    #========== EB ARCHIVE =========#
-    # def get_xs_stiffness_matrix_EB(self):
-        
-    #     #construct material constitutive tensor field
-    #     # self.constructConstitutiveField()
-
-    #     if self.verbose:
-    #         print('Constructing Cross-Section System...')
-    #     self._construct_residual()
-
-    #     if self.verbose:
-    #         print('Assembling System Matrix....')   
-    #     self._assemble_system_matrix()
-
-    #     if self.verbose:
-    #         print('Computing non-trivial solutions....')
-    #     self._get_modes()
-
-    #     if self.verbose:
-    #         print('Orthogonalizing w.r.t. elastic modes...')
-    #     self._decouple_modes()
-    #     self._build_elastic_solution_modes_EB()
-        
-    #     if self.verbose:
-    #         print('Computing Beam Constitutive Matrix....')
-    #     self._compute_xs_stiffness_matrix_EB()
-
-    #     print("DONE computing Beam Constitutive Matrix")  
-    
-    # def _build_elastic_solution_modes_EB(self):
-    #     #Initialize a tensor element and mixed tensor function space 
-    #     # for the elastic solution modes
-    #     Ne = element('CG',self.msh.topology.cell_name(),self.degree,shape=(3,4))
-    #     self.N_space = functionspace(self.msh,mixed_element(4*[Ne]))
-    #     self.N = Function(self.N_space)
-        
-    #     #extract portions of elastic solution mode function related to each warping fxn
-    #     self.N_bar, self.N_hat, self.N_tilde, self.N_breve = self.N.split() 
-
-    #     #unpack elastic solution modes
-    #     elastic_sols = np.concatenate([self.sols_decoup[:,6:7],self.sols_decoup[:,9:]],axis=1)
-
-    #     #get map of function dofs 
-    #     N_bar_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(0))
-    #     N_hat_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(1))
-    #     N_tilde_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(2))
-    #     N_breve_vtx_to_dofs = get_vtx_to_dofs(self.msh,self.N_space.sub(3))
-
-    #     #get separate elastic solution mode values
-    #     N_bar_vals = elastic_sols[self.ubar_vtx_to_dof.flatten(),:]
-    #     N_hat_vals = elastic_sols[self.uhat_vtx_to_dof.flatten(),:]
-    #     N_tilde_vals = elastic_sols[self.utilde_vtx_to_dof.flatten(),:]
-    #     N_breve_vals = elastic_sols[self.ubreve_vtx_to_dof.flatten(),:]
-
-    #     #populate elastic solution modes to elastic solution mode function
-    #     self.N_bar.vector.array[N_bar_vtx_to_dofs.flatten()] = N_bar_vals.flatten()
-    #     self.N_hat.vector.array[N_hat_vtx_to_dofs.flatten()] = N_hat_vals.flatten()
-    #     self.N_tilde.vector.array[N_tilde_vtx_to_dofs.flatten()] = N_tilde_vals.flatten()
-    #     self.N_breve.vector.array[N_breve_vtx_to_dofs.flatten()] = N_breve_vals.flatten()
-
-    # def _compute_xs_stiffness_matrix_EB(self):             
-    #     #unpacking values
-    #     x = self.x
-    #     dx = self.dx
-    #     #indices
-    #     i,j,k,l=self.i,self.j,self.k,self.l
-    #     a,B = self.a,self.B
-   
-    #     #elastic solution mode function related to each warping fxn
-    #     N_bar = self.N_bar
-    #     N_hat = self.N_hat
-    #     N_tilde = self.N_tilde
-    #     N_breve = self.N_breve 
-
-    #     #construct fenicsx variables pertaining to elastic solution modes
-    #     c7 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-    #     # c8 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-    #     # c9 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-    #     c10 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-    #     c11 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-    #     c12 = variable(Constant(self.msh,PETSc.ScalarType((0.0))))
-    #     c = as_tensor([c7,c10,c11,c12])
-
-    #     #construct general warping displacement functions in terms of the 
-    #     #   elastic solution modes and elastic solution mode coefficients
-    #     ubar_c = dot(N_bar,c)
-    #     uhat_c = dot(N_hat,c)
-    #     utilde_c = dot(N_tilde,c)
-    #     ubreve_c = dot(N_breve,c)
-
-    #     #these elastic solution modes are related by the general expression 
-    #     # for the displacement as:
-    #     # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
-    #     # wereh x1 is the beam axis direction
-                
-    #     # expressions for the stress and strain in terms of the polynomial 
-    #     # from expansion above:
-    #     eps_c = self.warping2strain(ubar_c,uhat_c,utilde_c,ubreve_c)
-    #     sigma_c = self.warping2stress(ubar_c,uhat_c,utilde_c,ubreve_c)
-
-    #     #only stresses with a 1x component are of concern:
-    #     sigma11_c = sigma_c[0,0]
-    #     sigma12_c = sigma_c[0,1]
-    #     sigma13_c = sigma_c[0,2]
-
-    #     #construct expression for the load applied to a cross-section in 
-    #     # terms of stress and strain expressions defined based on  the 
-    #     # polynomial expansion:
-    #     P1 = sigma11_c*dx
-    #     # V2 = sigma12_c*dx
-    #     # V3 = sigma13_c*dx
-    #     T1 = -((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
-    #     M2 = -(x[1])*sigma11_c*dx
-    #     M3 = (x[0])*sigma11_c*dx
-
-    #     #store loads in a list instead of a ufl vector as we cannot take 
-    #     # variable derivatives of non-scalar forms
-    #     P = [P1,T1,M2,M3]
-        
-    #     # construct expression for the internal energy of the beam based on
-    #     # the polynomial expansion:
-    #     Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
-
-    #     #now we begin the differentiation, form construction, and form assembly
-    #     # to get K1 & K2 as well as dK1dx & dK2dx (used for shape optimization)
-    #     self.K1_form = [[diff(P[idx1],c[idx2]) for idx1 in range(4)] 
-    #                     for idx2 in range(4)]
-    #     self.K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx1 in range(4)]
-    #                     for idx2 in range(4)]
-        
-    #     self.K1 = np.array([[assemble_scalar(form(self.K1_form[idx1][idx2]))
-    #                  for idx1 in range(4)] 
-    #                     for idx2 in range(4)])
-    #     self.K2 = np.array([[assemble_scalar(form(self.K2_form[idx1][idx2]))
-    #                  for idx1 in range(4)] 
-    #                     for idx2 in range(4)])
-        
-    #     #store K1^-1 for recovery and sensitivity computation
-    #     self.K1inv = np.linalg.inv(self.K1)
-        
-    #     #compute Flexibility matrix
-    #     self.S = self.K1inv.T@self.K2@self.K1inv
-        
-    #     #invert Flexibility matrix to find beam constitutive matrix
-    #     self.K = np.linalg.inv(self.S)
-    
-    # def compute_xs_stiffness_matrix_sensitivities_EB(self):
-    #     args = self.K1_form[0][0].arguments()
-    #     n = max(a.number() for a in args) if args else -1
-    #     du = Argument(self.VX,n+1)
-    #     # du = Argument(self.VX,0) #there are no arguments in any of these forms?
-
-    #     m = 4
-    #     self.dK1dx_form = [[derivative(self.K1_form[idx1][idx2],self.x,du)
-    #                         for idx1 in range(m)] 
-    #                             for idx2 in range(m)]
-    #     self.dK2dx_form = [[derivative(self.K2_form[idx1][idx2],self.x,du)
-    #                         for idx1 in range(m)] 
-    #                             for idx2 in range(m)]
-    #     self.dK1dx = np.array([[petsc.assemble_vector(form(self.dK1dx_form[idx1][idx2]))
-    #                     for idx1 in range(m)] 
-    #                         for idx2 in range(m)])     
-    #     self.dK2dx = np.array([[petsc.assemble_vector(form(self.dK2dx_form[idx1][idx2]))
-    #             for idx1 in range(m)] 
-    #                 for idx2 in range(m)])
-        
-    #     #boundary dofs ([:,:,self.boundary_dofs])
-    #     self.boundary_dofs = locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
-        
-    #     #use chain rule for derivative of flexibility matrix dSdx:
-    #     #first term of dSdx
-    #     self.dK1invT = -np.einsum('ijk,ij->ijk',
-    #                          self.K1inv.T @ self.dK1dx.transpose(1,0,2),
-    #                            self.K1inv.T @ self.K2 @ self.K1inv ) 
-    #     #second term of dSdx
-    #     self.dK2 = np.einsum('ijk,ij->ijk',
-    #                     self.K1inv.T@self.dK2dx,
-    #                     self.K1inv)
-        
-    #     #third term of dSdx
-    #     self.dK1inv = -np.einsum('ijk,ij->ijk',
-    #                         self.K1inv.T @ self.K2 @ self.K1inv @ self.dK1dx,
-    #                           self.K1inv)
-
-    #     #add terms to get dSdx
-    #     self.dSdx = self.dK1invT + self.dK2 + self.dK1inv
-
-    #     #compute derivative of stiffness matrix (dKdx) from derivative of flexibility matrix (dSdx)
-    #     self.dKdx = - np.einsum('ijk,ij->ijk',
-    #                             self.K @ self.dSdx,
-    #                             self.K)
-    
-    def _orthonormalize_rbm(self,fxn,verbose=False):
-        V = fxn.function_space
-        x = self.x
-        dx  = self.dx
-
-        #Rigid Body Modes expression (3D)
-        rbms = [
-            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((1.0,0.0,0.0))),V.element.interpolation_points()),
-            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,1.0,0.0))),V.element.interpolation_points()),
-            fem.Expression(fem.Constant(self.msh,PETSc.ScalarType((0.0,0.0,1.0))),V.element.interpolation_points()),
-            fem.Expression(ufl.as_vector([0,-x[1],x[0]]),V.element.interpolation_points())#,
-            # fem.Expression(ufl.as_vector([x[1],0,0]),V.element.interpolation_points()),
-            # fem.Expression(ufl.as_vector([-x[0],0,0]),V.element.interpolation_points())
-        ]
-
-        # List of functions to orthogonalise
-        vx = fem.Function(V)
-        vy = fem.Function(V)
-        vz = fem.Function(V)
-        vrx = fem.Function(V)
-        # vry = fem.Function(V)
-        # vrz = fem.Function(V)
-        vx.interpolate(rbms[0])
-        vy.interpolate(rbms[1])
-        vz.interpolate(rbms[2])
-        vrx.interpolate(rbms[3])
-        # vry.interpolate(rbms[4])
-        # vrz.interpolate(rbms[5])
-
-        # v = list((vx,vy,vz,vrx,vry,vrz))
-        v = list((vx,vy,vz,vrx))
-
-        # GS Projection
-        def proj(u, v):
-            res = fem.assemble_scalar(fem.form(inner(u, v)*dx))/fem.assemble_scalar(fem.form(inner(u, u)*dx)) * u.vector.array
-            return res
-
-        # GS orthogonalisation
-        def ortho(v):
-            xi = [None]*len(v)
-            xi[0] = v[0]
-            for j in range(1, len(xi)):
-                xi[j] = fem.Function(V)
-                xi[j].vector.array = v[j].vector.array - sum(proj(xi[i], v[j]) for i in range(j))
-            return xi
-        
-        xi = ortho(v)
-
-        # Orthonormalised vector basis
-        e = [fem.Function(V) for i in range(len(v))]
-        for i,xi_ in enumerate(xi):
-            e[i].vector.array = xi_.vector.array/fem.assemble_scalar(fem.form(inner(xi_, xi_)*dx))**0.5
-        
-        new_fxn = Function(V)
-        new_fxn.vector.array  = fxn.vector.array - sum(proj(e_, fxn) for e_ in e)
-
-        if verbose is True:
-            print("orthonormalisation test:")
-            for i in range(len(xi)):
-                for j in range(i+1):
-                    print(f"inner(e[{i}], e[{j}])*dx {fem.assemble_scalar(fem.form(inner(e[i], e[j])*dx))}")
-
-            print(f"u norm {fxn.vector.norm(2)}, u_star norm {new_fxn.vector.norm(2)}")
-            print(f"orthogonalisation of u_star with rigid body modes test:")
-            for j in range(len(v)):
-                print(f"(rbms[{j}], u_star) = {fem.assemble_scalar(fem.form(inner(new_fxn, v[j])*dx))}")
-
-        return new_fxn
-
-
 
 class CoupledCrossSection:
     '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
@@ -2100,7 +1626,7 @@ class CoupledCrossSection:
         
         #assign cross-sections objects to regions 
         self.XSs = XSs
-        self.regions = {i:Region(XS.msh,fxn_space=XS.V) for i,XS in enumerate(XSs)} 
+        self.regions = {i:Region(XS.msh,fxn_space=XS.V_w) for i,XS in enumerate(XSs)} 
         self.meshes = {i:XS.msh for i,XS in enumerate(XSs)}
         self.num_meshes = len(self.meshes)
         
@@ -2206,9 +1732,9 @@ class CoupledCrossSection:
         
         system_sizes = []
         for xs in self.XSs:
-            size = xs.V.dofmap.index_map.size_global * xs.V.dofmap.index_map_bs
+            size = xs.V_w.dofmap.index_map.size_global * xs.V_w.dofmap.index_map_bs
             system_sizes.append(size)
-        size_lm = self.XSs[0].LM.dofmap.index_map.size_global * self.XSs[0].LM.dofmap.index_map_bs
+        size_lm = self.XSs[0].V_lm.dofmap.index_map.size_global * self.XSs[0].V_lm.dofmap.index_map_bs
         system_sizes.append(size_lm)
         self.system_size_list= system_sizes
         self.system_sizes = [[(size_i,size_j) for size_j in system_sizes] for size_i in system_sizes]
@@ -2386,14 +1912,14 @@ class CoupledCrossSection:
             #construct projection operators
             VC = self.collisions[collision].fxn_space
 
-            self.collisions[collision].PA = get_interpolation_matrix(VC,self.XSs[collision[0]].V,mixed=True)
-            self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V,mixed=True)
+            self.collisions[collision].PA = get_interpolation_matrix(VC,self.XSs[collision[0]].V_w,mixed=True)
+            self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V_w,mixed=True)
     
     
     def _construct_interpolation_operator(self,collision,mesh_id):
         VC = self.collisions[collision].fxn_space
 
-        return get_interpolation_matrix(VC,self.XSs[collision[mesh_id]].V,mixed=True)
+        return get_interpolation_matrix(VC,self.XSs[collision[mesh_id]].V_w,mixed=True)
     
 
     def _construct_mortar_forms(self):
@@ -2607,7 +2133,7 @@ class CoupledCrossSection:
         # for xs_num,xs in enumerate(self.XSs):
         #     #create the warping function and the lagrange multiplier vectors
         #     xs.uh = fem.Function(xs.V, name="u_"+str(xs_num))
-        #     xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num))
+        #     xs.lmbdah= fem.Function(xs.V_lm,name="lmbda_"+str(xs_num))
         #     # xs.warping_functions = []
         #     # xs.lmbdas = []
 
@@ -2640,7 +2166,7 @@ class CoupledCrossSection:
             for xs_num,xs in enumerate(self.XSs):
                 #populate the warping function and the lagrange multiplier vectors
                 # xs.uh = fem.Function(xs.V, name="u_"+str(xs_num)+"_"+str(idx_l))
-                # xs.lmbdah= fem.Function(xs.LM,name="lmbda_"+str(xs_num)+"_"+str(idx_l))
+                # xs.lmbdah= fem.Function(xs.V_lm,name="lmbda_"+str(xs_num)+"_"+str(idx_l))
 
                 # xs.uh.x.array[: len(x_local[xs_num])] = x_local[xs_num]
                 # xs.lmbdah.x.array[: len(x_local[-1])] = x_local[-1]
@@ -2700,7 +2226,7 @@ class CoupledCrossSection:
 
 
     def _compute_vjp_dMC(self,d_output,collision):
-        VX = self.collisions[collision].mortar_mesh.VX
+        VX = self.collisions[collision].mortar_mesh.V_x
         d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
 
@@ -2727,7 +2253,7 @@ class CoupledCrossSection:
         return d_input
     
     def _compute_vjp_dSC(self,d_output,collision):
-        VX = self.collisions[collision].mortar_mesh.VX
+        VX = self.collisions[collision].mortar_mesh.V_x
         d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
 
@@ -2773,7 +2299,7 @@ class CoupledCrossSection:
 
         # dFormdx = ufl.derivative(form,x,dX)
 
-        VX = self.collisions[collision].mortar_mesh.VX
+        VX = self.collisions[collision].mortar_mesh.V_x
         d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
         
@@ -2835,13 +2361,13 @@ class CoupledCrossSection:
         d_residuals_lmbda_vec = PETSc.Vec().createSeq(d_residuals_lmbda_vec_size, comm=PETSc.COMM_SELF)
         
         #set up output vector sizes
-        d_inputs_a_vec_size = self.XSs[0].VX.dofmap.index_map_bs*self.XSs[0].VX.dofmap.index_map.size_global
+        d_inputs_a_vec_size = self.XSs[0].V_x.dofmap.index_map_bs*self.XSs[0].V_x.dofmap.index_map.size_global
         d_inputs_a_vec = PETSc.Vec().createSeq(d_inputs_a_vec_size, comm=PETSc.COMM_SELF)
 
-        d_inputs_b_vec_size = self.XSs[1].VX.dofmap.index_map_bs*self.XSs[1].VX.dofmap.index_map.size_global
+        d_inputs_b_vec_size = self.XSs[1].V_x.dofmap.index_map_bs*self.XSs[1].V_x.dofmap.index_map.size_global
         d_inputs_b_vec = PETSc.Vec().createSeq(d_inputs_b_vec_size, comm=PETSc.COMM_SELF)
 
-        d_inputs_c_vec_size = self.collisions[(0,1)].mortar_mesh.VX.dofmap.index_map_bs*self.collisions[(0,1)].mortar_mesh.VX.dofmap.index_map.size_global
+        d_inputs_c_vec_size = self.collisions[(0,1)].mortar_mesh.V_x.dofmap.index_map_bs*self.collisions[(0,1)].mortar_mesh.V_x.dofmap.index_map.size_global
         d_inputs_c_vec = PETSc.Vec().createSeq(d_inputs_c_vec_size, comm=PETSc.COMM_SELF)
         
         dRdxa_dr = np.zeros(d_inputs_a_vec_size)
@@ -2994,7 +2520,7 @@ class CoupledCrossSection:
         if derivative_type == 'w':
             # d_form = 0
 
-            d_inputs = np.zeros((XS.V.dofmap.index_map_bs*XS.V.dofmap.index_map.size_global,6))
+            d_inputs = np.zeros((XS.V_w.dofmap.index_map_bs*XS.V_w.dofmap.index_map.size_global,6))
             # indices_i,indices_j = np.nonzero(dK)
             #loop over warping functions:
             for idx_k in range(6):
@@ -3016,7 +2542,7 @@ class CoupledCrossSection:
         if derivative_type == 'l':
             # d_form = 0
 
-            d_inputs = np.zeros((XS.LM.dofmap.index_map_bs*XS.LM.dofmap.index_map.size_global,6))
+            d_inputs = np.zeros((XS.V_lm.dofmap.index_map_bs*XS.V_lm.dofmap.index_map.size_global,6))
             # indices_i,indices_j = np.nonzero(dK)
             #loop over lagrange multipliers:
             for idx_k in range(6):
@@ -3061,60 +2587,6 @@ class CoupledCrossSection:
 
         # return self.pKpx.reshape((36,self.pKpx.shape[-1]))
 
-
-
-
-
-    # def _build_penalty_vector(self,region_i,collision_ij):
-    #     '''
-    #     Build the vector of penalty terms per dof
-    #     This is a PETSc Vector that can be directly multiplied by the interpolation matrix
-    #     '''
-    #     #initialize empty PETSc vector
-    #     pen_vec = PETSc.Vec().create()
-    #     vec_size = region_i.fxn_space.dofmap.index_map.size_global #* region_i.fxn_space.num_sub_spaces
-    #     pen_vec.setSizes(vec_size)
-    #     pen_vec.setFromOptions()
-
-    #     #compute areas of each element in the overlapping subdomain using a DG0 space
-    #     DG0 = functionspace(region_i.msh,("DG",0))
-    #     v = ufl.TestFunction(DG0)
-    #     # dx_overlap = ufl.Measure("dx", domain=region_i.msh, subdomain_id = 1, subdomain_data=collision_ij.celltags)
-    #     dx_overlap = ufl.Measure("dx", domain=region_i.msh, subdomain_data=collision_ij.celltags[0])
-    #     cell_area_form = form(v*dx_overlap((1,2)))
-    #     cell_areas = assemble_vector(cell_area_form)
-
-    #     avg_cell_size = np.sum(cell_areas.array)/cell_areas.array.shape[0]
-
-    #     #create connectivity between cells and vertices (if not already created)
-    #     region_i.msh.topology.create_connectivity(0,2)
-    #     pen_values = np.zeros((len(collision_ij.penalty_dofs[0]),),dtype=float)
-    #     #for each pt, update the penalty value for that vertex
-    #     for i,pt in enumerate(collision_ij.pts[0]):
-    #         #get the cells connected to the penalty dof
-    #         cells = region_i.msh.topology.connectivity(0,2).links(pt)
-
-    #         dofs = fem.locate_dofs_topological(region_i.fxn_space,0,[pt])
-            
-    #         #add up area of all cells that are incident to the penalty dof
-    #         #  adjust penalty proportionately to the supported area
-    #         indices=np.where(np.isin(collision_ij.penalty_dofs[0],dofs))
-    #         # pen_values[indices] = self.pen * np.sum(cell_areas.array[cells])
-    #         pen_values[indices] = self.pen * avg_cell_size*np.ones_like(indices)
-
-    #         #increase the penaly value by 1-2 orders of magnitude for the 
-    #         #   out of plane warping displacement
-    #         out_of_plane_dofs = [dof for sublist in 
-    #                              [list(fem.locate_dofs_topological(region_i.fxn_space.sub(i).sub(0),0,[pt])) 
-    #                               for i in range(region_i.fxn_space.num_sub_spaces)] for dof in sublist]
-    #         out_of_plane_indices=np.where(np.isin(collision_ij.penalty_dofs[0],out_of_plane_dofs))
-    #         # pen_values[out_of_plane_indices] *= self.pen#*self.pen
-
-    #     #populate the PETSc vector with the values at the proper indices
-    #     for idx,val in zip(collision_ij.penalty_dofs[0],pen_values):
-    #         pen_vec.setValue(idx,val)
-        
-    #     return pen_vec
 
     def _adjust_material(self,collision_ij):
         '''
@@ -3177,6 +2649,8 @@ class CoupledCrossSection:
 
             self.A += self.XSs[i].A
 
+        self.K1inv = np.linalg.inv(self.K1)
+
         self.K2inv = np.linalg.inv(self.K2)
 
         self.K = self.K1 @ np.linalg.inv(self.K2) @ self.K1.T
@@ -3233,7 +2707,7 @@ class CoupledCrossSection:
                 for idx in range(6):
                     elastic_sols[:,idx]=xs.warping_functions[idx].sub(fxn_order).collapse().x.array
 
-                V0,V0_to_V = xs.V.sub(0).collapse()
+                V0,V0_to_V = xs.V_w.sub(0).collapse()
                 topology, cell_types, geom = plot.vtk_mesh(V0)
                 indiv_grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
                 
@@ -3308,7 +2782,7 @@ class CoupledCrossSection:
                 strain_to_plot = fem.Function(Vstrain)
                 strain_to_plot.interpolate(strain_component)
                 
-                V0,V0_to_V = xs.V.sub(0).collapse()
+                V0,V0_to_V = xs.V_w.sub(0).collapse()
                 topology, cell_types, geom = plot.vtk_mesh(V0)
                 indiv_grids.append(pyvista.UnstructuredGrid(topology, cell_types, geom))
 
@@ -3352,133 +2826,75 @@ class CoupledCrossSection:
         # # self.system_mats = system_mats
 
 
-    # def _construct_coupled_system_matrix(self):
-    #     '''
-    #     Given collisions and regions, 
-    #     set up the coupled system matrix with the penalty terms
-    #     '''
+    def setup_recovery(self):
+        """
+        Build expressions from ufl and appropriate functionspaces for
+        displacement and stress recovery.
 
-    #     # for each collision, compute the interpolation matrices and add the penalty terms to the corresponding dofs
-    #     for idx,val in np.ndenumerate(self.adjacency):
-    #         if val == 1:
-    #             #get the interpolation matrix
-    #             self.collisions[idx[0]][idx[1]].inter_mat = get_interpolation_matrix(self.regions[idx[1]].fxn_space,
-    #                                                                                  self.regions[idx[0]].fxn_space,
-    #                                                                                  mixed=True)
-    #             #copy the interpolation matrix :
-    #             self.collisions[idx[0]][idx[1]].pen_mat = self.collisions[idx[0]][idx[1]].inter_mat.duplicate()
-
-    #         elif val == 0 and idx[0] != idx[1]:
-    #             self.separations[idx[0]][idx[1]].mat.createAIJ([self.regions[idx[1]].system_mat.getSize()[0],
-    #                                                             self.regions[idx[0]].system_mat.getSize()[1]])
-    #             self.separations[idx[0]][idx[1]].mat.assemble()
-
-    #     #populate an array of the same size as the adjacency matrix of the petsc matrices
-    #     #  using a *nearly* incomprehensible list "comprehension" 
-    #     # this adds the unadultered system to the diagonals, the interpolation matrices where there is a collision
-    #     # and the assembled empty matrices where there is a "separation"
-    #     A_list = [ [self.regions[i].system_mat if i==j
-    #                 else self.separations[i][j].mat if self.adjacency[i][j] == 0 and i!=j
-    #                 else self.collisions[i][j].pen_mat 
-    #                     for i in range(self.num_meshes)]
-    #                  for j in range(self.num_meshes) ]
-               
-    #     # add the penalty to the relevant block of A_list
-    #     for idx,val in np.ndenumerate(self.adjacency):
-    #         # if idx[0]==idx[1]:
-    #         if val==1:
-    #             pen_term = PETSc.Mat().createAIJ(A_list[idx[0]][idx[0]].getSize())
-    #             pen_term.assemble()
-    #             pen_term.setDiagonal(self.collisions[idx[0]][idx[1]].pen_vec)
-    #             pen_term.assemble()
-                
-    #             #add penalty term to diagonal block
-    #             A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
-    #             # if idx[0]<idx[1]:
-    #             #     A_list[idx[0]][idx[0]].axpy(1.0,pen_term)
-    #             # elif idx[0]>idx[1]:
-    #             #     A_list[idx[0]][idx[0]].axpy(-1.0,pen_term)
-
-    #             #TODO: need to come up with a better way of populating the 
-    #             #   nested list than simply filling with the interpolation matrix, then overwriting it...
-
-    #             #add penalty term to off diagonal block (overwriting the )     
-    #             A_list[idx[0]][idx[1]] = pen_term.matMult(self.collisions[idx[1]][idx[0]].inter_mat)
-    #             A_list[idx[0]][idx[1]].assemble()
-    #             A_list[idx[0]][idx[1]].scale(-1.0)
-    #             # if idx[0]<idx[1]:
-    #             #     A_list[idx[0]][idx[1]].scale(-1.0)
-    #             # elif idx[0]>idx[1]:
-    #             #     A_list[idx[0]][idx[1]].scale(1.0)
-
-    #             # # TODO: this correction modifies the warping function discovery, which
-    #             # #       does NOT modify the discovered stiffness matrix properly
-    #             # #apply the correction for the overlap
-    #             # dx_correction = ufl.Measure("dx", 
-    #             #                             domain=self.XSs[idx[0]].msh,
-    #             #                             subdomain_data= self.collisions[idx[0]][idx[1]].celltags[0])
-    #             # res = self.XSs[idx[0]]._construct_residual(dx=dx_correction,
-    #             #                                            return_residual=True)
-    #             # correction = self.XSs[idx[0]]._assemble_system_matrix(residual=res)
-    #             # # correction.view()
-    #             # A_list[idx[0]][idx[0]].axpy(-0.5,correction)
-
-
-    #     A = PETSc.Mat()
-    #     A.createNest(A_list)
+        This must be called ONCE after cross-section analysis.
+        """
+        for xs in self.XSs:
+            xs.setup_recovery()
         
-    #     A.assemble()
+    def coeff_from_reactions(self,reactions:np.ndarray):
+        assert(reactions.shape==(6,))
 
-    #     self.system_mat = A
-
-
-    # def _get_modes(self):
-    #     m,n1=self.system_mat.getSize()
-    #     print('Computing QR factorization')
-    #     A_aij = self.system_mat.convert('aij')
-    #     Acsr = csr_matrix(A_aij.getValuesCSR()[::-1], shape=self.system_mat.size)
+        return self.K1inv@reactions
+    
+    
+    def recover_displacement(self, reactions):
+        '''     
+        :param reactions: the 6 sectional forces and moments from the 1d solution
         
-    #     #perform QR factorization and store as struct in householder form
-    #     QR= sparseqr.qr_factorize( Acsr.transpose() )
+        :return: functions describing sectional displacement
+        '''
+        disps = []
+        for xs in self.XSs:
+            xs.warping_coeffs.value = self.coeff_from_reactions(reactions)
 
-    #     #build matrix of unit vectors for selecting last 12 columns
-    #     X = np.zeros((m,12))
-    #     for i in range(12):
-    #         X[m-1-i,11-i]=1
+            u = fem.Function(xs.V_u)
+            u.interpolate(xs.u_expr)
 
-    #     #perform matrix multiplication implicitly to construct orthogonal nullspace basis
-    #     self.sols = sparseqr.qmult(QR,X)
-    #     self.sparse_sols = sparseify(self.sols,sparse_format='csc')
+            disps.append(u)
 
+        return disps
+    
 
-    # def _decouple_modes(self):
-    #     ''' 
-    #     for each region, decouple the modes corresponding to that region
-    #     '''
-    #     #intialize empty basis transformation matrix
-    #     self.basis_trans_matrix = np.zeros((6,12))
-
-    #     #compute contribution to basis transformation matrix for each region
-    #     for i,region in zip(self.regions,self.regions.values()):
-    #         self.XSs[i].sols = self.sols[region.offset_start:region.offset_end,:]
-    #         self.XSs[i]._decouple_modes(basis_matrix_only=True)
-    #         print(f"Condition number for sub mesh {i}: {np.linalg.cond(self.XSs[i].mat)}")
-    #         self.basis_trans_matrix += self.XSs[i].mat
-    #     #perform the basis transformation (use the sparse matrix to prevent numerical inaccuracies during inversion)
-    #     # self.sols_decoup = self.sols@np.linalg.inv(self.basis_trans_matrix)
+    def recover_stress(self,reactions):
+        '''     
+        :param reactions: the 6 sectional forces and moments from the 1d solution
         
-    #     print(f"Condition number for overall system: {np.linalg.cond(self.basis_trans_matrix)}")
-    #     self.basis_trans_matrix_sparse = sparseify(self.basis_trans_matrix)#,sparse_format='csc')
+        :return: function describing sectional displacement
+        '''
+
+        sigmas = []
+        for xs in self.XSs:
+            xs.warping_coeffs.value = self.coeff_from_reactions(reactions)
+
+            sigma = fem.Function(xs.V_sigma)
+            sigma.interpolate(xs.sigma_expr)
+
+            sigmas.append(sigma)
+
+        return sigmas
+
+    def get_von_mises(self,reactions):
+        '''
+        Given the sectional reaction forces/moments, return a function with the von Mises stress
         
-    #     self.basis_trans_matrix_pinv = sparseify(np.linalg.pinv(self.basis_trans_matrix_sparse.toarray()))
+        inputs: reaction forces/moments
+        
+        '''
+        vm_list = []
+        for xs in self.XSs:
+            xs.warping_coeffs.value = self.coeff_from_reactions(reactions)
 
-    #     self.sols_decoup = (self.sparse_sols.dot(self.basis_trans_matrix_pinv)).toarray()
+            von_Mises = Function(xs.V_vm)
+            von_Mises.interpolate(xs.von_Mises_expr)
 
-    #     #get the decoupled basis
-    #     for i,region in zip(self.regions,self.regions.values()):
-    #         # ubar_uhat_dofs = np.concatenate([self.XSs[i].ubar_vtx_to_dof,self.XSs[i].uhat_vtx_to_dof])
-    #         # self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:][ubar_uhat_dofs,:]
-    #         self.XSs[i].sols_decoup = self.sols_decoup[region.offset_start:region.offset_end,:]
+            vm_list.append(von_Mises)
+        
+        return vm_list
 
 
 class CrossSectionAnalytical:
