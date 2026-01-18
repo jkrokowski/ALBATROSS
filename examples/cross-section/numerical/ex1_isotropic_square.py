@@ -76,17 +76,20 @@ for i,reaction in enumerate(['axial','shear_x','shear_y','torsion','bending_x','
     von_mises.name = 'von_mises_'+ reaction
     von_mises_list.append(von_mises)
     
-with XDMFFile(MPI.COMM_WORLD, "output/"+domain.name+".xdmf", "w") as xdmf:
-    xdmf.write_mesh(domain)
-with XDMFFile(MPI.COMM_WORLD, "output/"+domain.name+".xdmf", "a") as xdmf:
-    # xdmf.write_function(disps[0],0.0)
-    # xdmf.write_function(stresses[0],0.0)
-    for fxn in disps:
-        xdmf.write_function(fxn,0.0)
-    for fxn in stresses:
-        xdmf.write_function(fxn,0.0)
-    for fxn in von_mises_list:
-        xdmf.write_function(fxn,0.0)
+# with XDMFFile(MPI.COMM_WORLD, "output/"+domain.name+".xdmf", "w") as xdmf:
+#     xdmf.write_mesh(domain)
+
+def write_xdmfs(fxn_list):
+    for i,fxn in enumerate(fxn_list):
+        fn = f"output/{domain.name}_{i}_{fxn.name}.xdmf"
+        with XDMFFile(MPI.COMM_WORLD, fn, "w") as xdmf:
+            xdmf.write_mesh(domain)
+            xdmf.write_function(fxn,0.0)
+
+#write displacements and stresses:
+write_xdmfs(disps)
+write_xdmfs(stresses)
+write_xdmfs(von_mises_list)
 
 
 #improve displacement plotting:

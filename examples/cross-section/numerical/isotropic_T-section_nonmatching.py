@@ -1,6 +1,7 @@
 import numpy as np
 from mpi4py import MPI
-from dolfinx import mesh, io
+from dolfinx import mesh
+from dolfinx.io import XDMFFile
 import ALBATROSS
 from petsc4py import PETSc
 
@@ -8,7 +9,7 @@ default_scalar_type = PETSc.ScalarType
 
 
 #=================== mesh construction ==================#
-N = 2
+N = 6
 offset = 1
 
 h_to_f = 10
@@ -27,14 +28,14 @@ mesh_0.geometry.x[:, :2] -= .5
 mesh_0.geometry.x[:, 1] *= tf
 mesh_0.geometry.x[:, 0] *= W
 mesh_0.geometry.x[:, 1] += H/2 - tf/2
-mesh_0.name = 'f'
+mesh_0.name = f'f_N{N}'
 
 mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.quadrilateral)
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= W
 # mesh_1.geometry.x[:,0] += -0.45
-mesh_1.name = 'w'
+mesh_1.name = f'w_N{N}'
 
 #================= initialize individual cross-sections ===========#
 meshes= [mesh_0,mesh_1]
@@ -108,19 +109,19 @@ for i,reaction in enumerate(['axial','shear_x','shear_y','torsion','bending_x','
     von_mises[1].name = 'von_mises_'+ reaction
     von_mises_list.append(von_mises)
 
-for msh in [mesh_A,mesh_B,mesh_C]:
-    with io.XDMFFile(MPI.COMM_WORLD, f"output/t-section_nm_{msh.name}.xdmf", "w") as xdmf:
-        xdmf.write_mesh(msh)
-for i,msh in enumerate([mesh_A,mesh_B]):
-    with io.XDMFFile(MPI.COMM_WORLD, f"output/t-section_nm_{msh.name}.xdmf", "a") as xdmf:
-        # xdmf.write_function(disps[0],0.0)
-        # xdmf.write_function(stresses[0],0.0)
-        for fxn in disps:
-            xdmf.write_function(fxn[i],0.0)
-        for fxn in stresses:
-            xdmf.write_function(fxn[i],0.0)
-        for fxn in von_mises_list:
-            xdmf.write_function(fxn[i],0.0)
+# for msh in [mesh_A,mesh_B,mesh_C]:
+#     with io.XDMFFile(MPI.COMM_WORLD, f"output/t-section_nm_{msh.name}.xdmf", "w") as xdmf:
+#         xdmf.write_mesh(msh)
+# for i,msh in enumerate([mesh_A,mesh_B]):
+#     with io.XDMFFile(MPI.COMM_WORLD, f"output/t-section_nm_{msh.name}.xdmf", "a") as xdmf:
+#         # xdmf.write_function(disps[0],0.0)
+#         # xdmf.write_function(stresses[0],0.0)
+#         for fxn in disps:
+#             xdmf.write_function(fxn[i],0.0)
+#         for fxn in stresses:
+#             xdmf.write_function(fxn[i],0.0)
+#         for fxn in von_mises_list:
+#             xdmf.write_function(fxn[i],0.0)
     # for i,function in enumerate(functions):
     #     ubar = function.sub(0).collapse()
     #     # uhat = function.sub(0).collapse()
@@ -128,5 +129,21 @@ for i,msh in enumerate([mesh_A,mesh_B]):
     #     # ubreve = function.sub(3).collapse()
     #     ubar.name = f'ubar_{i}'
     #     xdmf.write_function(ubar,t=0.0)
+
+def write_xdmfs(fxn_list):
+    for i,fxn in enumerate(fxn_list):
+        fn0 = f"output/{mesh_0.name}_{i}_{fxn[0].name}.xdmf"
+        with XDMFFile(MPI.COMM_WORLD, fn0, "w") as xdmf:
+            xdmf.write_mesh(mesh_0)
+            xdmf.write_function(fxn[0],0.0)
+        fn1 = f"output/{mesh_1.name}_{i}_{fxn[1].name}.xdmf"
+        with XDMFFile(MPI.COMM_WORLD, fn1, "w") as xdmf:
+            xdmf.write_mesh(mesh_1)
+            xdmf.write_function(fxn[1],0.0)
+#write displacements and stresses:
+write_xdmfs(disps)
+write_xdmfs(stresses)
+write_xdmfs(von_mises_list)
+
 
 print()
