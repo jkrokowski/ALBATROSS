@@ -75,17 +75,17 @@ class MortarMesh:
 
         #add mesh node labels:
         self.x = ufl.SpatialCoordinate(self.msh)
-        self.VX = fem.functionspace(self.msh,("CG",self.degree,(self.tdim,)))
-        self.dX = ufl.Argument(self.VX,2) #TODO: make sure this argument index keeps working? from arguments need unique IDs 
+        self.V_x = fem.functionspace(self.msh,("CG",self.degree,(self.tdim,)))
+        self.dX = ufl.Argument(self.V_x,2) #TODO: make sure this argument index keeps working? from arguments need unique IDs 
 
         #label nodes and provide dofs to xy mapping:
         self.all_nodes = mesh.locate_entities(self.msh,0,lambda x: np.ones_like(x[0]))
         self.boundary_nodes = mesh.locate_entities_boundary(self.msh,0,lambda x: np.ones_like(x[0]))
         self.interior_nodes = self.all_nodes[~np.isin(self.all_nodes, self.boundary_nodes)]
-        self.dofs_x_boundary = fem.locate_dofs_topological(self.VX.sub(0),0,self.boundary_nodes)
-        self.dofs_y_boundary = fem.locate_dofs_topological(self.VX.sub(1),0,self.boundary_nodes)
-        self.dofs_x_interior = fem.locate_dofs_topological(self.VX.sub(0),0,self.interior_nodes)
-        self.dofs_y_interior = fem.locate_dofs_topological(self.VX.sub(1),0,self.interior_nodes)
+        self.dofs_x_boundary = fem.locate_dofs_topological(self.V_x.sub(0),0,self.boundary_nodes)
+        self.dofs_y_boundary = fem.locate_dofs_topological(self.V_x.sub(1),0,self.boundary_nodes)
+        self.dofs_x_interior = fem.locate_dofs_topological(self.V_x.sub(0),0,self.interior_nodes)
+        self.dofs_y_interior = fem.locate_dofs_topological(self.V_x.sub(1),0,self.interior_nodes)
         self.dofs_boundary = np.sort(np.concatenate([self.dofs_x_boundary,self.dofs_y_boundary]))
         self.dofs_interior = np.sort(np.concatenate([self.dofs_x_interior,self.dofs_y_interior]))
     
@@ -694,13 +694,13 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     each nodal position of mesh 1
     '''
     msh_0 = V_0.mesh
-    msh_0.topology.dim
+    tdim = msh_0.topology.dim
     msh_1 = V_1.mesh
     x_0   = V_0.tabulate_dof_coordinates()
     x_1   = V_1.tabulate_dof_coordinates()
 
     #===== FIND CELLS ON MESH 0 CONTAINING MESH 1 DOFS ====== #
-    bb_tree         = geometry.bb_tree(msh_0, msh_0.topology.dim)
+    bb_tree         = geometry.bb_tree(msh_0, tdim)
     cell_candidates = geometry.compute_collisions_points(bb_tree, x_1)
     cells           = []
     points_on_proc  = []
@@ -718,7 +718,7 @@ def interpolation_matrix_nonmatching_meshes(V_1,V_0): # Function spaces from non
     points_on_proc_ = np.array(points_on_proc, dtype=np.float64)
     cells_          = np.array(cells)
 
-    x_ref = np.zeros((len(cells_), 2))
+    x_ref = np.zeros((len(cells_), tdim))
     for i in range(0, len(cells_)):
         geom_dofs  = list(msh_0.geometry.dofmap[cells_[i]])
         x_ref[i,:] = msh_0.geometry.cmap.pull_back(np.array([points_on_proc_[i,:]]), msh_0.geometry.x[geom_dofs])
@@ -809,8 +809,8 @@ def permute_and_expand_matrix(V_to,V_from,M_scalar,mixed=False):
     #list comprehension to construct blocks for the nested PETSc matrix
     M_list = [[M_scalar if i==j
                else M0
-                for i in range(V_to.value_shape[0])]
-               for j in range(V_to.value_shape[0])]
+                for i in range(V_to.value_size)]
+               for j in range(V_to.value_size)]
 
     #construct nested petsc matrix from the list of interpolation matrices
     M_nest = PETSc.Mat(comm=MPI.COMM_WORLD)

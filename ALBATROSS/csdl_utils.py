@@ -21,8 +21,8 @@ class WarpingFunctionState(csdl.experimental.CustomImplicitOperation):
 
         # construct output of the model
         outputs = csdl.VariableGroup()
-        outputs.w = self.create_output('w', (self.xs.V.dofmap.index_map.size_global,6))
-        outputs.lmbda = self.create_output('lmbda', (self.xs.LM.value_size,6))
+        outputs.w = self.create_output('w', (self.xs.V_w.dofmap.index_map.size_global,6))
+        outputs.lmbda = self.create_output('lmbda', (self.xs.V_lm.value_size,6))
 
         return outputs
     
@@ -434,7 +434,7 @@ class NonmatchingInterpolationMatrix(csdl.CustomExplicitOperation):
         dxC = np.zeros((self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x.shape[0],2))
         for i in range(4):
             for j in range(3):
-                sub_space_A,sub_space_A_dofmap = self.xs.XSs[self.mesh_id].V.sub(i).sub(j).collapse()
+                sub_space_A,sub_space_A_dofmap = self.xs.XSs[self.mesh_id].V_w.sub(i).sub(j).collapse()
                 sub_space_C,sub_space_C_dofmap = self.xs.collisions[self.collision].fxn_space.sub(i).sub(j).collapse()
                 dP = d_outputs['P'][np.ix_(sub_space_C_dofmap,sub_space_A_dofmap)]
                 dxAij,dxCij = ALBATROSS.nonmatching_utils.action_of_geom_on_nm_interpolation_matrix(sub_space_C,
@@ -570,6 +570,8 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         outputs.MC.name = 'mass_coupling_matrix'+str(self.collision[0])+str(self.collision[1])
         outputs.SC = self.create_output('SC',(size_c,size_c))
         outputs.SC.name = 'boundary_coupling_matrix'+str(self.collision[0])+str(self.collision[1])
+        outputs.KC = self.create_output('KC',(size_c,size_c))
+        outputs.KC.name = 'overlap_correction_matrix'+str(self.collision[0])+str(self.collision[1])
 
         return outputs
 
@@ -587,9 +589,11 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
 
         MC_petsc = self.xs.collisions[self.collision].MC
         SC_petsc = self.xs.collisions[self.collision].S_C
+        KC_petsc = self.xs.collisions[self.collision].mortar_xs.K_bar
                 
         outputs['MC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(MC_petsc)
         outputs['SC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(SC_petsc)
+        outputs['KC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(KC_petsc)
 
         #return mesh geometry to original state:
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[:] = geometry
@@ -623,6 +627,8 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         pMCpxT_dMC = self.xs._compute_vjp_dMC(d_outputs['MC'],self.collision)
                 
         pSCpxT_dSC = self.xs._compute_vjp_dSC(d_outputs['SC'],self.collision)
+        
+        pSCpxT_dSC = self.xs._compute_vjp_dSC(d_outputs['KC'],self.collision)
 
         d_inputs_full = pMCpxT_dMC + pSCpxT_dSC
 
@@ -952,8 +958,7 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         self.beam._link_xs_to_axial()
         self.beam.update_k()
         self.beam.elastic_energy()
-        #TODO: this doesn't seem to actually properly set the input K to the beam matrix value
-        print(self.beam.xs_list[0].K)
+        
         self.beam.solve()
         print('beam deflection: ',self.beam.w.x.array[self.output_dofs])
         outputs['d']  = self.beam.w.x.array

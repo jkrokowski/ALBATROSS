@@ -1,16 +1,17 @@
 import numpy as np
 from mpi4py import MPI
-from dolfinx import mesh
+from dolfinx import mesh,fem
+import ufl
 from dolfinx.io import XDMFFile
 import ALBATROSS
 from petsc4py import PETSc
+import basix.ufl
 
 default_scalar_type = PETSc.ScalarType   
 
-
 #=================== mesh construction ==================#
 N = 6
-offset = 1
+offset = 0
 
 h_to_f = 10
 w_to_w = 10
@@ -18,10 +19,10 @@ w_to_w = 10
 m1,n1 = N*h_to_f+offset,N
 m2,n2 = N,N*w_to_w+offset
 
-H = 1
-W = 1
-tf = 1/h_to_f
-tw = 1/w_to_w
+H = 0.1 #m
+W = 0.1 #m 
+tf = H/h_to_f
+tw = W/w_to_w
 
 mesh_0 = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
 mesh_0.geometry.x[:, :2] -= .5
@@ -34,22 +35,25 @@ mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= W
-# mesh_1.geometry.x[:,0] += -0.45
+# mesh_1.geometry.x[:,0] += -0.031
 mesh_1.name = f'w_N{N}'
+
+identifier_string = ''
 
 #================= initialize individual cross-sections ===========#
 meshes= [mesh_0,mesh_1]
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':100,'nu':0.2},
+                                           mech_props={'E':70e9,'nu':0.33},
                                            density=2700)
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e0,pen_t=1)
-TXS_nm.plot_meshes()
+# val = 
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e-4,pen_t=1e7)
+# TXS_nm.plot_meshes()
 
 #identify meshes:
 mesh_A = TXS_nm.XSs[0].msh
@@ -61,32 +65,140 @@ mesh_C = TXS_nm.collisions[(0,1)].mortar_mesh.msh
 TXS_nm.plot_warping_fxns()
 K = TXS_nm.K
 
-# dK = np.array([[1,0,0,0,0,0],
-#                [0,0,0,0,0,0],
-#                [0,0,0,0,0,0],
-#                [0,0,0,0,0,0],
-#                [0,0,0,0,0,0],
-#                [0,0,0,0,0,0]])
-# dx0 = TXS_nm._compute_pK_action(dK,0)
-# dw0 = TXS_nm._compute_pK_action(dK,0,derivative_type = 'w')
-# dx1 = TXS_nm._compute_pK_action(dK,1)
-# dw1 = TXS_nm._compute_pK_action(dK,1,derivative_type = 'w')
-# dl = TXS_nm._compute_pK_action(dK,0,derivative_type = 'l')
+np.set_printoptions(precision=3)
+print(K)
+TXS_conformal_K = np.load("T_section_K_n_6_H0.1_W0.1.npy")
 
-# np.set_printoptions(precision=3)
-# print(K)
-# TXS_conformal_K = np.load("T_section_K_n_20.npy")
+diff=K-TXS_conformal_K
+rel_diff = (K-TXS_conformal_K)/TXS_conformal_K
+abs_diff_diag = np.diag(diff)
+rel_diff_diag = abs_diff_diag/np.diag(TXS_conformal_K)
+print(f"max rel diagonal entry error: {rel_diff_diag}")
 
-# diff=K-TXS_conformal_K
-# rel_diff = (K-TXS_conformal_K)/TXS_conformal_K
-# abs_diff_diag = np.diag(diff)
-# rel_diff_diag = abs_diff_diag/np.diag(TXS_conformal_K)
+max_rel_fro_norm = np.linalg.norm(diff)/np.linalg.norm(TXS_conformal_K)
+print(f"max rel frobenius norm error: {max_rel_fro_norm}")
 
-# max_rel_fro_norm = np.linalg.norm(diff)/np.linalg.norm(TXS_conformal_K)
-# print(f"max rel frobenius norm error: {max_rel_fro_norm}")
+print("compute L2 error:")
+# TXS_nm.XSs[0].warping_functions[0]
+# TXS_nm.XSs[1].warping_functions[0]
+# collision=(0,1)
+# L2_errors = []
+# for idx in range(6):
+#     TXS_nm.collisions[collision].PA.mult(TXS_nm.XSs[0].warping_functions[idx].x.petsc_vec,TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
+#     wC_A = TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].copy()
+#     TXS_nm.collisions[collision].PB.mult(TXS_nm.XSs[1].warping_functions[idx].x.petsc_vec,TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
+#     wC_B = TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].copy()
+#     diff =wC_A-wC_B
+#     L2_error = np.sqrt(fem.assemble_scalar(fem.form(ufl.inner(diff,diff)*TXS_nm.collisions[(0,1)].dx)))
+#     L2_errors.append(L2_error)
+# print(L2_errors)
 
-#TODO: need to work on the visualization(2Dxy vs 3Dyz), but the functions seem to be correct
-#demonstration of displacement and stress recovery for unit forces and moments applied to the cross-section
+# print("compute H1 seminorm error:")
+# H1semi_errors = []
+# for idx in range(6):
+#     TXS_nm.collisions[collision].PA.mult(TXS_nm.XSs[0].warping_functions[idx].x.petsc_vec,TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
+#     wC_A = TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].copy()
+#     eps_A = TXS_nm.collisions[collision].mortar_xs.warping2strain(wC_A,0)
+#     TXS_nm.collisions[collision].PB.mult(TXS_nm.XSs[1].warping_functions[idx].x.petsc_vec,TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
+#     wC_B = TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].copy()
+#     eps_B = TXS_nm.collisions[collision].mortar_xs.warping2strain(wC_B,0)
+#     diff = eps_A-eps_B
+#     H1semi_error = np.sqrt(fem.assemble_scalar(fem.form(ufl.inner(diff,diff)*TXS_nm.collisions[(0,1)].dx)))
+#     H1semi_errors.append(H1semi_error)
+# print(H1semi_errors)
+
+# print("compute strain error A to mortar:")
+# #strain communtation test:
+# #tests whether transfer --> gradient is the same as gradient --> transfer
+# H1semi_strain_errors = []
+# for idx in range(6):
+#     #get the interpolated, then evaluated strain
+#     TXS_nm.collisions[collision].PA.mult(TXS_nm.XSs[0].warping_functions[idx].x.petsc_vec,TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
+#     wC_A = TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].copy()
+#     eps_A = TXS_nm.collisions[collision].mortar_xs.warping2strain(wC_A,1)
+
+#     #get the strain function on the foreground mesh by interpolating an expression
+#     eps_foreground = fem.Function(TXS_nm.XSs[0].V_sigma)
+#     eps_foreground_ufl = TXS_nm.XSs[0].warping2strain(TXS_nm.XSs[0].warping_functions[idx],1)
+#     eps_foreground.interpolate(fem.Expression(eps_foreground_ufl,TXS_nm.XSs[0].V_sigma.element.interpolation_points()))
+    
+#     #set up the quadrature function for projecting strain:
+#     mortar_mesh = TXS_nm.collisions[collision].mortar_mesh.msh
+#     degree = 1
+#     Qe = basix.ufl.quadrature_element(
+#         mortar_mesh.topology.cell_name(), value_shape=(3,3),degree=degree)
+#     V_quadrature = fem.functionspace(mortar_mesh, Qe)
+#     cell_map0 = mortar_mesh.topology.index_map(mortar_mesh.topology.dim)
+#     num_cells_on_proc = cell_map0.size_local + cell_map0.num_ghosts
+#     cells_coarse = np.arange(num_cells_on_proc, dtype=np.int32)
+#     nmmid_q = fem.create_interpolation_data(V_quadrature,
+#                                                 TXS_nm.XSs[0].V_sigma,
+#                                                 cells_coarse,
+#                                                     padding=1e-14)
+        
+#     q_func = fem.Function(V_quadrature)
+#     q_func.interpolate_nonmatching(eps_foreground, cells_coarse,interpolation_data=nmmid_q)
+    
+#     eps_C = ufl.TrialFunction(TXS_nm.collisions[collision].mortar_xs.V_sigma)
+#     eps_vC = ufl.TestFunction(TXS_nm.collisions[collision].mortar_xs.V_sigma)
+
+#     # Project fine function at quadrature points to coarse grid
+#     a_coarse = ufl.inner(eps_C, eps_vC) * ufl.dx
+#     L_coarse = ufl.inner(q_func, eps_vC)*ufl.dx
+#     problem = fem.petsc.LinearProblem(a_coarse, L_coarse)
+#     eps_A_proj = problem.solve()
+
+#     diff = eps_A-eps_A_proj
+#     H1semi_strain_error = np.sqrt(fem.assemble_scalar(fem.form(ufl.inner(diff,diff)*TXS_nm.collisions[(0,1)].dx)))
+#     H1semi_strain_errors.append(H1semi_error)
+# print(H1semi_strain_errors)
+
+# print("B to mortar:")
+# H1semi_strain_errors = []
+# for idx in range(6):
+#     #get the interpolated, then evaluated strain
+#     TXS_nm.collisions[collision].PB.mult(TXS_nm.XSs[1].warping_functions[idx].x.petsc_vec,TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
+#     wC_B = TXS_nm.collisions[collision].mortar_xs.warping_functions[idx].copy()
+#     eps_B = TXS_nm.collisions[collision].mortar_xs.warping2strain(wC_B,1)
+
+#     #get the strain function on the foreground mesh by interpolating an expression
+#     eps_foreground = fem.Function(TXS_nm.XSs[1].V_sigma)
+#     eps_foreground_ufl = TXS_nm.XSs[1].warping2strain(TXS_nm.XSs[1].warping_functions[idx],1)
+#     eps_foreground.interpolate(fem.Expression(eps_foreground_ufl,TXS_nm.XSs[1].V_sigma.element.interpolation_points()))
+    
+#     #set up the quadrature function for projecting strain:
+#     mortar_mesh = TXS_nm.collisions[collision].mortar_mesh.msh
+#     degree = 1
+#     Qe = basix.ufl.quadrature_element(
+#         mortar_mesh.topology.cell_name(), value_shape=(3,3),degree=degree)
+#     V_quadrature = fem.functionspace(mortar_mesh, Qe)
+#     cell_map0 = mortar_mesh.topology.index_map(mortar_mesh.topology.dim)
+#     num_cells_on_proc = cell_map0.size_local + cell_map0.num_ghosts
+#     cells_coarse = np.arange(num_cells_on_proc, dtype=np.int32)
+#     nmmid_q = fem.create_interpolation_data(V_quadrature,
+#                                                 TXS_nm.XSs[1].V_sigma,
+#                                                 cells_coarse,
+#                                                     padding=1e-14)
+        
+#     q_func = fem.Function(V_quadrature)
+#     q_func.interpolate_nonmatching(eps_foreground, cells_coarse,interpolation_data=nmmid_q)
+    
+#     eps_C = ufl.TrialFunction(TXS_nm.collisions[collision].mortar_xs.V_sigma)
+#     eps_vC = ufl.TestFunction(TXS_nm.collisions[collision].mortar_xs.V_sigma)
+
+#     # Project fine function at quadrature points to coarse grid
+#     a_coarse = ufl.inner(eps_C, eps_vC) * ufl.dx
+#     L_coarse = ufl.inner(q_func, eps_vC)*ufl.dx
+#     problem = fem.petsc.LinearProblem(a_coarse, L_coarse)
+#     eps_B_proj = problem.solve()
+
+#     diff = eps_B-eps_B_proj
+#     H1semi_strain_error = np.sqrt(fem.assemble_scalar(fem.form(ufl.inner(diff,diff)*TXS_nm.collisions[(0,1)].dx)))
+#     H1semi_strain_errors.append(H1semi_error)
+# print(H1semi_strain_errors)
+
+
+
 TXS_nm.setup_recovery()
 disps = []
 stresses = []
@@ -109,26 +221,6 @@ for i,reaction in enumerate(['axial','shear_x','shear_y','torsion','bending_x','
     von_mises[1].name = 'von_mises_'+ reaction
     von_mises_list.append(von_mises)
 
-# for msh in [mesh_A,mesh_B,mesh_C]:
-#     with io.XDMFFile(MPI.COMM_WORLD, f"output/t-section_nm_{msh.name}.xdmf", "w") as xdmf:
-#         xdmf.write_mesh(msh)
-# for i,msh in enumerate([mesh_A,mesh_B]):
-#     with io.XDMFFile(MPI.COMM_WORLD, f"output/t-section_nm_{msh.name}.xdmf", "a") as xdmf:
-#         # xdmf.write_function(disps[0],0.0)
-#         # xdmf.write_function(stresses[0],0.0)
-#         for fxn in disps:
-#             xdmf.write_function(fxn[i],0.0)
-#         for fxn in stresses:
-#             xdmf.write_function(fxn[i],0.0)
-#         for fxn in von_mises_list:
-#             xdmf.write_function(fxn[i],0.0)
-    # for i,function in enumerate(functions):
-    #     ubar = function.sub(0).collapse()
-    #     # uhat = function.sub(0).collapse()
-    #     # utilde = function.sub(2).collapse()
-    #     # ubreve = function.sub(3).collapse()
-    #     ubar.name = f'ubar_{i}'
-    #     xdmf.write_function(ubar,t=0.0)
 
 def write_xdmfs(fxn_list):
     for i,fxn in enumerate(fxn_list):

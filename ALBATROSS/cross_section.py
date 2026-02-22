@@ -550,6 +550,17 @@ class CrossSection:
                      for idx2 in range(6)] 
                         for idx1 in range(6)])
         
+        #apply threshholding:
+        s1 = np.max(np.abs(np.diag(self.K2)))
+        s2 = np.max(np.abs(np.diag(self.K2)))
+        eta = 1e-8
+        mask_1 = (np.abs(self.K1) < s1*eta)
+        mask_2 = (np.abs(self.K2) < s2*eta)
+        np.fill_diagonal(mask_1,False)
+        np.fill_diagonal(mask_2,False)
+        self.K1[mask_1] = 0.0
+        self.K2[mask_2] = 0.0 
+        
         #update cross-sectional area:
         self.A = assemble_scalar(fem.form(self.A_form))
 
@@ -668,101 +679,6 @@ class CrossSection:
     def _compute_mesh_size(self):
         h_expr = ufl.CellDiameter(self.msh)
         self.mesh_size = fem.assemble_scalar(fem.form(h_expr*self.dx))/self.A
-
-    def _get_stiffness_contribution(self,dx=None):             
-        #unpacking values
-        x = self.x
-        if dx is None:
-            dx = self.dx
-        #indices
-        i,j,k,l=self.i,self.j,self.k,self.l
-        a,B = self.a,self.B
-   
-        #elastic solution mode function related to each warping fxn
-        N_bar = self.N_bar
-        N_hat = self.N_hat
-
-        #construct fenicsx variables pertaining to elastic solution modes
-        c7 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
-        c8 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
-        c9 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
-        c10 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
-        c11 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
-        c12 = variable(Constant(self.msh,PETSc.ScalarType((1.0))))
-        c = as_tensor([c7,c8,c9,c10,c11,c12])
-
-        #construct general warping displacement functions in terms of the 
-        #   elastic solution modes and elastic solution mode coefficients
-        ubar_c = dot(N_bar,c)
-        uhat_c = dot(N_hat,c)
-        # utilde_c = dot(N_tilde,c)
-        # ubreve_c = dot(N_breve,c)
-
-        #these elastic solution modes are related by the general expression 
-        # for the displacement as:
-        # u_c = ubar_c + uhat_c * x1 + utilde_c * x1**2 + ubreve_c * x1**3
-        # where x1 is the beam axis direction
-                
-        # expressions for the stress and strain in terms of the polynomial 
-        # from expansion above:
-        eps_c = self.warping2strain(ubar_c,uhat_c)
-        sigma_c = self.warping2stress(ubar_c,uhat_c)
-
-        #only stresses with a 1x component are of concern:
-        sigma11_c = sigma_c[0,0]
-        sigma12_c = sigma_c[0,1]
-        sigma13_c = sigma_c[0,2]
-
-        #construct expression for the load applied to a cross-section in 
-        # terms of stress and strain expressions defined based on  the 
-        # polynomial expansion:
-        P1 = sigma11_c*dx
-        V2 = sigma12_c*dx
-        V3 = sigma13_c*dx
-        T1 = ((x[0])*sigma13_c - (x[1])*sigma12_c)*dx
-        M2 = (x[1])*sigma11_c*dx
-        M3 = -(x[0])*sigma11_c*dx
-
-        #store loads in a list instead of a ufl vector as we cannot take 
-        # variable derivatives of non-scalar forms
-        P = [P1,V2,V3,T1,M2,M3]
-        
-        # construct expression for the internal energy of the beam based on
-        # the polynomial expansion:
-        Uc = 0.5*sigma_c[i,j]*eps_c[i,j]*dx
-
-        # differentiation of the constructed form 
-        K1_form = [[diff(P[idx1],c[idx2]) for idx2 in range(6)] 
-                        for idx1 in range(6)]
-        K2_form = [[diff(diff(Uc,c[idx1]),c[idx2]) for idx2 in range(6)]
-                        for idx1 in range(6)]
-        
-        #assemble the K1 and K2 matrices
-        K1 = np.array([[assemble_scalar(form(K1_form[idx1][idx2]))
-                     for idx2 in range(6)] 
-                        for idx1 in range(6)])
-        K2 = np.array([[assemble_scalar(form(K2_form[idx1][idx2]))
-                     for idx2 in range(6)] 
-                        for idx1 in range(6)])
-        
-        K1 = sparseify(K1).toarray()
-        K2 = sparseify(K2).toarray()
-        
-        #store K1^-1 for recovery and sensitivity computation
-        K1inv = np.linalg.inv(K1)
-        K1inv = sparseify(K1inv).toarray()
-
-        #store K2^-1 for sensitivity computation
-        K2inv = np.linalg.inv(K2)
-        K2inv = sparseify(K2inv).toarray()
-        
-        #compute Flexibility matrix
-        S = K1inv.T@K2@K1inv
-
-        #compute stiffness matrix
-        K = K1@sparseify(K2inv).toarray()@K1.T
-
-        return K
     
     #========== computing derivatives for optimization ===========#
     def apply_inverse_jacobian(self,d_output_w,d_output_l):
@@ -1660,8 +1576,27 @@ class CoupledCrossSection:
             h_avg = XS.mesh_size 
             print(f'average cell size: {h_avg}')
             h_avg_list.append(h_avg)
-        self.nu_u = (self.pen_u * self.XSs[0].materials[0].E) / np.average(h_avg_list)**2
-        self.nu_t = (self.pen_t * self.XSs[0].materials[0].E) / np.average(h_avg_list)
+        # # use with area disp penalty
+        self.nu_u = (self.pen_u * self.XSs[0].materials[0].E) / ((0.5*np.average(h_avg_list))**2)
+        # self.nu_u = (self.pen_u * self.XSs[0].materials[0].E) / ((np.average(h_avg_list)))
+        # self.nu_u = (self.pen_u  / np.average(h_avg_list) )
+        # self.nu_u = (self.pen_u * self.XSs[0].materials[0].E) / np.average(h_avg_list)
+        # self.nu_u = (self.pen_u ) / np.average(h_avg_list)**2
+        # self.nu_u = (self.pen_u ) / np.average(h_avg_list)
+        # self.nu_t = (self.pen_t ) / (np.average(h_avg_list)**2 * self.XSs[0].materials[0].E)
+        # self.nu_t = (self.pen_t * np.average(h_avg_list)) / ( self.XSs[0].materials[0].E)
+        # self.nu_t = (self.pen_t * self.XSs[0].materials[0].E) / np.average(h_avg_list)
+        # # use with area stress penalty
+        # self.nu_t = (self.pen_t  * 0.5* np.average(h_avg_list) ) / self.XSs[0].materials[0].E
+        # self.nu_t = (self.pen_t  ) / ( self.XSs[0].materials[0].E * 0.5* np.average(h_avg_list))
+        # use with traction term (boundary)
+        self.nu_t = (self.pen_t ) / ( self.XSs[0].materials[0].E)
+        # #use with area strain penalty
+        # self.nu_t = self.pen_t * self.XSs[0].materials[0].E 
+        # # use with boundary strain penalty
+        # self.nu_t = (self.pen_t * self.XSs[0].materials[0].E) * 0.5* np.average(h_avg_list)
+        # self.nu_t = (self.pen_t ) / np.average(h_avg_list)
+
         return
     
 
@@ -1682,6 +1617,7 @@ class CoupledCrossSection:
         self._construct_interpolation_operators()
         self._construct_mortar_forms()
         self._assemble_mortar_matrices()
+        # self._construct_overlap_correction()
         self._construct_coupling_terms()
 
         #apply the penalty terms
@@ -1846,7 +1782,7 @@ class CoupledCrossSection:
                     
                     #TODO: move this to a different location
                     #modify each region's material properties based on the effective material rule 
-                    self._adjust_material(collision_ij)
+                    # self._adjust_material(collision_ij)
 
                     collisions[(i,j)]=collision_ij
 
@@ -1884,8 +1820,17 @@ class CoupledCrossSection:
             # minimum mesh size in the overlap region, not the min of both meshes' average cell size
             mesh_size = np.min([self.XSs[collision[0]].mesh_size,
                                self.XSs[collision[1]].mesh_size])
-            mesh_C = mesh_from_polygon(poly_C,mesh_size=mesh_size,mesh_name='mortar_mesh')
+            mesh_C = mesh_from_polygon(poly_C,mesh_size=0.5*mesh_size,mesh_name='mortar_mesh')
             self.collisions[collision].mortar_mesh = MortarMesh(mesh_C)
+            #TODO: the material field could be interpolated from the foreground meshes instead of just 
+            #       populating straight from a single material property
+            self.collisions[collision].mortar_xs = CrossSection(
+                mesh_C,
+                materials=self.XSs[0].materials,
+                celltags=None,
+                degree=1,
+                verbose=False,
+            )
 
     def _construct_mortar_mesh_fxns(self):
         for collision in self.collisions:
@@ -1893,16 +1838,24 @@ class CoupledCrossSection:
             mesh_C = self.collisions[collision].mortar_mesh.msh
         
             #intialize functions on mortar mesh and add to collision
-            Ve_C = element("CG",mesh_C.topology.cell_name(),1,shape=(3,))
-            self.collisions[collision].fxn_space = fem.functionspace(mesh_C, mixed_element(4*[Ve_C]))
-            VC = self.collisions[collision].fxn_space
-            
-            self.collisions[collision].u = TrialFunction(VC)
-            self.collisions[collision].v = TestFunction(VC)
-            self.collisions[collision].dx = Measure("dx",domain=mesh_C)
-            # uC = self.collisions[collision].u
-            # vC = self.collisions[collision].v
-            # dx_C = self.collisions[collision].dx
+            if hasattr(self.collisions[collision], "mortar_xs"):
+                mortar_xs = self.collisions[collision].mortar_xs
+                self.collisions[collision].fxn_space = mortar_xs.V_w
+                self.collisions[collision].u = mortar_xs.du
+                self.collisions[collision].v = mortar_xs.v
+                self.collisions[collision].dx = mortar_xs.dx
+                VC = mortar_xs.V_w
+            else:
+                Ve_C = element("CG",mesh_C.topology.cell_name(),1,shape=(3,))
+                self.collisions[collision].fxn_space = fem.functionspace(mesh_C, mixed_element(4*[Ve_C]))
+                VC = self.collisions[collision].fxn_space
+                
+                self.collisions[collision].u = TrialFunction(VC)
+                self.collisions[collision].v = TestFunction(VC)
+                self.collisions[collision].dx = Measure("dx",domain=mesh_C)
+                # uC = self.collisions[collision].u
+                # vC = self.collisions[collision].v
+                # dx_C = self.collisions[collision].dx
 
             self.collisions[collision].mortar_mesh.size = VC.dofmap.index_map.size_global * VC.dofmap.index_map_bs
 
@@ -1924,27 +1877,17 @@ class CoupledCrossSection:
 
     def _construct_mortar_forms(self):
         for collision in self.collisions:
+            i,j=self.collisions[collision].mortar_xs.i,self.collisions[collision].mortar_xs.j
             #mortar mesh has previously been constructed:
             mesh_C = self.collisions[collision].mortar_mesh.msh
-        
-            #intialize functions on mortar mesh and add to collision
-            # Ve_C = element("CG",mesh_C.topology.cell_name(),1,shape=(3,))
-            # self.collisions[collision].fxn_space = fem.functionspace(mesh_C, mixed_element(4*[Ve_C]))
             VC = self.collisions[collision].fxn_space
-            
-            # self.collisions[collision].u = TrialFunction(VC)
-            # self.collisions[collision].v = TestFunction(VC)
-            # self.collisions[collision].dx = Measure("dx",domain=mesh_C)
             uC = self.collisions[collision].u
             vC = self.collisions[collision].v
             dx_C = self.collisions[collision].dx
 
-            # #construct projection operators
-            # self.collisions[collision].PA = get_interpolation_matrix(VC,self.XSs[collision[0]].V,mixed=True)
-            # self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V,mixed=True)
-
             #construct displacement term (penalty weighted mass matrix)
             MC_ufl = self.nu_u * inner(uC, vC) * dx_C
+            # MC_ufl = self.nu_u * inner(uC, vC) * ds
             MC_form = fem.form(MC_ufl)
             MC = fem.petsc.assemble_matrix(MC_form)
             MC.assemble()
@@ -1967,15 +1910,26 @@ class CoupledCrossSection:
             i,j,k,l = indices(4)
 
             #trial function strain/stress:
-            eps_C = self.XSs[0].warping2strain(uC,0)
+            eps_C = self.collisions[collision].mortar_xs.warping2strain(uC,0)
+            eps1_C = self.collisions[collision].mortar_xs.warping2strain(uC,1)
             sigma_c =  as_tensor(C_C[i,j,k,l]*eps_C[k,l],(i,j))
+            sigma1_c =  as_tensor(C_C[i,j,k,l]*eps1_C[k,l],(i,j))
 
             #test function strain/stress:
-            eps_vC = self.XSs[0].warping2strain(vC,0)
-            sigma_vc =  as_tensor(C_C[i,j,k,l]*eps_vC[k,l],(i,j))
+            eps_vC = self.collisions[collision].mortar_xs.warping2strain(vC,0)
+            eps1_vC = self.collisions[collision].mortar_xs.warping2strain(vC,1)
+            sigma_vC =  as_tensor(C_C[i,j,k,l]*eps_vC[k,l],(i,j))
+            sigma1_vC =  as_tensor(C_C[i,j,k,l]*eps1_vC[k,l],(i,j))
 
             #traction stiffness matrix:
-            SC_ufl = self.nu_t * dot(dot(sigma_c,n3),dot(sigma_vc,n3))*ds
+            SC_ufl = self.nu_t * dot(dot(sigma_c,n3),dot(sigma_vC,n3))*ds
+            # SC_ufl = self.nu_t * inner(sigma_c,sigma_vC)+inner(sigma_c,sigma_vC)*dx_C
+            # SC_ufl = self.nu_t * inner(sigma_c,sigma_vC)*dx_C
+            # SC_ufl = self.nu_t * inner(eps_vC,eps_C)*dx_C
+            # SC_ufl = self.nu_t * inner(eps_vC,eps_C)*ds
+            # SC_ufl = self.nu_t * (inner(eps_vC,eps_C)+ inner(eps1_vC,eps1_C))*dx_C
+            # SC_ufl = self.nu_t * (dot(dot(sigma_c,n3),dot(sigma_vC,n3))+ dot(dot(sigma1_c,n3),dot(sigma1_vC,n3)))*ds
+            # SC_ufl = self.nu_t * sigma_vC[i,j]*eps_C[i,j]*dx_C
             SC_form = fem.form(SC_ufl)
             S_C = fem.petsc.assemble_matrix(SC_form)
             S_C.assemble()
@@ -1983,6 +1937,11 @@ class CoupledCrossSection:
             self.collisions[collision].SC_form = SC_form
             self.collisions[collision].S_C = S_C
 
+            #construct overlap correction forms:
+            self.collisions[collision].mortar_xs._construct_xs_form()
+            
+            self.collisions[collision].mortar_xs.a_form = fem.form(self.collisions[collision].mortar_xs.a00)
+            
 
     def _assemble_mortar_matrices(self):
         for collision in self.collisions:
@@ -1999,82 +1958,50 @@ class CoupledCrossSection:
             # self.collisions[collision].SC_form = S_C_form
             self.collisions[collision].S_C = S_C
 
+            #assemble overlap correction term:
+            self.collisions[collision].mortar_xs.K_bar = fem.petsc.assemble_matrix(self.collisions[collision].mortar_xs.a_form)
+            self.collisions[collision].mortar_xs.K_bar.assemble()
+    
+    # def _construct_overlap_correction(self):
+    #     '''
+    #     construct the mortar warping stiffness matrix used in overlap correction
+        
+    #     '''
+    #     for collision in self.collisions:
+    #         self.collisions[collision].mortar_xs._construct_xs_form()
+    #         self.collisions[collision].mortar_xs.a_form = fem.form(self.collisions[collision].mortar_xs.a00)
+    #         self.collisions[collision].mortar_xs.K_bar = fem.petsc.assemble_matrix(self.collisions[collision].mortar_xs.a_form)
+
     def _construct_coupling_terms(self):
         for collision in self.collisions:
-            #mortar mesh has previously been constructed:
-            # mesh_C = self.collisions[collision].mortar_mesh.msh
-        
-            # #intialize functions on mortar mesh and add to collision
-            # # Ve_C = element("CG",mesh_C.topology.cell_name(),1,shape=(3,))
-            # # self.collisions[collision].fxn_space = fem.functionspace(mesh_C, mixed_element(4*[Ve_C]))
-            # VC = self.collisions[collision].fxn_space
-            
-            # # self.collisions[collision].u = TrialFunction(VC)
-            # # self.collisions[collision].v = TestFunction(VC)
-            # # self.collisions[collision].dx = Measure("dx",domain=mesh_C)
-            # uC = self.collisions[collision].u
-            # vC = self.collisions[collision].v
-            # dx_C = self.collisions[collision].dx
 
-            # #construct projection operators
-            # self.collisions[collision].PA = get_interpolation_matrix(VC,self.XSs[collision[0]].V,mixed=True)
-            # self.collisions[collision].PB = get_interpolation_matrix(VC,self.XSs[collision[1]].V,mixed=True)
-
-            #construct displacement term (penalty weighted mass matrix)
-            # MC_form = self.nu_u * inner(uC, vC) * dx_C
-            # MC_form = self.collisions[collision].MC_form 
-            # MC = fem.petsc.assemble_matrix(fem.form(MC_form))
-            # MC.assemble()
-            # self.collisions[collision].MC_form = MC_form
-            # self.collisions[collision].MC = MC
-            MC = self.collisions[collision].MC
-
-            # #construct traction term (penalty weighted traction matrix)
-            # n = FacetNormal(mesh_C)
-            # n3 = as_tensor([0,n[0],n[1]])
-
-            # #DG0 space, used for material properties, etc
-            # Q = fem.functionspace(mesh_C,('DG',0))
-            # #construct DG spaces for modulus of elasticity and poisson ratio (assuming all materials are ISOTROPIC)
-            # E = fem.Function(Q)
-            # nu = fem.Function(Q)
-            # E.x.array[:] = np.full_like(E.x.array,self.XSs[0].materials[0].E,dtype=default_scalar_type)
-            # nu.x.array[:] = np.full_like(nu.x.array,self.XSs[0].materials[0].nu,dtype=default_scalar_type)
-            # C_C = getMatConstitutiveIsotropic(mesh_C,E,nu)
-            # i,j,k,l = indices(4)
-
-            # #trial function strain/stress:
-            # eps_C = self.XSs[0].warping2strain(uC,0)
-            # sigma_c =  as_tensor(C_C[i,j,k,l]*eps_C[k,l],(i,j))
-
-            # #test function strain/stress:
-            # eps_vC = self.XSs[0].warping2strain(vC,0)
-            # sigma_vc =  as_tensor(C_C[i,j,k,l]*eps_vC[k,l],(i,j))
-
-            # #traction stiffness matrix:
-            # S_C_form = self.nu_t * dot(dot(sigma_c,n3),dot(sigma_vc,n3))*ds
-            # S_C_form = self.collisions[collision].SC_form 
-            # S_C = fem.petsc.assemble_matrix(fem.form(S_C_form))
-            # S_C.assemble()
-            # self.collisions[collision].SC_form = S_C_form
-            # self.collisions[collision].S_C = S_C
-            S_C = self.collisions[collision].S_C 
-
-
-            #construct displacement penalty terms
+            #interpolation operators
             PA = self.collisions[collision].PA
             PB = self.collisions[collision].PB
+
+            #construct displacement penalty terms
+            MC = self.collisions[collision].MC
+
             S_AA = AT_C_B(PA, MC, PA)
             S_AB = AT_C_B(PA, MC, PB)
             S_BA = AT_C_B(PB, MC, PA)
             S_BB = AT_C_B(PB, MC, PB)
 
             #add traction term to the penalty terms:
+            S_C = self.collisions[collision].S_C 
+
             S_AA.axpy(1.0, AT_C_B(PA, S_C, PA) )
             S_AB.axpy(1.0, AT_C_B(PA, S_C, PB) )
             S_BA.axpy(1.0, AT_C_B(PB, S_C, PA) )
             S_BB.axpy(1.0, AT_C_B(PB, S_C, PB) )
 
+            #add overlap correction to main system diagonal blocks
+            K_C = self.collisions[collision].mortar_xs.K_bar
+
+            S_AA.axpy(-0.5,AT_C_B(PA,K_C,PA))
+            S_BB.axpy(-0.5,AT_C_B(PB,K_C,PB))
+
+            #store to collision for later addition to overall system
             self.collisions[collision].Sij = [[S_AA,S_AB],
                                               [S_BA,S_BB]]
         
@@ -2110,36 +2037,8 @@ class CoupledCrossSection:
         
         return
 
-
-    # def _initialize_mortar_mesh_fxns(self):
-        
-    #     return
-    
-    # def _get_projection_operators(self):
-    #     return
-    
-
-    # def _construct_disp_term(self):
-    #     return
-    
-    # def _construct_traction_term(self):
-    #     return
-    
-    # def _assemble_coupled_system(self):
-    #     return
-    
     def _solve_coupled_system(self):
-        #create functions for solution for each region
-        # for xs_num,xs in enumerate(self.XSs):
-        #     #create the warping function and the lagrange multiplier vectors
-        #     xs.uh = fem.Function(xs.V, name="u_"+str(xs_num))
-        #     xs.lmbdah= fem.Function(xs.V_lm,name="lmbda_"+str(xs_num))
-        #     # xs.warping_functions = []
-        #     # xs.lmbdas = []
-
         #================== solve constrained system for each mode ==================#           
-        residuals = []
-        L1_list = self.XSs[0].L_form[1] #all global constraints are identical
         for idx_l in range(6):
             self.XSs[0].f1.value = 0
             self.XSs[0].f1.value[idx_l] = 1
@@ -2153,7 +2052,7 @@ class CoupledCrossSection:
 
             #solve the linear systesm
             self.solver.solve(b, xh)
-            # xh.ghostUpdd_residuals_lmbdaate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+            # xh.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
             #get the local vectors:
             x_local = []
@@ -2164,47 +2063,11 @@ class CoupledCrossSection:
 
             #populate the warping function and the lagrange multiplier vectors
             for xs_num,xs in enumerate(self.XSs):
-                #populate the warping function and the lagrange multiplier vectors
-                # xs.uh = fem.Function(xs.V, name="u_"+str(xs_num)+"_"+str(idx_l))
-                # xs.lmbdah= fem.Function(xs.V_lm,name="lmbda_"+str(xs_num)+"_"+str(idx_l))
-
-                # xs.uh.x.array[: len(x_local[xs_num])] = x_local[xs_num]
-                # xs.lmbdah.x.array[: len(x_local[-1])] = x_local[-1]
-                # xs.warping_functions.append(xs.uh.copy())
-                # xs.lmbdas.append(xs.lmbdah.copy())
                 xs.warping_functions[idx_l].x.array[:] = x_local[xs_num]
                 xs.lmbdas[idx_l].x.array[:] = x_local[-1]
+
             # uh.x.scatter_forward()
             # lmbdah.x.scatter_forward()
-
-            # solutions.append(xh.copy())
-
-            # xs.uh.copy() for xs in self.XSs
-            # lmbdas.append([xs.lmbdah.copy() for xs in self.XSs])
-
-            # #TODO: currently, need to do this because we are using a ufl.TestFunction() in the residual construction
-            # #       This can be re-written so that uh is used to construct the form, so that we don't have to repeatedly
-            # #       re-assemble a00,a10 or a01, just L0 and L1
-            # a00_form = squareXS._construct_xs_form(uh,return_form=True)
-            # a01_form = inner(lmbdah,constraints(squareXS.v))*dx
-            # a10_form = inner(dlmbda, constraints(uh)) * dx
-
-            # #main system residual
-            # residual00 = a00_form + a01_form - L0 
-            # #lagrange multiplier system residual
-            # residual10 = a10_form - L1
-
-            # residuals.append((residual00,residual10))
-
-            # print(f'lagrange multipliers for mode{k}:{x_local[2]}')
-
-
-        #==================== compute overall stiffness matrix ======================#
-        #populate individual functions with warping fucntions
-        # for xs in self.XSs:
-        #     xs.warping_functions = [function[0] for function in functions]
-        # TXS_nm.XSs[1].warping_functions = [functionAB[1] for functionAB in functions]
-
 
         return
     
@@ -2219,9 +2082,11 @@ class CoupledCrossSection:
         v_j = self.collisions[collision].v_j 
         MC_ufl= self.collisions[collision].MC_ufl
         SC_ufl = self.collisions[collision].SC_ufl
+        KC_ufl = self.collisions[collision].mortar_xs.a00
 
         self.collisions[collision].pMCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(MC_ufl,u_j),v_j),x,dX))
         self.collisions[collision].pSCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(SC_ufl,u_j),v_j),x,dX))
+        self.collisions[collision].pKCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(KC_ufl,u_j),v_j),x,dX))
         print('DONE compling coupling forms')
 
 
@@ -2275,6 +2140,33 @@ class CoupledCrossSection:
 
 
             vec = fem.assemble_vector(self.collisions[collision].pSCpx_form)
+            d_input += vec.array
+
+        return d_input
+
+    def _compute_vjp_dKC(self,d_output,collision):
+        VX = self.collisions[collision].mortar_mesh.V_x
+        d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
+        d_input = np.zeros(d_inputs_size)
+
+        u_j = self.collisions[collision].u_j 
+        v_j = self.collisions[collision].v_j
+
+        for j in np.unique(np.nonzero(d_output)[1]):
+            u_j.x.array[:] = 0.0
+            u_j.x.array[j] = 1.0                
+
+            v_j.x.array[:] = d_output[:, j]     # column j = coefficients Λ_{ij}
+
+            #this only computes the scalar value, needs to be done with the spatial derivative
+            # fem.assemble_scalar(fem.form(ufl.action(ufl.action(self.a_form[0][0],u_j),v_j)))
+
+            #TODO: update to use the actual passed form and function spaces
+            #i barely understand this myself, but we start with a bilinear form, then we compute the "double-action", 
+            # this gives us a form (scalar), then we take the spatial derivative of that and add to the d_inputs vec
+
+
+            vec = fem.assemble_vector(self.collisions[collision].pKCpx_form)
             d_input += vec.array
 
         return d_input
@@ -2644,10 +2536,40 @@ class CoupledCrossSection:
             self.K1 += self.XSs[i].K1
             self.K2 += self.XSs[i].K2
 
-            # self.S += self.XSs[i].S
-            # self.K += self.XSs[i].K
-
             self.A += self.XSs[i].A
+
+        for collision in self.collisions:
+            for idx in range(6):
+                self.collisions[collision].PA.mult(self.XSs[0].warping_functions[idx].x.petsc_vec,self.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
+            self.collisions[collision].mortar_xs._compute_xs_stiffness_matrix()
+            # self.K1 -= self.collisions[collision].mortar_xs.K1
+            # self.K2 -= self.collisions[collision].mortar_xs.K2
+            
+            K1CA = self.collisions[collision].mortar_xs.K1
+            K2CA = self.collisions[collision].mortar_xs.K2
+            
+            self.K1 -= 0.5*self.collisions[collision].mortar_xs.K1
+            self.K2 -= 0.5*self.collisions[collision].mortar_xs.K2
+
+            for idx in range(6):
+                self.collisions[collision].PB.mult(self.XSs[1].warping_functions[idx].x.petsc_vec,self.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
+            self.collisions[collision].mortar_xs._compute_xs_stiffness_matrix()
+            K1CB = self.collisions[collision].mortar_xs.K1
+            K2CB = self.collisions[collision].mortar_xs.K2
+
+            self.K1 -= 0.5*self.collisions[collision].mortar_xs.K1
+            self.K2 -= 0.5*self.collisions[collision].mortar_xs.K2
+        
+        #apply threshholding:
+        s1 = np.max(np.abs(np.diag(self.K2)))
+        s2 = np.max(np.abs(np.diag(self.K2)))
+        eta = 1e-8
+        mask_1 = (np.abs(self.K1) < s1*eta)
+        mask_2 = (np.abs(self.K2) < s2*eta)
+        np.fill_diagonal(mask_1,False)
+        np.fill_diagonal(mask_2,False)
+        self.K1[mask_1] = 0.0
+        self.K2[mask_2] = 0.0 
 
         self.K1inv = np.linalg.inv(self.K1)
 

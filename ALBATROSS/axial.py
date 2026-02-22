@@ -526,7 +526,6 @@ class Axial:
                 d_inputs[i,j] = d_residuals_vec.dot(dRdk_vec)
                 
                 
-                
                 # dFdKij=fem.petsc.assemble_matrix(fem.form(ufl.diff(self.a_form,self.k[i,j])))        
                 # dFdKij.assemble()
 
@@ -545,7 +544,7 @@ class Axial:
         return d_inputs   
 
     def apply_inverse_jacobian(self,d_outputs):
-        #this approach works as long as we don't have RHS value that depend on the state
+        #this approach works as long as we don't have an RHS value that depend on the state
         d_residuals = self.A_mat.createVecLeft()
         d_residuals.setUp()
         d_outputs_vec = self.A_mat.createVecRight()

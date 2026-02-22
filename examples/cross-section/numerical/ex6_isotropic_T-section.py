@@ -2,13 +2,14 @@
 import ALBATROSS
 from dolfinx.io import XDMFFile
 import numpy as np
+from mpi4py import MPI
 
 #create mesh
 N = 6
-H = 1.0
-W= 1.0
-tf = 0.1
-tw = 0.1
+H = 0.1 #m
+W= 0.1 #m
+tf = H*0.1
+tw = W*0.1
 
 dims = [H,W,tf,tw]
 num_el = [N,N]#number of elements through each wall thickness
@@ -17,7 +18,7 @@ domain.name = f'conformal_t-section_N{N}'
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':100,'nu':0.2},
+                                           mech_props={'E':70e9,'nu':0.33},
                                            density=2700)
 
 #initialize cross-section object
@@ -62,11 +63,10 @@ print(E*I2)
 print("Computed bending stiffness 2:")
 print(TXS.K[5,5])
 
-# np.save(f"T_section_K_n_{N}.npy", TXS.K)
+np.save(f"T_section_K_n_{N}_H{H}_W{W}.npy", TXS.K)
 
-from dolfinx import io
-from mpi4py import MPI
-with io.XDMFFile(MPI.COMM_WORLD, f"output/{domain.name}.xdmf", "w") as xdmf:
+
+with XDMFFile(MPI.COMM_WORLD, f"output/{domain.name}.xdmf", "w") as xdmf:
         xdmf.write_mesh(domain)
 
 #demonstration of displacement and stress recovery for unit forces and moments applied to the cross-section
@@ -101,3 +101,5 @@ def write_xdmfs(fxn_list):
 write_xdmfs(disps)
 write_xdmfs(stresses)
 write_xdmfs(von_mises_list)
+
+print()

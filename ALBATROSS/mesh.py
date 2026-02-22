@@ -71,18 +71,21 @@ class MeshMotion():
           #update boundary conditions
           displacement = x_new - self.msh.geometry.x[self.moved_nodes,:2]
           self.u_bc.x.array[self.moved_dofs] = displacement.T.flatten()
+          # self.u_bc.x.array[self.moved_dofs] = displacement[np.argsort(self.moved_nodes)].T.flatten()
           self.u_bc.x.scatter_forward()
           
           self.problem.solve()
 
           deformation_array = self.uh.x.array.reshape((-1, self.msh.geometry.dim))
           new_mesh_coords = self.msh.geometry.x[self.nodes_to_move, 0:2] + deformation_array[self.nodes_to_move,0:2]
+          # deformation_array = self.uh.x.array[self.dofs_to_move].reshape(( self.msh.geometry.dim),-1).T
+          # new_mesh_coords = self.msh.geometry.x[self.nodes_to_move, :2] + deformation_array#[self.nodes_to_move,:2]
      
           return new_mesh_coords
      
      def plot_current_mesh_state(self):
           #TODO: need to not update the mesh here
-          self.msh.geometry.x[self.nodes_to_move,0:2] += self.uh.x.array.reshape((-1, self.msh.geometry.dim))[self.nodes_to_move,:]
+          self.msh.geometry.x[:,:2] += self.uh.x.array.reshape((-1, self.msh.geometry.dim))
 
           #plot mesh
           pyvista.global_theme.background = [255, 255, 255, 255]

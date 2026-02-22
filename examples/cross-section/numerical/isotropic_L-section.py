@@ -1,22 +1,23 @@
 #simple example of cross-sectional analysis of an isotropic symmetric box:
 import ALBATROSS
-
+from dolfinx.io import XDMFFile
 import numpy as np
+from mpi4py import MPI
 
 #create mesh
-N = 2
-H = 1
-W= 1
-tfh = 0.1
-tfw = 0.1
+N = 6
+H = .1
+W= .1
+tfh = 0.01
+tfw = 0.01
 
 dims = [H,W,tfh,tfw]
 num_el = [N,N]#number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_L_section(dims,num_el,'L_section')
-
+domain.name = 'L_section'
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':100,'nu':0.2},
+                                           mech_props={'E':70e9,'nu':0.33},
                                            density=2700)
 
 #initialize cross-section object
@@ -63,6 +64,44 @@ print(E*I2)
 print("Computed bending stiffness 2:")
 print(LXS.K[5,5])
 
+np.save(f"L_section_K_n_{N}_H{H}_W{W}.npy", LXS.K)
+
+
 # LXS.compute_xs_stiffness_matrix_sensitivities()
 
 # LXS.plot_sensitivities()
+
+#demonstration of displacement and stress recovery for unit forces and moments applied to the cross-section
+LXS.setup_recovery()
+disps = []
+stresses = []
+von_mises_list = []
+for i,reaction in enumerate(['axial','shear_x','shear_y','torsion','bending_x','bending_y']):
+    reactions = np.zeros((6,))
+    reactions[i]=1
+    disp = LXS.recover_displacement(reactions)
+    disp.name = reaction
+    disps.append(disp)
+
+    stress = LXS.recover_stress(reactions)
+    stress.name = 'sigma_'+ reaction
+    stresses.append(stress)
+
+    von_mises = LXS.get_von_mises(reactions)
+    von_mises.name = 'von_mises_'+ reaction
+    von_mises_list.append(von_mises)
+    
+def write_xdmfs(fxn_list):
+    for i,fxn in enumerate(fxn_list):
+        fn = f"output/{domain.name}_{i}_{fxn.name}.xdmf"
+        with XDMFFile(MPI.COMM_WORLD, fn, "w") as xdmf:
+            xdmf.write_mesh(domain)
+            xdmf.write_function(fxn,0.0)
+
+
+#write displacements and stresses:
+write_xdmfs(disps)
+write_xdmfs(stresses)
+write_xdmfs(von_mises_list)
+
+print()

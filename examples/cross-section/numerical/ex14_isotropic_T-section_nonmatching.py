@@ -18,8 +18,8 @@ import numpy as np
 # m1,n1 = 10,1
 # m2,n2 = 1,9
 
-N = 28
-offset = 0
+N = 8
+offset = 1
 
 m1,n1 = N*10+offset,N
 m2,n2 = N,N*10+offset
@@ -51,13 +51,13 @@ meshes= [mesh_0,mesh_1]
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':100,'nu':0.2},
+                                           mech_props={'E':10e6,'nu':0.2},
                                            density=2700)
 
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e1,pen_t=1e2)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e6,pen_t=1)
 
 TXS_nm.plot_meshes()
 
@@ -103,10 +103,10 @@ dims = [H,W,tf,tw]
 num_el = [N,N]#number of elements through each wall thickness
 domain = ALBATROSS.mesh.create_T_section(dims,num_el,'T_section')
 
-unobtainium = ALBATROSS.material.Material(name='unobtainium',
-                                           mat_type='ISOTROPIC',
-                                           mech_props={'E':100,'nu':0.2},
-                                           density=2700)
+# unobtainium = ALBATROSS.material.Material(name='unobtainium',
+#                                            mat_type='ISOTROPIC',
+#                                            mech_props={'E':E,'nu':0.2},
+#                                            density=2700)
 
 #initialize cross-section object
 TXS = ALBATROSS.cross_section.CrossSection(domain,[unobtainium])

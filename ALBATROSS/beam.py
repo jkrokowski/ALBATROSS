@@ -74,7 +74,7 @@ class Beam(Axial):
 
             print("Linking cross-sectional properties to axial mesh...")
             self._link_xs_to_axial()
-            self.update_k() #TODO: this is a bit of temporary hack to overwrite the fem.function with ufl variables
+            # self.update_k() #TODO: this is a bit of temporary hack to overwrite the fem.function with ufl variables
 
         elif xs_type == 'precomputed':
             #For usage with fully populated beam constitutive matrices

@@ -73,13 +73,13 @@ meshes= [mesh_0,mesh_1,mesh_2,mesh_3]
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':100,'nu':0.2},
+                                           mech_props={'E':70e9,'nu':0.2},
                                            density=2700)
 
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
-boxXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e4)
+boxXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e5,pen_t=1e5)
 
 boxXS_nm.get_xs_stiffness_matrix()
 
