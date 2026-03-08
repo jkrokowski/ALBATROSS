@@ -62,7 +62,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e7)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e4,pen_t=1e4)
 TXS_nm.get_xs_stiffness_matrix()
 TXS_nm.plot_meshes()
 

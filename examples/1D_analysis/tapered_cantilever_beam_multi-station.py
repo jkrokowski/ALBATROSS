@@ -20,10 +20,13 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 20 #number of quad elements per side on xc mesh
-W = .1 #xs width
-H = .1 #xs height
-A = W*H #xs area
+N = 10 #number of quad elements per side on xc mesh
+W_root = .2 #xs width
+H_root = .2 #xs height
+W_tip = .1 #xs width
+H_tip = .1 #xs height
+A_root = W_root*H_root #xs area
+A_tip = W_tip*H_tip
 L = 20 
 
 #define tip load magnitude 
@@ -33,9 +36,11 @@ F = .01
 p1 = (0,0,0)
 p2 = (L,0,0)
 
-#create cross-sectional mesh
-points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
-squareXSmesh = ALBATROSS.mesh.create_rectangle(points,[N,N])
+# #create cross-sectional mesh
+# root_points = [[-W_root/2,-H_root/2],[W_root/2, H_root/2]] #bottom left and upper right point of square
+# rootmesh = ALBATROSS.mesh.create_rectangle(root_points,[N,N])
+# tip_points = [[-W_tip/2,-H_tip/2],[W_tip/2, H_tip/2]] #bottom left and upper right point of square
+# tipmesh = ALBATROSS.mesh.create_rectangle(tip_points,[N,N])
 
 #initialize material object
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
@@ -44,23 +49,34 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            density=2700)
 
 #initialize and run cross-sectional analysis
-squareXS = ALBATROSS.cross_section.CrossSection(squareXSmesh,[unobtainium])
-squareXS.get_xs_stiffness_matrix()
-xs_list = [squareXS]
+xs_list = []
+num_xs=10
+span_ref = np.linspace(0,1,num_xs)
+W_station = W_root + span_ref*(W_tip-W_root)
+H_station = H_root + span_ref*(H_tip-H_root)
+for i in range(num_xs):
+    pts = [[-W_station[i]/2,-H_station[i]/2],[W_station[i]/2, H_station[i]/2]] #bottom left and upper right point of square
+    msh = ALBATROSS.mesh.create_rectangle(pts,[N,N])
+    XS = ALBATROSS.cross_section.CrossSection(msh,[unobtainium])
+    XS.get_xs_stiffness_matrix()
+    xs_list.append(XS)
 
 #create a beam axis
-meshname = 'ex_1'
-nodal_points = [p1,p2]
+meshname = 'tapered_beam'
+# nodal_points = [p1,p2]
+nodal_points = [(p1[0] + span*(p2[0]-p1[0]),
+                 p1[1] + span*(p2[1]-p1[1]),
+                 p1[1] + span*(p2[2]-p1[1])) for span in span_ref]
 # number of segments of the beams that use different cross-sections
-num_segments = len(nodal_points)-1 
-num_ele = [100] #number of subdivisions for each beam segment
+num_segments = num_xs-1
+num_ele = [5]*num_segments #number of subdivisions for each beam segment
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
 
-#define orientation of each xs with a vector
-orientations = np.tile([0,1,0],num_segments+1)
+#define orientation of each xs with a vector 
+orientations = np.tile([0,1,0],num_xs)
 
 #collect all xs information
-xs_adjacency_list = [[0,0]] #this is the trivial connectivity for a uniform beam 
+xs_adjacency_list = [[i,i+1] for i in range(num_segments)] #this is the trivial connectivity for a tapered beam
 xs_info = [xs_list,orientations,xs_adjacency_list]
 
 #################################################################
@@ -82,12 +98,6 @@ CantileverBeam.add_point_load([(0,0,-F)],[p2])
 #solve the linear problem
 CantileverBeam.solve()
 
-#compute beam mass:
-CantileverBeam.get_mass()
-
-CantileverBeam.write_deformation()
-
-
 #################################################################
 ######### POSTPROCESSING, TESTING & VISUALIZATION ############
 #################################################################
@@ -98,27 +108,28 @@ CantileverBeam.plot_axial_displacement(warp_factor=10)
 #recovers the 3D displacement field over each xs
 CantileverBeam.recover_displacement()
 
-# #shows plot of stress over cross-section 
-# CantileverBeam.recover_stress()
+#shows plot of stress over cross-section 
+CantileverBeam.recover_stress()
 
-# #plots both 1D and 2D solutions together
-# CantileverBeam.plot_xs_disp_3D()
+#plots both 1D and 2D solutions together
+CantileverBeam.plot_xs_disp_3D()
 
-#compare with an analytical EB bending solution 
-# for this relatively slender beam, this should be nearly identical to the timoshenko solution)
-print('Max Tip Deflection for point load')
-print('EB analytical solution:')
-E=unobtainium.E
-I = W*H**3/12
-print( (-F*L**3)/(3*E*I) )
+#TODO: update analytical model based on a linear taper ratio
+# #compare with an analytical EB bending solution 
+# # for this relatively slender beam, this should be nearly identical to the timoshenko solution)
+# print('Max Tip Deflection for point load')
+# print('EB analytical solution:')
+# E=unobtainium.E
+# I = W*H**3/12
+# print( (-F*L**3)/(3*E*I) )
 
-print('ALBATROSS computed value:')
-print(CantileverBeam.get_local_disp([p2])[0][2])
-print('------')
+# print('ALBATROSS computed value:')
+# print(CantileverBeam.get_local_disp([p2])[0][2])
+# print('------')
 
-print('Maximum Stress for point load (at root of beam)')
-print('EB analytical solution:')
-M = -F*L #maximum moment
-print( (-H/2)* (M) / I  )
-print('ALBATROSS computed value:')
-print( CantileverBeam.get_max_stress() )
+# print('Maximum Stress for point load (at root of beam)')
+# print('EB analytical solution:')
+# M = -F*L #maximum moment
+# print( (-H/2)* (M) / I  )
+# print('ALBATROSS computed value:')
+# print( CantileverBeam.get_max_stress() )

@@ -62,7 +62,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e4)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e4,pen_t=1e4)
 TXS_nm.get_xs_stiffness_matrix()
 TXS_nm.plot_meshes()
 
@@ -251,10 +251,12 @@ outputs_C = coupling_terms.evaluate(inputs_C)
 
 M_C = outputs_C.MC
 S_C = outputs_C.SC
+K_C = outputs_C.KC
 # F_C = outputs_C.F_C
 
 M_Cii = M_C[:3,:3]
 S_Cii = S_C[:2,:2]
+K_Cii = K_C[:2,:2]
 # K_Aii = K_A[3,3]
 
 sim = csdl.experimental.PySimulator(recorder)
@@ -269,6 +271,9 @@ dMiidxC_FD = sim.check_totals(M_Cii,xy_C,step_size=0.000001)
 # dSiidxC = csdl.derivative(S_Cii,xy_C)
 # dSiidxC_FD = sim.compute_totals(S_Cii,xy_C,use_finite_difference=True,finite_difference_step_size=0.000001)
 dSiidxC_FD = sim.check_totals(S_Cii,xy_C,step_size=0.000001)
+
+
+dKiidxC_FD = sim.check_totals(K_Cii,xy_C,step_size=0.000001)
 
 
 

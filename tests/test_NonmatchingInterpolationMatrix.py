@@ -62,7 +62,7 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e4)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e4,pen_t=1e4)
 
 TXS_nm.plot_meshes()
 
@@ -231,8 +231,8 @@ dP_Adx_C = csdl.derivative(P_Aii,xy_C)
 sim = csdl.experimental.PySimulator(recorder)
 sim.run()
 
-dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.00000001)
-dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.00000001)
+dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.00001)
+dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.00001)
 
 #we actually expect some issues here with the x_A mesh nodes derivatives, since some motions can move the 
 print('derivatives w.r.t. x_A')

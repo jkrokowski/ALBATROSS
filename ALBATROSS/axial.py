@@ -508,39 +508,34 @@ class Axial:
         d_residuals_vec_size = self.b.getSize()
         d_residuals_vec = PETSc.Vec().createSeq(d_residuals_vec_size, comm=PETSc.COMM_SELF)
         
-        #set up output vector sizes
-        # d_inputs_vec_size = self.T_66.dofmap.index_map_bs*self.T_66.dofmap.index_map.size_global
-        # d_inputs_vec = PETSc.Vec().createSeq(d_inputs_vec_size, comm=PETSc.COMM_SELF)
-        # dRdk_vec = PETSc.Vec().createSeq(d_residuals_vec_size, comm=PETSc.COMM_SELF)
-
-        # d_inputs_vec =  PETSc.Vec().createSeq(36, comm=PETSc.COMM_SELF)
-        
         d_residuals_vec.array[:] = d_residuals
 
-        d_inputs = np.zeros((6,6))
-        for i in range(6):
-            for j in range(6):
-                #compute the derivative of the beam linear functional w.r.t. the Kij entry
-                dRdk_vec = fem.petsc.assemble_vector(fem.form(ufl.diff(self.F_form,self.k[i,j])))
-                # populate value of d_inputs
-                d_inputs[i,j] = d_residuals_vec.dot(dRdk_vec)
-                
-                
-                # dFdKij=fem.petsc.assemble_matrix(fem.form(ufl.diff(self.a_form,self.k[i,j])))        
-                # dFdKij.assemble()
+        d_inputs = np.zeros((self.numxs,36))
 
-                # dFdKij.mult(self.w.x.petsc_vec,dRdk_vec)
-                #numpy version for debugging:
-                # dFdKijnp = convert_petsc_to_numpy(dFdKij)
-                # d_inputs[i,j] = d_residuals_vec.array.dot(dFdKijnp@self.w.x.array )
+        #compute the dRdK from the beam field:
+        dRdK = fem.petsc.assemble_matrix(fem.form(ufl.derivative(self.F_form,self.k)))
+        dRdK.assemble()
 
+        #map the beam field to the station field:
+        dRdK_s = dRdK.matMult(self.P_K)
 
-        # dRdK = fem.petsc.assemble_matrixf(fem.form(derivative(self.F_form,self.k,ufl.TestFunction(self.T_66))))
-        # dRdK.assemble()
+        #get the action of the residual on the station
+        d_station_vec_size = self.K_s.x.array.shape[0]
+        d_station_vec = PETSc.Vec().createSeq(d_station_vec_size, comm=PETSc.COMM_SELF)
+        dRdK_s.multTranspose(d_residuals_vec,d_station_vec)
         
-        # d_residuals_vec.array[dof] = d_residual
-        # dRdK.multTranspose(d_residuals_vec,d_inputs_vec) #perform vec-mat product
-        
+        #map the station field to the individual cross-sections using the transpose of the xs2station map:       
+        d_inputs=self.xs2station.T@d_station_vec.array.reshape((self.station_to_xs.shape[0],36))
+
+
+        # d_inputs = np.zeros((6,6))
+        # for i in range(6):
+        #     for j in range(6):
+        #         #compute the derivative of the beam linear functional w.r.t. the Kij entry
+        #         dRdk_vec = fem.petsc.assemble_vector(fem.form(ufl.diff(self.F_form,self.k[i,j])))
+        #         # populate value of d_inputs
+        #         d_inputs[i,j] = d_residuals_vec.dot(dRdk_vec)
+                       
         return d_inputs   
 
     def apply_inverse_jacobian(self,d_outputs):

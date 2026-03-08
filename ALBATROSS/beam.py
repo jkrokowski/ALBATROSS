@@ -13,6 +13,7 @@ from dolfinx import fem
 import ufl
 from ALBATROSS.cross_section import CrossSectionAnalytical
 from ALBATROSS.axial import Axial
+from ALBATROSS.nonmatching_utils import get_interpolation_matrix
 import numpy as np
 import pyvista
 from dolfinx.plot import vtk_mesh
@@ -73,8 +74,9 @@ class Beam(Axial):
             self._orient_xss()
 
             print("Linking cross-sectional properties to axial mesh...")
-            self._link_xs_to_axial()
-            # self.update_k() #TODO: this is a bit of temporary hack to overwrite the fem.function with ufl variables
+            # self._link_xs_to_axial()
+            self._build_station_to_beam_param()
+            self._update_xs_field()
 
         elif xs_type == 'precomputed':
             #For usage with fully populated beam constitutive matrices
@@ -102,7 +104,7 @@ class Beam(Axial):
             print("please use one of the documented methods")
         
         print("Initializing Axial Model (1D Analysis)")
-        super().__init__(self.axial_mesh,self.k,self.o,self.directory)
+        super().__init__(self.axial_mesh,self.K_b,self.o,self.directory)
 
         print("Computing Elastic Energy...")
         self.elastic_energy()
@@ -124,15 +126,11 @@ class Beam(Axial):
         self.O2 = fem.functionspace(self.axial_pos_mesh,element_type)
         self.o2 = fem.Function(self.O2)
         self.o2.x.array[:] = np.array(self.orientations)
-        # self.o2.vector.destroy() #needed for PETSc garbage collection
 
         #interpolate these orientations into the finer 1D analysis mesh
         self.O = fem.functionspace(self.axial_mesh,element_type)
         self.o = fem.Function(self.O)
-        #TODO: need to update based on this syntax change: 
-        # https://fenicsproject.discourse.group/t/segv-fault-when-interpolating-function-onto-different-mesh/13593
-        # https://github.com/FEniCS/dolfinx/blob/v0.7.3/python/test/unit/fem/test_interpolation.py#L720-L765 
-        #TODO: nm_interpolation needs to be fixed here
+
         cell_map_o = self.axial_mesh.topology.index_map(self.axial_mesh.topology.dim)
         num_cells_on_proc = cell_map_o.size_local + cell_map_o.num_ghosts
         cells_o = np.arange(num_cells_on_proc,dtype=np.int32)
@@ -148,15 +146,7 @@ class Beam(Axial):
         #     self.o2.function_space.mesh, padding=1e-14))
 
 
-    def _link_xs_to_axial(self):
-        '''
-        CORE FUNCTION FOR PROCESSING MULTIPLE 2D XSs TO PREPARE A 1D MODEL
-        '''
-
-        # def get_flat_sym_stiff(K_mat):
-        #     K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
-        #     return K_flat
-        
+    def _build_station_to_beam_param(self):
         #determine how the segments are constructed
         if self.segment_type == "CONSTANT":
             scalar_element = ('DG',0)
@@ -166,69 +156,147 @@ class Beam(Axial):
             scalar_element = ('CG',1)
             vector_element = ('CG',1,(3,))
             tensor_element = ('CG',1,(6,6))
+
+        #create functionspaces and functions over STATION mesh
+        self.V_s_K = fem.functionspace(self.axial_pos_mesh,tensor_element)
+        self.K_s = fem.Function(self.V_s_K)
+        self.V_s_S = fem.functionspace(self.axial_pos_mesh,scalar_element)
+        self.linear_density_s = fem.Function(self.V_s_S)
+
+        #create functionspaces and function over BEAM mesh
+        self.V_b_K = fem.functionspace(self.axial_mesh,tensor_element)
+        self.K_b = fem.Function(self.V_b_K)
+        self.V_b_S = fem.functionspace(self.axial_mesh,scalar_element)
+        self.linear_density = fem.Function(self.V_b_S)
+
+        self.P_K = get_interpolation_matrix(self.V_b_K,self.V_s_K)
+        self.P_s = get_interpolation_matrix(self.V_b_S,self.V_s_S)
+        # self.P_s = get_interpolation_matrix(self.V_b_S,self.V_s_S,mixed=True)
+        
+        #CONSTRUCT AN ASSIGNMENT MATRIX THAT MAPS XSs to the station position
+        self.station_to_xs = np.zeros(self.numsegments+1, dtype=int)
+        # left node of first element
+        self.station_to_xs[0] = self.xs_adj_list[0][0]
+
+        # right nodes from each element
+        for e in range(self.numsegments):
+            self.station_to_xs[e+1] = self.xs_adj_list[e][1]
+
+        n_s = self.numsegments+1
+        n_x = len(set(self.station_to_xs))
+
+        self.xs2station = np.zeros((n_s, n_x))
+
+        for s in range(n_s):
+            self.xs2station[s, self.station_to_xs[s]] = 1
+
+    def _update_xs_field(self):    
+        '''
+        update the station beam matrix field from the individual cross-sections
+        then, interpolate to the beam mesh beam matrix field
+        '''
+        #extract the individual beam cross-section matrices into a flattened stack
+        Kx_flat = np.zeros((self.numxs,36))
+        for idx in range(self.numxs):
+            Kx_flat[idx,:]=self.xs_list[idx].K.reshape((1,36))
+
+        #populate array with links to the station beam matrix field
+        arr = self.K_s.x.array  # local + ghost dofs on this rank
+        n_station_dofs_local = arr.size // 36
+        assert arr.size % 36 == 0
+
+        # View the flattened dofs as blocks of 36 (one block per station dof)
+        K_s_blocks = arr.reshape((n_station_dofs_local, 36))
+
+        # station_to_xs must correspond to the same *local dof ordering* as K_s_blocks
+        K_s_blocks[:, :] = Kx_flat[self.station_to_xs[:n_station_dofs_local], :]
+        
+        #interpolate the beam matrix from the station field to the beam field:
+        self.P_K.mult(self.K_s.x.petsc_vec,self.K_b.x.petsc_vec)
+        self.P_s.mult(self.linear_density_s.x.petsc_vec,self.linear_density.x.petsc_vec)
+        
+        return
+
+    # def _link_xs_to_axial(self):
+    #     '''
+    #     CORE FUNCTION FOR PROCESSING MULTIPLE 2D XSs TO PREPARE A 1D MODEL
+    #     '''
+
+    #     # def get_flat_sym_stiff(K_mat):
+    #     #     K_flat = np.concatenate([K_mat[i,i:] for i in range(6)])
+    #     #     return K_flat
+        
+    #     #determine how the segments are constructed
+    #     if self.segment_type == "CONSTANT":
+    #         scalar_element = ('DG',0)
+    #         vector_element = ('DG',0,(3,))
+    #         tensor_element = ('DG',0,(6,6))
+    #     elif self.segment_type == "LINEAR":
+    #         scalar_element = ('CG',1)
+    #         vector_element = ('CG',1,(3,))
+    #         tensor_element = ('CG',1,(6,6))
             
 
-        #We need to construct a continuous field over the axial mesh 
-        #   from the properties computed from each cross-section
-        sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
-        #initialize functions and functionspaces over axial positioning mesh            
-        T2_66 = fem.functionspace(self.axial_pos_mesh,tensor_element)
-        k2 = fem.Function(T2_66)
-        S2 = fem.functionspace(self.axial_pos_mesh,scalar_element)
-        linear_density2 = fem.Function(S2)
+    #     #We need to construct a continuous field over the axial mesh 
+    #     #   from the properties computed from each cross-section
+    #     sym_cond = False #there is an issue with symmetric tensor fxn spaces in dolfinx at the moment
+    #     #initialize functions and functionspaces over axial positioning mesh            
+    #     T2_66 = fem.functionspace(self.axial_pos_mesh,tensor_element)
+    #     k2 = fem.Function(T2_66)
+    #     S2 = fem.functionspace(self.axial_pos_mesh,scalar_element)
+    #     linear_density2 = fem.Function(S2)
 
-        #populate cross-sectional properties over axial positioning mesh
-        for i in range(self.numsegments):
-            for j,xs_idx in enumerate(self.xs_adj_list[i]):
-                xs=self.xs_list[xs_idx]
-                #output stiffess matrix
-                if sym_cond:
-                    print("symmetric mode not available yet,try again soon")
-                    exit()
-                    k2.x.array[21*i,21*(i+1)] = xs.K.flatten()
-                elif not sym_cond:
-                    #TODO: need to think a bit about this mapping, but seems fine rn
-                    k2.x.array[36*j:36*(j+1)] = xs.K.flatten()
-                    linear_density2.x.array[i] = xs.linear_density
-                    # a2.vector.array[i] = xs.A
-                    # rho2.vector.array[i] = xs.rho
-                    # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
+    #     #populate cross-sectional properties over axial positioning mesh
+    #     for i in range(self.numsegments):
+    #         for j,xs_idx in enumerate(self.xs_adj_list[i]):
+    #             xs=self.xs_list[xs_idx]
+    #             #output stiffess matrix
+    #             if sym_cond:
+    #                 print("symmetric mode not available yet,try again soon")
+    #                 exit()
+    #                 k2.x.array[21*i,21*(i+1)] = xs.K.flatten()
+    #             elif not sym_cond:
+    #                 #TODO: need to think a bit about this mapping, but seems fine rn
+    #                 k2.x.array[36*j:36*(j+1)] = xs.K.flatten()
+    #                 linear_density2.x.array[i] = xs.linear_density
+    #                 # a2.vector.array[i] = xs.A
+    #                 # rho2.vector.array[i] = xs.rho
+    #                 # c2.vector.array[2*i:2*(i+1)] = [self.xss[i].yavg,self.xss[i].zavg]
 
-        #interpolate from axial_pos_mesh to axial_mesh 
+    #     #interpolate from axial_pos_mesh to axial_mesh 
 
-        #initialize fxn spaces
-        self.T_66 = fem.functionspace(self.axial_mesh,tensor_element)
-        self.S = fem.functionspace(self.axial_mesh,scalar_element)
+    #     #initialize fxn spaces
+    #     self.T_66 = fem.functionspace(self.axial_mesh,tensor_element)
+    #     self.S = fem.functionspace(self.axial_mesh,scalar_element)
 
-        #interpolate beam constitutive matrix
-        self.k = fem.Function(self.T_66)
+    #     #interpolate beam constitutive matrix
+    #     self.k = fem.Function(self.T_66)
 
-        cell_map_axial = self.axial_mesh.topology.index_map(self.axial_mesh.topology.dim)
-        num_cells_on_proc = cell_map_axial.size_local + cell_map_axial.num_ghosts
-        cells_axial = np.arange(num_cells_on_proc,dtype=np.int32)
-        self.o.interpolate_nonmatching(self.o2, 
-                                       cells_axial,
-                                       interpolation_data=fem.create_interpolation_data(self.O,
-                                                                                    self.O2,
-                                                                                    cells_axial))
+    #     cell_map_axial = self.axial_mesh.topology.index_map(self.axial_mesh.topology.dim)
+    #     num_cells_on_proc = cell_map_axial.size_local + cell_map_axial.num_ghosts
+    #     cells_axial = np.arange(num_cells_on_proc,dtype=np.int32)
+    #     self.o.interpolate_nonmatching(self.o2, 
+    #                                    cells_axial,
+    #                                    interpolation_data=fem.create_interpolation_data(self.O,
+    #                                                                                 self.O2,
+    #                                                                                 cells_axial))
 
-        self.k.interpolate_nonmatching(k2, 
-                                       cells_axial,
-                                       interpolation_data=fem.create_interpolation_data(self.T_66,
-                                                                                    T2_66,
-                                                                                    cells_axial))
+    #     self.k.interpolate_nonmatching(k2, 
+    #                                    cells_axial,
+    #                                    interpolation_data=fem.create_interpolation_data(self.T_66,
+    #                                                                                 T2_66,
+    #                                                                                 cells_axial))
 
-        #interpolate linear density area
-        self.linear_density = fem.Function(self.S)
-        #TODO: nm_interpolation needs to be fixed here
-        self.linear_density.interpolate_nonmatching(linear_density2, 
-                                       cells_axial,
-                                       interpolation_data=fem.create_interpolation_data(self.S,
-                                                                                    S2,
-                                                                                    cells_axial))
+    #     #interpolate linear density area
+    #     self.linear_density = fem.Function(self.S)
+    #     self.linear_density.interpolate_nonmatching(linear_density2, 
+    #                                    cells_axial,
+    #                                    interpolation_data=fem.create_interpolation_data(self.S,
+    #                                                                                 S2,
+    #                                                                                 cells_axial))
 
 
-        print("Done interpolating cross-sectional properties to axial mesh...")
+    #     print("Done interpolating cross-sectional properties to axial mesh...")
     
     def update_k(self):
         '''

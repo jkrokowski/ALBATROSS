@@ -628,9 +628,9 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
                 
         pSCpxT_dSC = self.xs._compute_vjp_dSC(d_outputs['SC'],self.collision)
         
-        pSCpxT_dSC = self.xs._compute_vjp_dSC(d_outputs['KC'],self.collision)
+        pKCpxT_dSC = self.xs._compute_vjp_dKC(d_outputs['KC'],self.collision)
 
-        d_inputs_full = pMCpxT_dMC + pSCpxT_dSC
+        d_inputs_full = pMCpxT_dMC + pSCpxT_dSC + pKCpxT_dSC
 
         d_inputs['xy'] = np.vstack([d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_x_boundary],
                                         d_inputs_full[self.xs.collisions[self.collision].mortar_mesh.dofs_y_boundary]]).T
@@ -939,9 +939,12 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         super().__init__()
         self.beam = beam
         self.tip_point = tip_point
-        self.output_dofs = beam._get_dofs(tip_point,'disp')
+        self.output_dofs_disp = beam._get_dofs(tip_point,'disp')
+        self.output_dofs_rot = beam._get_dofs(tip_point,'rot')
+
         
     def evaluate(self,inputs: csdl.VariableGroup):
+        #stack of flattened beam matrix values (ordered by the beam cross-section)
         self.declare_input('K',inputs.K)
         # self.declare_input('xy')
         # self.declare_input('F',inputs.F)
@@ -953,14 +956,19 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         return outputs
     
     def solve_residual_equations(self, inputs, outputs):
-        self.beam.xs_list[0].K = inputs['K']
+        #update cross-section values in the cross-sectional objects
+        # self.beam.xs_list[0].K = inputs['K']
+        for idx in range(self.beam.numxs):
+            self.beam.xs_list[idx].K[:,:] =inputs['K'][idx,:].reshape((6,6))
         
-        self.beam._link_xs_to_axial()
-        self.beam.update_k()
+        #apply the new cross-sectional values to the beam model
+        self.beam._update_xs_field()
+        #update the forms for the beam model
         self.beam.elastic_energy()
         
         self.beam.solve()
-        print('beam deflection: ',self.beam.w.x.array[self.output_dofs])
+        print('tip deflections (x,y,z): ',self.beam.w.x.array[self.output_dofs_disp])
+        print('tip rotations (theta_x,theta_y,theta_z): ',self.beam.w.x.array[self.output_dofs_rot])
         outputs['d']  = self.beam.w.x.array
         
         self.beam.write_deformation()
@@ -974,8 +982,6 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
 
         we can use similar machinery (just the KSP.solveTranspose() method)
 
-        so this requires a minor mod to the axial .solve() method to make sure the object keeps the solver accessible
-
         '''
 
         d_residuals['d'] = self.beam.apply_inverse_jacobian(d_outputs['d'])    
@@ -987,8 +993,7 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
 
     # def compute_derivatives(self, inputs, outputs, derivatives):
         # return super().compute_derivatives(inputs, outputs, derivatives)
-    
-        # derivatives['M'] = inputs['A']*
+
 
 class SectionPropertyMapper(csdl.CustomExplicitOperation):
     def __init__(self,beam,section_list):

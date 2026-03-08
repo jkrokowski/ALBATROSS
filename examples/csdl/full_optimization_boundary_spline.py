@@ -14,7 +14,7 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 10 #number of quad elements per side on xc mesh
+N = 25 #number of quad elements per side on xc mesh
 W = .099 #xs width
 H = .099 #xs height
 A = W*H #xs area
@@ -33,7 +33,7 @@ points = [[-W/2,-H/2],[W/2, H/2]] #bottom left and upper right point of square
 
 #cross-section mesh definition
 radius = 0.05
-num_el = 10 #number of elements through thickness
+num_el = 25 #number of elements through thickness
 
 xs_msh = ALBATROSS.mesh.create_circle(radius,num_el,'disk')
 
@@ -63,10 +63,10 @@ num_ele = [10] #number of subdivisions for each beam segment
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
 
 #define orientation of each xs with a vector
-orientations = np.tile([0,1,0],num_segments)
+orientations = np.tile([0,1,0],num_segments+1)
 
 #collect all xs information
-xs_adjacency_list = [[0]] #this is the trivial connectivity for a uniform beam 
+xs_adjacency_list = [[0,0]] #this is the trivial connectivity for a uniform beam 
 xs_info = [xs_list,orientations,xs_adjacency_list]
 
 #################################################################
@@ -74,7 +74,7 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 #################################################################
 
 #initialize beam object using beam axis and definition of xs's
-CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
+CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info,segment_type='LINEAR')
 
 #show the orientation of each xs and the interpolated orientation along the beam
 # CantileverBeam.plot_xs_orientations()
@@ -171,7 +171,7 @@ A.name = 'area'
 
 #======= beam deflection ==========#
 inputs_beam = csdl.VariableGroup()
-inputs_beam.K = outputs_sec.K
+inputs_beam.K = outputs_sec.K.reshape((1,36))
 # inputs_beam.A = outputs_sec.A 
 # inputs_beam.F = csdl.Variable(value = F)
 
@@ -181,7 +181,7 @@ beam_model = ALBATROSS.csdl_utils.BeamDeflection(CantileverBeam,
 outputs_beam = beam_model.evaluate(inputs_beam)
 
 #  = csdl.Variable(shape=(1,))
-tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs[2]])
+tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs_disp[2]])
 tip_displacement.name = 'tip_deflection'
 # dddK = csdl.derivative(outputs_beam.d,inputs_beam.K)
 

@@ -43,7 +43,9 @@ unobtainium = ALBATROSS.material.Material(name='unobtainium',
 #initialize and run cross-sectional analysis
 xs = ALBATROSS.cross_section.CrossSection(xs_msh,[unobtainium])
 xs.get_xs_stiffness_matrix()
-xs_list = [xs]
+xs1 = ALBATROSS.cross_section.CrossSection(xs_msh,[unobtainium])
+xs1.get_xs_stiffness_matrix()
+xs_list = [xs,xs1]
 
 #create a beam axis
 meshname = 'ex_1'
@@ -54,10 +56,10 @@ num_ele = [10] #number of subdivisions for each beam segment
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
 
 #define orientation of each xs with a vector
-orientations = np.tile([0,1,0],num_segments)
+orientations = np.tile([0,1,0],num_segments+1)
 
 #collect all xs information
-xs_adjacency_list = [[0]] #this is the trivial connectivity for a uniform beam 
+xs_adjacency_list = [[0,1]] #this is the trivial connectivity for a uniform beam 
 xs_info = [xs_list,orientations,xs_adjacency_list]
 
 #################################################################
@@ -65,7 +67,7 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 #################################################################
 
 #initialize beam object using beam axis and definition of xs's
-CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
+CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info,segment_type='LINEAR')
 
 #show the orientation of each xs and the interpolated orientation along the beam
 # CantileverBeam.plot_xs_orientations()
@@ -90,7 +92,11 @@ xy_interior = xs_msh.geometry.x[xs.interior_nodes,0:2]
 recorder = csdl.Recorder(inline=True)
 recorder.start()
 
-K = csdl.Variable(value=CantileverBeam.xs_list[0].K)
+K0 = csdl.Variable(value=CantileverBeam.xs_list[0].K.reshape(1,36))
+K1 = csdl.Variable(value=CantileverBeam.xs_list[1].K.reshape(1,36))
+
+K = csdl.vstack([K0,K1])
+K.name = 'stacked_mats'
 
 #======= beam deflection ==========#
 inputs_beam = csdl.VariableGroup()
@@ -102,19 +108,20 @@ beam_model = ALBATROSS.csdl_utils.BeamDeflection(CantileverBeam,
 outputs_beam = beam_model.evaluate(inputs_beam)
 
 #  = csdl.Variable(shape=(1,))
-tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs[2]])
+tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs_disp[2]])
 tip_displacement.name = 'tip_deflection'
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues
 # recorder.stop()
 
 sim = csdl.experimental.PySimulator(recorder)
-sim.run()
+# sim.run()
 
 # recorder.visualize_adjacency_matrix()
 # dddx = csdl.derivative(tip_displacement,xy)
 #uncommment this to check the total derivatives of the pipeline
-dddK = sim.check_totals(tip_displacement,K,step_size=0.001)
+dddK0 = sim.check_totals(tip_displacement,K0,step_size=0.001)
+dddK1 = sim.check_totals(tip_displacement,K1,step_size=0.001)
 
 # print('current K:      ', sim[K])
 # # print('dKdx(FD):  ', sim.compute_totals(K,xy,use_finite_difference=True,finite_difference_step_size=.0001)[K,xy], '\n')
