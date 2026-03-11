@@ -337,7 +337,7 @@ with csdl.namespace('Objective'):
 # recorder.stop()
 
 sim = csdl.experimental.PySimulator(recorder)
-sim.run()
+# sim.run()
 
 # recorder.visualize_adjacency_matrix()
 

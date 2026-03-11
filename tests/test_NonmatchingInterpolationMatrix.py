@@ -4,17 +4,6 @@ import numpy as np
 from dolfinx import mesh, io
 from dolfinx.io import XDMFFile
 from mpi4py import MPI
-import lsdo_function_spaces as lfs
-
-'''
-This optimization problem is not well-posed with just the bending stiffness maximization
-A potential way to counter this (without applying constraints on the boundary self-intersections)
-would be to add a shear stiffness constraint as well as the area constraint?
-the shear stiffness constraint prevents the "web" from necking down and self intersecting
-
-UPDATE: the shear stiffness constraint didn't work because element inversion is not handled well by the cross-section model
-maybe this needs to be "fixed" by the mesh smoothing?
-'''
 
 #=================== mesh construction ==================#
 N = 1
@@ -31,11 +20,12 @@ W = 1
 tf = 1/h_to_f
 tw = 1/w_to_w
 
+
 mesh_A = mesh.create_unit_square(MPI.COMM_WORLD, m1, n1,cell_type=mesh.CellType.quadrilateral)
 mesh_A.geometry.x[:, :2] -= .5
 mesh_A.geometry.x[:, 1] *= tf
 mesh_A.geometry.x[:, 0] *= W
-mesh_A.geometry.x[:, 1] += H/2 - tf/2
+mesh_A.geometry.x[:, 1] += H/2 - tf/2 
 mesh_A.name = 'f'
 filename_A = 'nonmatching_flange'
 # domain.name = filename
@@ -44,8 +34,8 @@ with XDMFFile(MPI.COMM_WORLD, "output/"+filename_A+".xdmf", "w") as xdmf:
 
 mesh_B = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.quadrilateral)
 mesh_B.geometry.x[:, :2] -= .5
-mesh_B.geometry.x[:, 0] *= tw
-mesh_B.geometry.x[:, 1] *= W
+mesh_B.geometry.x[:, 0] *= tw 
+mesh_B.geometry.x[:, 1] *= H
 mesh_B.name = 'w'
 filename_B = 'nonmatching_web'
 with XDMFFile(MPI.COMM_WORLD, "output/"+filename_B+".xdmf", "w") as xdmf:
@@ -101,104 +91,7 @@ xy_C = csdl.Variable(value=xy_C,shape=xy_C.shape,name='xy_C')
 dx_w = csdl.Variable(value=0.0)
 dx_w.set_as_design_variable(lower=-0.45,upper=0.45)
 
-
-# #=====mesh motion=======#
-# inputs_mm_A = csdl.VariableGroup()
-# inputs_mm_A.xy = xy_A
-# inputs_mm_A.xy_interior = xy_A_interior
-# meshSmoothing_A = ALBATROSS.csdl_utils.EllipticSmoothing(mesh_A,
-#                                                        XSs[0].boundary_nodes,
-#                                                        XSs[0].interior_nodes,
-#                                                        filename=filename_A)
-# outputs_mm_A = meshSmoothing_A.evaluate(inputs_mm_A)
-
-# #massively simplified "mesh motion"
-# xy_B = xy_B + csdl.expand(csdl.concatenate([dx_w,0]),xy_B.shape,action='j->ij')
-
-# inputs_mm_B = csdl.VariableGroup()
-# inputs_mm_B.xy = xy_B
-# inputs_mm_B.xy_interior = xy_B_interior
-# meshSmoothing_B = ALBATROSS.csdl_utils.EllipticSmoothing(mesh_B,
-#                                                        XSs[1].boundary_nodes,
-#                                                        XSs[1].interior_nodes,
-#                                                        filename=filename_B)
-# outputs_mm_B = meshSmoothing_B.evaluate(inputs_mm_B)
-
-
-
-# #===== mortar mesh update computation =======#
-# #mortar mesh is moved identically to the web motion:
-# xy_C = xy_C + csdl.expand(csdl.concatenate([dx_w,0]),xy_C.shape,action='j->ij')
-
 mortar_mesh = TXS_nm.collisions[(0,1)].mortar_mesh 
-# filename_C = 'mortar_mesh'
-
-# inputs_mm_C = csdl.VariableGroup()
-# inputs_mm_C.xy = xy_C
-# inputs_mm_C.xy_interior = xy_C_interior
-# meshSmoothing_C = ALBATROSS.csdl_utils.EllipticSmoothing(mortar_mesh.msh,
-#                                                        mortar_mesh.boundary_nodes,
-#                                                        mortar_mesh.interior_nodes,
-#                                                        filename=filename_C)
-# outputs_mm_C = meshSmoothing_C.evaluate(inputs_mm_C)
-
-
-#======= construct coupled system =========#
-# #get foreground mesh A values
-# inputs_A = csdl.VariableGroup()
-# #limited test slice:
-# # input_slice = xy_A[3,1]
-# # inputs_A.xy = xy_A.set(csdl.slice[3,1],input_slice)
-# #uncomment for 
-# inputs_A.xy = xy_A
-# inputs_A.xy_interior = xy_A_interior
-# # inputs_A.xy_interior = outputs_mm_A.xy_interior
-
-# conformal_problem_A = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
-#                                                                         mesh_id=0,
-#                                                                         boundary_nodes=XSs[0].boundary_nodes,
-#                                                                         interior_nodes=XSs[0].interior_nodes)
-
-# outputs_A = conformal_problem_A.evaluate(inputs_A)
-
-# K_A = outputs_A.K
-# C_A = outputs_A.C
-# F_A = csdl.Variable(value=np.zeros(K_A.shape[0]))
-# # F_A = outputs_A.F # this is just vector of zeros, does not contain the lagrange multiplier values
-
-# # csdl.derivative(K_A,inputs_A.xy)
-
-# sim = csdl.experimental.PySimulator(recorder)
-# sim.run()
-
-# # dKdx = csdl.derivative(K_A,inputs_A.xy)
-# K_Aii = K_A[:3,:3]
-# # K_Aii = K_A[3,3]
-
-# #these seem to match well :)
-# dK00dx00 = csdl.derivative(K_Aii,xy_A)
-# dK00dx00_FD = sim.compute_totals(K_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.0001)
-
-
-# #THIS IS A BAD IDEA, TOO MANY VALUES ( (N X N )X M sized matrix)
-# # sim.check_totals(K_A,inputs_A.xy)
-
-# #get foreground mesh B values
-# inputs_B = csdl.VariableGroup()
-# inputs_B.xy = xy_B
-# inputs_B.xy_interior = outputs_mm_B.xy_interior
-
-# conformal_problem_B = ALBATROSS.csdl_utils.CrossSectionSystemComponents(xs=TXS_nm,
-#                                                                         mesh_id=1,
-#                                                                         boundary_nodes=XSs[1].boundary_nodes,
-#                                                                         interior_nodes=XSs[1].interior_nodes)
-
-# outputs_B = conformal_problem_B.evaluate(inputs_B)
-
-# K_B = outputs_B.K
-# C_B = outputs_B.C
-# F_B = csdl.Variable(value=np.zeros(K_B.shape[0]))
-# #F_B = outputs_B.F_B
 
 #get interpolation matrices
 inputs_interp_A = csdl.VariableGroup()
@@ -222,17 +115,17 @@ nzC = list(np.nonzero(P_A.value)[0])
 nzA = list(np.nonzero(P_A.value)[1])
 
 start = 0
-stop = 5
+stop = 10
 num_nz= stop- start
 P_Aii = P_A[nzC[start:stop],nzA[start:stop]]
 dP_Adx_A = csdl.derivative(P_Aii,xy_A)
 dP_Adx_C = csdl.derivative(P_Aii,xy_C)
 
 sim = csdl.experimental.PySimulator(recorder)
-sim.run()
+# sim.run()
 
-dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.00001)
-dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.00001)
+dP_Adx_A_FD = sim.compute_totals(P_Aii,xy_A,use_finite_difference=True,finite_difference_step_size=0.00000001)
+dP_Adx_C_FD = sim.compute_totals(P_Aii,xy_C,use_finite_difference=True,finite_difference_step_size=0.00000001)
 
 #we actually expect some issues here with the x_A mesh nodes derivatives, since some motions can move the 
 print('derivatives w.r.t. x_A')

@@ -957,8 +957,9 @@ def action_of_geom_on_nm_interpolation_matrix(V_1,V_0,dP=None): # Function space
         #invert to map from the reference domain back to physical space
         invJ0 = np.linalg.inv(J0)
         #construct local geometric sensitivity operator from field basis function derivatives and geometry inverse jacobian
-        B0 = dphi_dxy[:,i,:].T@invJ0
-       
+        # B0 = dphi_dxy[:,i,:].T@invJ0
+        B0 = dphi_dxy[:,i,:].T @ invJ0.T       
+        
         # #use geometry basis functions to relate the local geometric sensitivity of the interpolation operator to the mesh coordinates
         # if wrt=="FROM":
         dPdx0[index_points_[i],:,:,:] = -np.einsum('i,jk->jik', basis_matrix[i],B0) #this is the interpolation operator design sensitivity to the mesh0 nodes
@@ -973,8 +974,8 @@ def action_of_geom_on_nm_interpolation_matrix(V_1,V_0,dP=None): # Function space
     for i in index_points_:
         dP_local = dP[i,cell_dofs_[i]]
         dx1[i,:] += dP_local@dPdx1[i,:,:]
-        for k in range(4):
-            dx0_local = np.einsum('i,ijk->jk',dP_local,dPdx0[i,:,:,:])
+        dx0_local = np.einsum('i,ijk->jk', dP_local, dPdx0[i,:,:,:])
+        for k in range(num_cell_dofs):
             dx0[cell_dofs_[i,k],:] += dx0_local[k,:]
 
 

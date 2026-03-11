@@ -11,7 +11,7 @@ import pyvista
 from petsc4py import PETSc
 
 class MeshMotion():
-     def __init__(self,msh,moved_nodes,nodes_to_move,directory='output/'):
+     def __init__(self,msh,moved_nodes,nodes_to_move,directory='output/',write_initial_mesh=True):
           self.msh = msh
           self.moved_nodes = moved_nodes
           self.nodes_to_move = nodes_to_move
@@ -21,8 +21,9 @@ class MeshMotion():
           # self.mode = 'lin_elas'
 
           #write mesh:
-          with XDMFFile(MPI.COMM_WORLD, self.directory+self.filename+".xdmf", "w") as xdmf:
-               xdmf.write_mesh(self.msh)
+          if write_initial_mesh:
+               with XDMFFile(MPI.COMM_WORLD, self.directory+self.filename+".xdmf", "w") as xdmf:
+                    xdmf.write_mesh(self.msh)
                     
           c_el = msh.ufl_domain().ufl_coordinate_element()
           self.V = fem.functionspace(msh, c_el)

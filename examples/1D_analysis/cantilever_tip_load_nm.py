@@ -22,15 +22,15 @@ gdim = 3
 tdim = 1
 
 #create or read in series of 2D meshes
-N = 2 #number of quad elements per side on xc mesh
-W = 1 #xs width
-H = 1 #xs height
+N = 6 #number of quad elements per side on xc mesh
+W = 0.1 #xs width
+H = 0.1 #xs height
 A = W*H #xs area
-L = 20 
-section_type = 'L'
+L = 2.0 
+# section_type = 'L'
 
 #define tip load magnitude 
-F = .001
+F = 1000.0
 loading = 'z'
 
 #beam endpoint locations
@@ -59,8 +59,8 @@ mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= W
-if section_type == 'L':
-    mesh_1.geometry.x[:,0] += -0.45
+# if section_type == 'L':
+#     mesh_1.geometry.x[:,0] += -0.45
 mesh_1.name = 'w'
 
 #================= initialize individual cross-sections ===========#
@@ -68,13 +68,13 @@ meshes= [mesh_0,mesh_1]
 
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':10e6,'nu':0.2},
+                                           mech_props={'E':70e9,'nu':0.33},
                                            density=2700)
 
 XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes]
 
 #================= initialize coupled cross-section ===========#
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen=1e4)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e4,pen_t=1e4)
 TXS_nm.plot_meshes()
 
 #identify meshes:
@@ -94,10 +94,10 @@ num_ele = [10] #number of subdivisions for each beam segment
 beam_axis = ALBATROSS.axial.BeamAxis(nodal_points,num_ele,meshname)
 
 #define orientation of each xs with a vector
-orientations = np.tile([0,1,0],num_segments)
+orientations = np.tile([0,1,0],num_segments+1)
 
 #collect all xs information
-xs_adjacency_list = [[0]] #this is the trivial connectivity for a uniform beam 
+xs_adjacency_list = [[0,0]] #this is the trivial connectivity for a uniform beam 
 xs_info = [xs_list,orientations,xs_adjacency_list]
 
 #################################################################
@@ -105,7 +105,7 @@ xs_info = [xs_list,orientations,xs_adjacency_list]
 #################################################################
 
 #initialize beam object using beam axis and definition of xs's
-CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info)
+CantileverBeam = ALBATROSS.beam.Beam(beam_axis,xs_info,segment_type='LINEAR')
 
 #show the orientation of each xs and the interpolated orientation along the beam
 CantileverBeam.plot_xs_orientations()
@@ -140,6 +140,11 @@ CantileverBeam.plot_axial_displacement(warp_factor=10)
 
 # #plots both 1D and 2D solutions together
 # CantileverBeam.plot_xs_disp_3D()
+
+
+print('ALBATROSS computed value:')
+print(CantileverBeam.get_local_disp([p2])[0][2])
+print('------')
 
 #compare with an analytical EB bending solution 
 # for this relatively slender beam, this should be nearly identical to the timoshenko solution)

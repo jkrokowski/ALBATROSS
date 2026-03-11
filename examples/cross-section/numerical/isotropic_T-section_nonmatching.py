@@ -10,7 +10,7 @@ import basix.ufl
 default_scalar_type = PETSc.ScalarType   
 
 #=================== mesh construction ==================#
-N = 6
+N = 12
 offset = 0
 
 h_to_f = 10
@@ -35,7 +35,7 @@ mesh_1 = mesh.create_unit_square(MPI.COMM_WORLD, m2, n2,cell_type=mesh.CellType.
 mesh_1.geometry.x[:, :2] -= .5
 mesh_1.geometry.x[:, 0] *= tw
 mesh_1.geometry.x[:, 1] *= W
-# mesh_1.geometry.x[:,0] += -0.031
+# mesh_1.geometry.x[:,0] += 0.0162
 mesh_1.name = f'w_N{N}'
 
 identifier_string = ''
@@ -52,8 +52,8 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 
 #================= initialize coupled cross-section ===========#
 # val = 
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e-4,pen_t=1e7)
-# TXS_nm.plot_meshes()
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e1,pen_t=1e-1)
+TXS_nm.plot_meshes()
 
 #identify meshes:
 mesh_A = TXS_nm.XSs[0].msh

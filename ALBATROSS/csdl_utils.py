@@ -261,11 +261,22 @@ class BeamMatrixFromWarping(csdl.CustomExplicitOperation):
 
 class EllipticSmoothing(csdl.CustomExplicitOperation):
 
-    def __init__(self,domain,boundary_nodes,interior_nodes,filename='xs',directory='output/'):
+    def __init__(
+        self,
+        domain,
+        boundary_nodes,
+        interior_nodes,
+        filename='xs',
+        directory='output/',
+        write_mesh_history=True,
+        verbose=False,
+    ):
         super().__init__()
         self.domain = domain
         self.boundary_nodes = boundary_nodes
         self.interior_nodes = interior_nodes
+        self.write_mesh_history = write_mesh_history
+        self.verbose = verbose
         # self.step = 0.0
         # self.filename =filename
         # self.original_boundary = self.domain.geometry.x[self.boundary_nodes,0:2]
@@ -274,7 +285,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         self.mesh_motion = ALBATROSS.mesh.MeshMotion(self.domain,
                                   self.boundary_nodes,
                                   self.interior_nodes,
-                                  directory=directory)
+                                  directory=directory,
+                                  write_initial_mesh=write_mesh_history)
         
 
     def evaluate(self, inputs: csdl.VariableGroup):
@@ -292,7 +304,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         return output
 
     def compute(self, inputs, outputs):
-        print(f'perform elliptic smoothing (step {self.mesh_motion.step})')
+        if self.verbose:
+            print(f'perform elliptic smoothing (step {self.mesh_motion.step})')
         # displacement = inputs['xy']-inputs['xy_prev']
         # print('xy values (mesh motion op):')
         # print(inputs['xy'].flatten())
@@ -302,7 +315,8 @@ class EllipticSmoothing(csdl.CustomExplicitOperation):
         # displacement = inputs['xy']-self.domain.geometry.x[self.boundary_nodes,0:2]
         xy_interior = self.mesh_motion.smooth_mesh(inputs['xy'])
 
-        self.mesh_motion.write_mesh_deformation()
+        if self.write_mesh_history:
+            self.mesh_motion.write_mesh_deformation()
         # self.mesh_motion.plot_current_mesh_state()
         # xy_interior = ALBATROSS.mesh.smooth_mesh(self.domain,
         #                                             self.boundary_nodes,
@@ -642,181 +656,439 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
 
 
 class CoupledBeamMatrixFromWarping(csdl.CustomExplicitOperation):
-    def __init__(self,xs,collision=(0,1),check_partials='False'):
+    """
+    Explicit map:
+        K = K(x_A, x_B, x_C, w_A, w_B)
+
+    Important:
+        This op mutates self.xs in-place, so all mutable state is saved/restored.
+        Geometry-dependent coupled operators must be rebuilt at the current geometry
+        before evaluating K.
+
+    Notes:
+        - lmbda is intentionally omitted as an explicit input unless later FD checks
+          show K depends explicitly on it.
+        - reverse-mode wrt the full coupled section assembly requires a coupled-level
+          VJP implementation on CoupledCrossSection.
+    """
+    def __init__(self, xs, collision=(0, 1), check_partials=None, verbose=False):
         super().__init__()
         self.xs = xs
-        self.check_partials = check_partials
         self.collision = collision
-        for xs in self.xs.XSs:
-            xs._set_up_dK_forms()
-            # xs._set_up_dA_form()
+        self.check_partials = check_partials
+        self.verbose = verbose
 
+        self.xs_A = self.xs.XSs[self.collision[0]]
+        self.xs_B = self.xs.XSs[self.collision[1]]
+        self.mortar = self.xs.collisions[self.collision].mortar_mesh
+        self.mortar_xs = self.xs.collisions[self.collision].mortar_xs
 
-    def evaluate(self,inputs: csdl.VariableGroup):
-        # assign method inputs to input dictionary
-        if self.check_partials != 'w':
-            self.declare_input('xy_A',inputs.xy_A)
-            self.declare_input('xy_A_interior',inputs.xy_A_interior)
-            self.declare_input('xy_B',inputs.xy_B)
-            self.declare_input('xy_B_interior',inputs.xy_B_interior)
-        # self.declare_input('xy_C',inputs.xy_C)
-        # self.declare_input('xy_C_interior',inputs.xy_C_interior)
-        if self.check_partials != 'x':
-            self.declare_input('w_A',inputs.w_A)
-            self.declare_input('w_B',inputs.w_B)
-            self.declare_input('lmbda',inputs.lmbda)
-        
-        # construct output of the model
+        # Foreground dK forms are still useful pieces, but they are NOT sufficient
+        # for the full coupled reverse pass by themselves.
+        for xs_i in self.xs.XSs:
+            xs_i._set_up_dK_forms()
+
+    def evaluate(self, inputs: csdl.VariableGroup):
+
+        # Geometry inputs
+        if self.check_partials not in ('w',):
+            self.declare_input('xy_A', inputs.xy_A)
+            self.declare_input('xy_A_interior', inputs.xy_A_interior)
+
+        if self.check_partials not in ('w',):
+            self.declare_input('xy_B', inputs.xy_B)
+            self.declare_input('xy_B_interior', inputs.xy_B_interior)
+
+        if self.check_partials not in ('w',):
+            self.declare_input('xy_C', inputs.xy_C)
+            self.declare_input('xy_C_interior', inputs.xy_C_interior)
+
+        # Warping inputs
+        if self.check_partials not in ('xA','xB','xC'):
+            self.declare_input('w_A', inputs.w_A)
+            self.declare_input('w_B', inputs.w_B)
+
         outputs = csdl.VariableGroup()
-        outputs.K = self.create_output('K', (6,6))
+        outputs.K = self.create_output('K', (6, 6))
         outputs.K.name = 'beam stiffness matrix'
-        print(outputs.K)
-        # outputs.A = self.create_output('A',(1,))
-        # outputs.A.name = 'beam xs area'
+        return outputs
+
+    # ------------------------------------------------------------------
+    # state helpers
+    # ------------------------------------------------------------------
+    def _save_state(self):
+        return {
+            'geom_A': self.xs_A.msh.geometry.x.copy(),
+            'geom_B': self.xs_B.msh.geometry.x.copy(),
+            'geom_C': self.mortar.msh.geometry.x.copy(),
+            'w_A': [wf.x.array.copy() for wf in self.xs_A.warping_functions],
+            'w_B': [wf.x.array.copy() for wf in self.xs_B.warping_functions],
+            'lm_A': [lm.x.array.copy() for lm in self.xs_A.lmbdas],
+            'lm_B': [lm.x.array.copy() for lm in self.xs_B.lmbdas],
+            'w_C': [wf.x.array.copy() for wf in self.mortar_xs.warping_functions],
+        }
+
+    def _restore_state(self, state):
+        self.xs_A.msh.geometry.x[:] = state['geom_A']
+        self.xs_B.msh.geometry.x[:] = state['geom_B']
+        self.mortar.msh.geometry.x[:] = state['geom_C']
+
+        for i in range(6):
+            self.xs_A.warping_functions[i].x.array[:] = state['w_A'][i]
+            self.xs_B.warping_functions[i].x.array[:] = state['w_B'][i]
+            self.xs_A.lmbdas[i].x.array[:] = state['lm_A'][i]
+            self.xs_B.lmbdas[i].x.array[:] = state['lm_B'][i]
+            self.mortar_xs.warping_functions[i].x.array[:] = state['w_C'][i]
+
+    def _update_geometry_from_inputs(self, inputs):
+        if self.check_partials in (None, 'xA'):
+            self.xs_A.msh.geometry.x[self.xs_A.boundary_nodes,0:2] = inputs['xy_A']
+            self.xs_A.msh.geometry.x[self.xs_A.interior_nodes,0:2] = inputs['xy_A_interior']
+
+        if self.check_partials in (None, 'xB'):
+            self.xs_B.msh.geometry.x[self.xs_B.boundary_nodes,0:2] = inputs['xy_B']
+            self.xs_B.msh.geometry.x[self.xs_B.interior_nodes,0:2] = inputs['xy_B_interior']
+
+        if self.check_partials in (None, 'xC'):
+            self.mortar.msh.geometry.x[self.mortar.boundary_nodes,0:2] = inputs['xy_C']
+            self.mortar.msh.geometry.x[self.mortar.interior_nodes,0:2] = inputs['xy_C_interior']
+    
+    def _update_state_from_inputs(self, inputs):
+        for i in range(6):
+            self.xs_A.warping_functions[i].x.array[:] = inputs['w_A'][:, i]
+            self.xs_B.warping_functions[i].x.array[:] = inputs['w_B'][:, i]
+
+    def _refresh_coupled_geometry_dependent_data(self):
+        """
+        Rebuild geometry-dependent objects used by coupled section stiffness evaluation.
+
+        This is necessary because PA/PB and mortar matrices/forms depend on geometry.
+        """
+        # Interpolation operators depend on current foreground/mortar geometry
+        self.xs._construct_interpolation_operators()
+
+        # Mortar forms/matrices depend on current mortar geometry
+        self.xs._construct_mortar_forms()
+        self.xs._assemble_mortar_matrices()
+
+        # Not strictly needed for _compute_xs_stiffness_matrix itself unless other
+        # code depends on Sij being current, but harmless to refresh consistently.
+        self.xs._construct_coupling_terms()
+
+    # ------------------------------------------------------------------
+    # forward
+    # ------------------------------------------------------------------
+    def compute(self, inputs, outputs):
+        if self.verbose:
+            print('compute beam matrix from warping function state')
+        state = self._save_state()
+        try:
+            if self.check_partials != 'w':
+                self._update_geometry_from_inputs(inputs)
+
+            if self.check_partials not in ('xA','xB','xC'):
+                self._update_state_from_inputs(inputs)
+
+            # Geometry-dependent operators must be current before computing K
+            self._refresh_coupled_geometry_dependent_data()
+
+            # Compute full coupled section stiffness from current geometry + warping
+            self.xs._compute_xs_stiffness_matrix()
+            outputs['K'] = self.xs.K.copy()
+
+        finally:
+            self._restore_state(state)
+
+    # ------------------------------------------------------------------
+    # reverse-mode VJP
+    # ------------------------------------------------------------------
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
+        if mode != 'rev':
+            return
+
+        if self.verbose:
+            print("getting coupled beam matrix derivatives...")
+        state = self._save_state()
+        try:
+            # IMPORTANT: update all current geometry and all current warping state
+            # BEFORE any derivative action is evaluated.
+            if self.check_partials in (None,'xA','xB','xC'):
+                self._update_geometry_from_inputs(inputs)
+
+            if self.check_partials not in ('xA','xB','xC'):
+                self._update_state_from_inputs(inputs)
+
+            # Must match the same current geometry-dependent coupled data as forward
+            self._refresh_coupled_geometry_dependent_data()
+            self.xs._compute_xs_stiffness_matrix()
+
+            dK_seed = d_outputs['K']
+
+            # ------------------------------------------------------------------
+            # Correct implementation target:
+            #   CoupledCrossSection must provide the full VJP for
+            #   K(x_A, x_B, x_C, w_A, w_B)
+            #
+            # Suggested signature:
+            #   dXA, dXB, dXC, dWA, dWB = self.xs.compute_section_vjp(dK_seed)
+            #
+            # The old self.xs._compute_pK_action(...) is NOT sufficient because it
+            # misses mortar/interpolation correction paths.
+            # ------------------------------------------------------------------
+            if not hasattr(self.xs, "compute_section_vjp"):
+                raise NotImplementedError(
+                    "CoupledBeamMatrixFromWarping reverse-mode is incomplete without "
+                    "CoupledCrossSection.compute_section_vjp(dK_seed). "
+                    "The old _compute_pK_action foreground-only path is not sufficient "
+                    "for the coupled section matrix."
+                )
+
+            results = self.xs.compute_section_vjp(dK_seed)
+
+            # Expect:
+            # results = {
+            #   'x_A': full_Vx_vector_on_A,
+            #   'x_B': full_Vx_vector_on_B,
+            #   'x_C': full_Vx_vector_on_C,
+            #   'w_A': ndarray shape (nA, 6),
+            #   'w_B': ndarray shape (nB, 6),
+            # }
+
+            if self.check_partials in (None,'xA','xB','xC'):
+                dxA = results['x_A']
+                dxB = results['x_B']
+                dxC = results['x_C']
+
+                d_inputs['xy_A'] = np.vstack([
+                    dxA[self.xs_A.dofs_x_boundary],
+                    dxA[self.xs_A.dofs_y_boundary],
+                ]).T
+                d_inputs['xy_A_interior'] = np.vstack([
+                    dxA[self.xs_A.dofs_x_interior],
+                    dxA[self.xs_A.dofs_y_interior],
+                ]).T
+
+                d_inputs['xy_B'] = np.vstack([
+                    dxB[self.xs_B.dofs_x_boundary],
+                    dxB[self.xs_B.dofs_y_boundary],
+                ]).T
+                d_inputs['xy_B_interior'] = np.vstack([
+                    dxB[self.xs_B.dofs_x_interior],
+                    dxB[self.xs_B.dofs_y_interior],
+                ]).T
+
+                d_inputs['xy_C'] = np.vstack([
+                    dxC[self.mortar.dofs_x_boundary],
+                    dxC[self.mortar.dofs_y_boundary],
+                ]).T
+                d_inputs['xy_C_interior'] = np.vstack([
+                    dxC[self.mortar.dofs_x_interior],
+                    dxC[self.mortar.dofs_y_interior],
+                ]).T
+
+            if self.check_partials not in ('xA','xB','xC'):
+                d_inputs['w_A'] = results['w_A']
+                d_inputs['w_B'] = results['w_B']
+
+        finally:
+            self._restore_state(state)
+
+
+class NonmatchingWarpingFunctionState(csdl.experimental.CustomImplicitOperation):
+    """
+    Implicit state solve for one coupled nonmatching cross-section
+    made from:
+        - foreground mesh A
+        - foreground mesh B
+        - one mortar mesh for collision (0,1)
+
+    Inputs:
+        xy_A, xy_A_interior
+        xy_B, xy_B_interior
+        xy_C, xy_C_interior
+
+    Outputs:
+        w_A, w_B, lmbda
+    """
+
+    def __init__(self, xs, collision=(0, 1), verbose=False):
+        super().__init__()
+        self.xs = xs
+        self.collision = collision
+        self.verbose = verbose
+
+        self.xs_A = self.xs.XSs[self.collision[0]]
+        self.xs_B = self.xs.XSs[self.collision[1]]
+        self.mortar = self.xs.collisions[self.collision].mortar_mesh
+
+    def evaluate(self, inputs: csdl.VariableGroup):
+        self.declare_input('xy_A', inputs.xy_A)
+        self.declare_input('xy_A_interior', inputs.xy_A_interior)
+
+        self.declare_input('xy_B', inputs.xy_B)
+        self.declare_input('xy_B_interior', inputs.xy_B_interior)
+
+        self.declare_input('xy_C', inputs.xy_C)
+        self.declare_input('xy_C_interior', inputs.xy_C_interior)
+
+        outputs = csdl.VariableGroup()
+
+        outputs.w_A = self.create_output(
+            'w_A',
+            (self.xs.system_size_list[0], 6)
+        )
+        outputs.w_B = self.create_output(
+            'w_B',
+            (self.xs.system_size_list[1], 6)
+        )
+        outputs.lmbda = self.create_output(
+            'lmbda',
+            (self.xs.system_size_list[-1], 6)
+        )
 
         return outputs
-    
-    def compute(self, inputs, outputs):
-        print('compute beam matrix from warping function state')
-        mesh0_geometry = self.xs.XSs[self.collision[0]].msh.geometry.x.copy()
-        mesh1_geometry = self.xs.XSs[self.collision[1]].msh.geometry.x.copy()
 
-        if self.check_partials != 'w':
+    # -----------------------------
+    # geometry/state helpers
+    # -----------------------------
+    def _save_geometry(self):
+        return (
+            self.xs_A.msh.geometry.x.copy(),
+            self.xs_B.msh.geometry.x.copy(),
+            self.mortar.msh.geometry.x.copy(),
+        )
 
-            #UPDATE FOREGROUND MESHES GEOMETRY:
-            self.xs.XSs[self.collision[0]].msh.geometry.x[self.xs.XSs[self.collision[0]].boundary_nodes,0:2]=inputs['xy_A']
-            self.xs.XSs[self.collision[0]].msh.geometry.x[self.xs.XSs[self.collision[0]].interior_nodes,0:2]=inputs['xy_A_interior']
-            
-            self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].boundary_nodes,0:2]=inputs['xy_B']
-            self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].interior_nodes,0:2]=inputs['xy_B_interior']
+    def _restore_geometry(self, geom_A, geom_B, geom_C):
+        self.xs_A.msh.geometry.x[:] = geom_A
+        self.xs_B.msh.geometry.x[:] = geom_B
+        self.mortar.msh.geometry.x[:] = geom_C
 
-        # #TODO: is this necessary? or is the mortar mesh just used for the warping function discovery?
-        # #UPDATE MORTAR MESH GEOMETRY:
-        # self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.boundary_nodes,0:2]=inputs['xy_C']
-        # self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[self.xs.collisions[self.collision].mortar_mesh.interior_nodes,0:2]=inputs['xy_C_interior']
-        if self.check_partials != 'x':
+    def _update_geometry_from_inputs(self, inputs):
+        # mesh A
+        self.xs_A.msh.geometry.x[self.xs_A.boundary_nodes, 0:2] = inputs['xy_A']
+        self.xs_A.msh.geometry.x[self.xs_A.interior_nodes, 0:2] = inputs['xy_A_interior']
 
-            #UPDATE WARPING FUNCTIONS:
-            for i in range(6):
-                self.xs.XSs[self.collision[0]].warping_functions[i].x.array[:] = inputs['w_A'][:,i]
-                self.xs.XSs[self.collision[0]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-                
-                self.xs.XSs[self.collision[1]].warping_functions[i].x.array[:] = inputs['w_B'][:,i]
-                self.xs.XSs[self.collision[1]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-        
-        # self.xs.plot_mesh()
-        self.xs._compute_xs_stiffness_matrix()
+        # mesh B
+        self.xs_B.msh.geometry.x[self.xs_B.boundary_nodes, 0:2] = inputs['xy_B']
+        self.xs_B.msh.geometry.x[self.xs_B.interior_nodes, 0:2] = inputs['xy_B_interior']
 
-        outputs['K'] = self.xs.K
-        # outputs['A'] = self.xs.A
+        # mortar mesh
+        self.mortar.msh.geometry.x[self.mortar.boundary_nodes, 0:2] = inputs['xy_C']
+        self.mortar.msh.geometry.x[self.mortar.interior_nodes, 0:2] = inputs['xy_C_interior']
 
-        #return mesh geometry to original state:
-        self.xs.XSs[self.collision[0]].msh.geometry.x[:] = mesh0_geometry
-        self.xs.XSs[self.collision[1]].msh.geometry.x[:] = mesh1_geometry
+    def _update_state_from_outputs(self, outputs):
+        for i in range(6):
+            self.xs_A.warping_functions[i].x.array[:] = outputs['w_A'][:, i]
+            self.xs_B.warping_functions[i].x.array[:] = outputs['w_B'][:, i]
 
-    
-    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, mode):
-        # dxA = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
-        # dxB = np.zeros_like(self.xs.XSs[self.collision[0]].msh.geometry.x[:,:2].shape)
-        # dwA = np.zeros_like(self.d_outputs['w_A'])
-        # dwB = np.zeros_like(self.d_outputs['w_B'])
-        # dlmbda = np.zeros_like(self.d_outputs['lmbda'])
-        print("getting coupled beam matrix derivatives...")
-        mesh0_geometry = self.xs.XSs[self.collision[0]].msh.geometry.x.copy()
-        mesh1_geometry = self.xs.XSs[self.collision[1]].msh.geometry.x.copy()
-        
-        if self.check_partials != 'w':
-            #UPDATE FOREGROUND MESHES GEOMETRY:
-            self.xs.XSs[self.collision[0]].msh.geometry.x[self.xs.XSs[self.collision[0]].boundary_nodes,0:2]=inputs['xy_A']
-            self.xs.XSs[self.collision[0]].msh.geometry.x[self.xs.XSs[self.collision[0]].interior_nodes,0:2]=inputs['xy_A_interior']
-            
-            self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].boundary_nodes,0:2]=inputs['xy_B']
-            self.xs.XSs[self.collision[1]].msh.geometry.x[self.xs.XSs[self.collision[1]].interior_nodes,0:2]=inputs['xy_B_interior']
+            # shared LM block is stored on both foreground XSs
+            self.xs_A.lmbdas[i].x.array[:] = outputs['lmbda'][:, i]
+            self.xs_B.lmbdas[i].x.array[:] = outputs['lmbda'][:, i]
 
-            
-            dxA = self.xs._compute_pK_action(d_outputs['K'],
-                                            mesh_id=self.collision[0],
-                                            derivative_type='x')
-            dxB = self.xs._compute_pK_action(d_outputs['K'],
-                                            mesh_id=self.collision[1],
-                                            derivative_type='x')
-            # dxA = self.xs.XSs[self.collision[0]]._compute_pK_action(d_outputs['K'],
-            #                                 derivative_type='x')
-            # dxB = self.xs.XSs[self.collision[1]]._compute_pK_action(d_outputs['K'],
-            #                                 derivative_type='x')
+    def _extract_outputs_from_xs(self, outputs):
+        outputs['w_A'] = np.vstack(
+            [self.xs_A.warping_functions[i].x.array for i in range(6)]
+        ).T
+        outputs['w_B'] = np.vstack(
+            [self.xs_B.warping_functions[i].x.array for i in range(6)]
+        ).T
+        outputs['lmbda'] = np.vstack(
+            [self.xs_A.lmbdas[i].x.array for i in range(6)]
+        ).T
 
-            d_inputs['xy_A'] = np.vstack([dxA[self.xs.XSs[self.collision[0]].dofs_x_boundary],
-                                            dxA[self.xs.XSs[self.collision[0]].dofs_y_boundary]]).T
-            d_inputs['xy_A_interior'] = np.vstack([dxA[self.xs.XSs[self.collision[0]].dofs_x_interior],
-                                            dxA[self.xs.XSs[self.collision[0]].dofs_y_interior]]).T
-            
-            d_inputs['xy_B'] = np.vstack([dxB[self.xs.XSs[self.collision[1]].dofs_x_boundary],
-                                            dxB[self.xs.XSs[self.collision[1]].dofs_y_boundary]]).T
-            d_inputs['xy_B_interior'] = np.vstack([dxB[self.xs.XSs[self.collision[1]].dofs_x_interior],
-                                            dxB[self.xs.XSs[self.collision[1]].dofs_y_interior]]).T
+    # -----------------------------
+    # implicit solve
+    # -----------------------------
+    def solve_residual_equations(self, inputs, outputs):
+        if self.verbose:
+            print("solve nonmatching warping residual equations")
 
-        if self.check_partials != 'x':
-            for i in range(6):
-                self.xs.XSs[self.collision[0]].warping_functions[i].x.array[:] = inputs['w_A'][:,i]
-                self.xs.XSs[self.collision[0]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-                
-                self.xs.XSs[self.collision[1]].warping_functions[i].x.array[:] = inputs['w_B'][:,i]
-                self.xs.XSs[self.collision[1]].lmbdas[i].x.array[:] = inputs['lmbda'][:,i]
-        
-            
-            d_inputs['w_A'] = self.xs._compute_pK_action(d_outputs['K'],
-                                                        mesh_id=self.collision[0],
-                                                        derivative_type='w')
-            d_inputs['w_B'] = self.xs._compute_pK_action(d_outputs['K'],
-                                                        mesh_id=self.collision[1],
-                                                        derivative_type='w')
-            d_inputs['lmbda'] = self.xs._compute_pK_action(d_outputs['K'],
-                                                        mesh_id=self.collision[0],
-                                                        derivative_type='l')
-            # d_inputs['w_A'] = self.xs.XSs[self.collision[0]]._compute_pK_action(d_outputs['K'],
-            #                                             derivative_type='w')
-            # d_inputs['w_B'] = self.xs.XSs[self.collision[1]]._compute_pK_action(d_outputs['K'],
-            #                                             derivative_type='w')
-            # d_inputs['lmbda'] = self.xs.XSs[self.collision[0]]._compute_pK_action(d_outputs['K'],
-            #                                             derivative_type='l')
-            
+        geom_A, geom_B, geom_C = self._save_geometry()
+        try:
+            self._update_geometry_from_inputs(inputs)
 
-        self.xs.XSs[self.collision[0]].msh.geometry.x[:] = mesh0_geometry
-        self.xs.XSs[self.collision[1]].msh.geometry.x[:] = mesh1_geometry
+            # Full coupled assembly + solve lives here
+            self.xs._get_warping_functions()
 
-    # def compute_derivatives(self, inputs, outputs, derivatives):
-    #     print('compute beam matrix derivatives...')
-                
-    #     if self.check_partials != 'w':                
-    #         pKpx = self.xs.compute_pKpx()
-    #         derivatives['K', 'xy'] = pKpx[:,self.xs.dofs_boundary]
-    #         derivatives['K', 'xy_interior'] = pKpx[:,self.xs.dofs_interior]
-        
-    #     if self.check_partials != 'x':
-    #         pKpw = self.xs.compute_pKpw()
-    #         pKpl = self.xs.compute_pKpl()
-    #         derivatives['K', 'w'] = pKpw #return (36 x num_warping_function_dofs*6) but need to be ordered  
-    #         derivatives['K', 'lmbda'] = pKpl #return (36 x 30*6)
+            self._extract_outputs_from_xs(outputs)
 
-        
-    #     derivatives['K', 'xy_A']
-    #     derivatives['K', 'xy_A_interior']
-    #     derivatives['K', 'xy_B']
-    #     derivatives['K', 'xy_B_interior']
-    #     # derivatives['K', 'xy_C']
-    #     # derivatives['K', 'xy_C_interior']
-    #     derivatives['K', 'w_A']
-    #     derivatives['K', 'w_B']
-    #     derivatives['K', 'lmbda']
-        
-        
-        #declare derivatives
-        
-        # derivatives['K', 'xy'] = pKpx[:,np.concatenate([self.xs.dofs_x_boundary,self.xs.dofs_y_boundary])]
-        # derivatives['K', 'xy'] = np.hstack([pKpx[:,self.xs.dofs_x_boundary],
-        #                                 pKpx[:,self.xs.dofs_y_boundary]]) #return (36 x num_boundary_nodes*2)
-        # derivatives['K', 'xy_interior'] = np.hstack([pKpx[:,self.xs.dofs_x_interior],
-        #                                 pKpx[:,self.xs.dofs_y_interior]]) #return (36 x num_interior_nodes*2)
+        finally:
+            self._restore_geometry(geom_A, geom_B, geom_C)
+
+    # -----------------------------
+    # inverse Jacobian action
+    # -----------------------------
+    def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
+        if mode != 'rev':
+            return
+
+        geom_A, geom_B, geom_C = self._save_geometry()
+        try:
+            self._update_geometry_from_inputs(inputs)
+            self._update_state_from_outputs(outputs)
+
+            dres_w_A, dres_w_B, dres_lmbda = self.xs.apply_inverse_jacobian(
+                d_outputs['w_A'],
+                d_outputs['w_B'],
+                d_outputs['lmbda'],
+            )
+
+            d_residuals['w_A'] = dres_w_A
+            d_residuals['w_B'] = dres_w_B
+            d_residuals['lmbda'] = dres_lmbda
+
+        finally:
+            self._restore_geometry(geom_A, geom_B, geom_C)
+
+    # -----------------------------
+    # VJP wrt geometry inputs
+    # -----------------------------
+    def compute_jacvec_product(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
+        if mode != 'rev':
+            return
+
+        geom_A, geom_B, geom_C = self._save_geometry()
+        try:
+            self._update_geometry_from_inputs(inputs)
+            self._update_state_from_outputs(outputs)
+
+            dRdx_A, dRdx_B, dRdx_C = self.xs.compute_VJP(
+                d_residuals['w_A'],
+                d_residuals['w_B'],
+                d_residuals['lmbda'],
+            )
+
+            # map full coordinate derivative vectors back to boundary / interior node arrays
+            d_inputs['xy_A'] = np.vstack([
+                dRdx_A[self.xs_A.dofs_x_boundary],
+                dRdx_A[self.xs_A.dofs_y_boundary],
+            ]).T
+            d_inputs['xy_A_interior'] = np.vstack([
+                dRdx_A[self.xs_A.dofs_x_interior],
+                dRdx_A[self.xs_A.dofs_y_interior],
+            ]).T
+
+            d_inputs['xy_B'] = np.vstack([
+                dRdx_B[self.xs_B.dofs_x_boundary],
+                dRdx_B[self.xs_B.dofs_y_boundary],
+            ]).T
+            d_inputs['xy_B_interior'] = np.vstack([
+                dRdx_B[self.xs_B.dofs_x_interior],
+                dRdx_B[self.xs_B.dofs_y_interior],
+            ]).T
+
+            d_inputs['xy_C'] = np.vstack([
+                dRdx_C[self.mortar.dofs_x_boundary],
+                dRdx_C[self.mortar.dofs_y_boundary],
+            ]).T
+            d_inputs['xy_C_interior'] = np.vstack([
+                dRdx_C[self.mortar.dofs_x_interior],
+                dRdx_C[self.mortar.dofs_y_interior],
+            ]).T
+
+        finally:
+            self._restore_geometry(geom_A, geom_B, geom_C)
+
 
 #TODO: this is a massive operation that requires a lot of validation of individual components, 
 # but would perfom much better than the current coupled approach where the system matrices are provided along with derivatives 
@@ -935,10 +1207,12 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
     
     outputs: deflection
     '''
-    def __init__(self,beam,tip_point):
+    def __init__(self, beam, tip_point, verbose=True, write_deformation=True):
         super().__init__()
         self.beam = beam
         self.tip_point = tip_point
+        self.verbose = verbose
+        self.write_deformation = write_deformation
         self.output_dofs_disp = beam._get_dofs(tip_point,'disp')
         self.output_dofs_rot = beam._get_dofs(tip_point,'rot')
 
@@ -967,11 +1241,13 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
         self.beam.elastic_energy()
         
         self.beam.solve()
-        print('tip deflections (x,y,z): ',self.beam.w.x.array[self.output_dofs_disp])
-        print('tip rotations (theta_x,theta_y,theta_z): ',self.beam.w.x.array[self.output_dofs_rot])
+        if self.verbose:
+            print('tip deflections (x,y,z): ',self.beam.w.x.array[self.output_dofs_disp])
+            print('tip rotations (theta_x,theta_y,theta_z): ',self.beam.w.x.array[self.output_dofs_rot])
         outputs['d']  = self.beam.w.x.array
         
-        self.beam.write_deformation()
+        if self.write_deformation:
+            self.beam.write_deformation()
     
     def apply_inverse_jacobian(self, inputs, outputs, d_outputs, d_residuals, mode):
         # for mode = rev:

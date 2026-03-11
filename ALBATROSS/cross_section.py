@@ -551,7 +551,7 @@ class CrossSection:
                         for idx1 in range(6)])
         
         #apply threshholding:
-        s1 = np.max(np.abs(np.diag(self.K2)))
+        s1 = np.max(np.abs(np.diag(self.K1)))
         s2 = np.max(np.abs(np.diag(self.K2)))
         eta = 1e-8
         mask_1 = (np.abs(self.K1) < s1*eta)
@@ -1133,67 +1133,41 @@ class CrossSection:
 
 
         
-    def _compute_pK_action(self,dK,derivative_type='x'):
-        '''
-        compute the action of the seed dK on the input based on derivative_type
+    def _compute_pK_action(self, dK, derivative_type='x'):
+        """
+        Compute the action of the seed dK on the input based on derivative_type.
 
-        return numpy arrays
-        '''
+        Constitutive map:
+            K = K1 @ K2^{-1} @ K1.T
+        """
         XS = self
         K1 = self.K1
         K2inv = self.K2inv
-        
-        #get K1 and K2 adjoint loads
-        W_1_value = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
+
+        # Correct adjoint weights
+        W_1_value = dK @ K1 @ K2inv + K2inv @ K1.T @ dK
         W_2_value = K2inv @ K1.T @ dK @ K1 @ K2inv
 
         self.W_1.value = W_1_value
         self.W_2.value = W_2_value
 
         if derivative_type == 'x':
-            # d_form = 0
-            
-            # for idx_i in range(6):
-            #     for idx_j in range(6):
-            #         d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-            #         d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
-
             d_inputs = fem.petsc.assemble_vector(self.dKdx_form)
-
             return d_inputs.array
-        
+
         if derivative_type == 'w':
-            # d_form = 0
-
-            d_inputs = np.zeros((XS.V_w.dofmap.index_map_bs*XS.V_w.dofmap.index_map.size_global,6))
-            # indices_i,indices_j = np.nonzero(dK)
-            #loop over warping functions:
+            n_w = XS.V_w.dofmap.index_map_bs * XS.V_w.dofmap.index_map.size_global
+            d_inputs = np.zeros((n_w, 6))
             for idx_k in range(6):
-                # for idx_i in range(6):
-                #     for idx_j in range(6):
-                #         d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-                #         d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
-
-                d_inputs[:,idx_k] = fem.petsc.assemble_vector(self.dKdw_form[idx_k])
-
+                d_inputs[:, idx_k] = fem.petsc.assemble_vector(self.dKdw_form[idx_k]).array
             return d_inputs
-        
+
         if derivative_type == 'l':
-            # d_form = 0
-
-            d_inputs = np.zeros((XS.V_lm.dofmap.index_map_bs*XS.V_lm.dofmap.index_map.size_global,6))
-            # indices_i,indices_j = np.nonzero(dK)
-            #loop over lagrange multipliers:
+            n_l = XS.V_lm.dofmap.index_map_bs * XS.V_lm.dofmap.index_map.size_global
+            d_inputs = np.zeros((n_l, 6))
             for idx_k in range(6):
-            #     for idx_i in range(6):
-            #         for idx_j in range(6):
-            #             d_form += W_1[idx_i,idx_j] * XS.K1_form[idx_i][idx_j]     
-            #             d_form -= W_2[idx_i,idx_j] * XS.K2_form[idx_i][idx_j]
-
-                d_inputs[:,idx_k] = fem.petsc.assemble_vector(self.dKdl_form[idx_k])
-
-            return d_inputs
-        
+                d_inputs[:, idx_k] = fem.petsc.assemble_vector(self.dKdl_form[idx_k]).array
+            return d_inputs        
 
     def _set_up_dA_form(self):
         self.dAdx_form = fem.form(ufl.derivative(self.A_form,self.x,self.dX))
@@ -1820,7 +1794,7 @@ class CoupledCrossSection:
             # minimum mesh size in the overlap region, not the min of both meshes' average cell size
             mesh_size = np.min([self.XSs[collision[0]].mesh_size,
                                self.XSs[collision[1]].mesh_size])
-            mesh_C = mesh_from_polygon(poly_C,mesh_size=0.5*mesh_size,mesh_name='mortar_mesh')
+            mesh_C = mesh_from_polygon(poly_C,mesh_size=0.25*mesh_size,mesh_name='mortar_mesh')
             self.collisions[collision].mortar_mesh = MortarMesh(mesh_C)
             #TODO: the material field could be interpolated from the foreground meshes instead of just 
             #       populating straight from a single material property
@@ -2225,126 +2199,362 @@ class CoupledCrossSection:
 
         return d_input
 
+    def apply_inverse_jacobian(self, d_output_w_A, d_output_w_B, d_output_lmbda):
+        """
+        Solve the transpose of the coupled KKT system for each of the 6 RHS columns.
 
-    def compute_VJP(self, d_residuals_w_a, d_residuals_w_b, d_residuals_w_c, d_residuals_lmbda):
-        '''
-        INPUTS:
-        d_residual_w_a shape : num_dofs_a x 6
-        d_residual_w_b shape : num_dofs_a x 6
-        d_residual_w_c shape : num_dofs_a x 6
-        d_residual_l shape : num_lms x 6
+        Inputs:
+            d_output_w_A    : (nA, 6)
+            d_output_w_B    : (nB, 6)
+            d_output_lmbda  : (nL, 6)
 
-        OUTPUTS:
-        dRdxa_dr = num_nodes_a
-        dRdxb_dr = num_nodes_b
-        dRdxc_dr = num_nodes_c
-        '''
-        #set up input vector sizes
-        d_residuals_w_a_vec_size = d_residuals_w_a.shape[0]
-        d_residuals_w_a_vec = PETSc.Vec().createSeq(d_residuals_w_a_vec_size, comm=PETSc.COMM_SELF)
+        Returns:
+            d_residuals_w_A   : (nA, 6)
+            d_residuals_w_B   : (nB, 6)
+            d_residuals_lmbda : (nL, 6)
+        """
+        nA = d_output_w_A.shape[0]
+        nB = d_output_w_B.shape[0]
+        nL = d_output_lmbda.shape[0]
 
-        d_residuals_w_b_vec_size = d_residuals_w_b.shape[0]
-        d_residuals_w_b_vec = PETSc.Vec().createSeq(d_residuals_w_b_vec_size, comm=PETSc.COMM_SELF)
+        d_residuals_w_A = np.zeros_like(d_output_w_A)
+        d_residuals_w_B = np.zeros_like(d_output_w_B)
+        d_residuals_lmbda = np.zeros_like(d_output_lmbda)
 
-        d_residuals_w_c_vec_size = d_residuals_w_c.shape[0]
-        d_residuals_w_c_vec = PETSc.Vec().createSeq(d_residuals_w_c_vec_size, comm=PETSc.COMM_SELF)
+        offsets = np.cumsum([0] + self.system_size_list)
+
+        for k in range(d_output_w_A.shape[1]):
+            rhs = self.system_mat.createVecRight()
+            lhs = self.system_mat.createVecLeft()
+
+            rhs.array[:] = 0.0
+            lhs.array[:] = 0.0
+
+            rhs.array[offsets[0]:offsets[1]] = d_output_w_A[:, k]
+            rhs.array[offsets[1]:offsets[2]] = d_output_w_B[:, k]
+            rhs.array[offsets[2]:offsets[3]] = d_output_lmbda[:, k]
+
+            self.solver.solveTranspose(rhs, lhs)
+
+            d_residuals_w_A[:, k] = lhs.array[offsets[0]:offsets[1]].copy()
+            d_residuals_w_B[:, k] = lhs.array[offsets[1]:offsets[2]].copy()
+            d_residuals_lmbda[:, k] = lhs.array[offsets[2]:offsets[3]].copy()
+
+        return d_residuals_w_A, d_residuals_w_B, d_residuals_lmbda
+    
+    def compute_VJP(self, d_residuals_w_A, d_residuals_w_B, d_residuals_lmbda):
+        """
+        Reverse-mode VJP for the coupled residual:
+            (dR/dx)^T * seed
+
+        Inputs:
+            d_residuals_w_A   : (nA, 6)
+            d_residuals_w_B   : (nB, 6)
+            d_residuals_lmbda : (nL, 6)
+
+        Returns:
+            dRdx_A : full coordinate derivative vector for mesh A
+            dRdx_B : full coordinate derivative vector for mesh B
+            dRdx_C : full coordinate derivative vector for mortar mesh
+
+        Assumptions:
+            - one collision only: (0,1)
+            - current geometry / state have already been updated
+            - _get_warping_functions() has already been run for the current geometry
+        """
+        collision = (0, 1)
+
+        # lazily compile component / coupling VJP forms if needed
+        if not hasattr(self.XSs[0], "pA00px_form"):
+            self.XSs[0]._compile_component_vjp_forms()
+        if not hasattr(self.XSs[1], "pA00px_form"):
+            self.XSs[1]._compile_component_vjp_forms()
+        if not hasattr(self.collisions[collision], "pMCpx_form"):
+            self._compile_coupling_vjp_forms(collision)
+
+        # current interpolation / mortar matrices from the latest forward solve
+        P_A = convert_petsc_to_numpy(self.collisions[collision].PA)
+        P_B = convert_petsc_to_numpy(self.collisions[collision].PB)
+
+        MC = convert_petsc_to_numpy(self.collisions[collision].MC)
+        SC = convert_petsc_to_numpy(self.collisions[collision].S_C)
+        KC = convert_petsc_to_numpy(self.collisions[collision].mortar_xs.K_bar)
+
+        U = MC + SC
+        T = MC + SC - 0.5 * KC
+
+        dRdx_A = np.zeros(self.XSs[0].V_x.dofmap.index_map_bs * self.XSs[0].V_x.dofmap.index_map.size_global)
+        dRdx_B = np.zeros(self.XSs[1].V_x.dofmap.index_map_bs * self.XSs[1].V_x.dofmap.index_map.size_global)
+        dRdx_C = np.zeros(self.collisions[collision].mortar_mesh.V_x.dofmap.index_map_bs *
+                        self.collisions[collision].mortar_mesh.V_x.dofmap.index_map.size_global)
+        DEBUG_FOREGROUND = True
+        DEBUG_MORTAR = True
+        DEBUG_INTERP = True
+
+        for k in range(6):
+            # current state for mode k
+            w_A = self.XSs[0].warping_functions[k].x.array.copy()
+            w_B = self.XSs[1].warping_functions[k].x.array.copy()
+            lmbda = self.XSs[0].lmbdas[k].x.array.copy()
+
+            # residual seeds for mode k
+            r_A = d_residuals_w_A[:, k]
+            r_B = d_residuals_w_B[:, k]
+            r_L = d_residuals_lmbda[:, k]
+
+            # -------------------------
+            # component seeds
+            # -------------------------
+            seed_K_A = np.outer(r_A, w_A)
+            seed_K_B = np.outer(r_B, w_B)
+
+            seed_C_A = np.outer(lmbda, r_A) + np.outer(r_L, w_A)
+            seed_C_B = np.outer(lmbda, r_B) + np.outer(r_L, w_B)
+            
+            if DEBUG_FOREGROUND:
+                # VJP wrt foreground geometries from uncoupled blocks
+                dRdx_A += self.XSs[0]._compute_vjp_dA00dx(seed_K_A)
+                dRdx_A += self.XSs[0]._compute_vjp_dA10dx(seed_C_A)
+
+                dRdx_B += self.XSs[1]._compute_vjp_dA00dx(seed_K_B)
+                dRdx_B += self.XSs[1]._compute_vjp_dA10dx(seed_C_B)
+
+            # -------------------------
+            # projected state/seed vectors on mortar mesh
+            # -------------------------
+            PA_wA = P_A @ w_A
+            PB_wB = P_B @ w_B
+            PA_rA = P_A @ r_A
+            PB_rB = P_B @ r_B
+
+            # -------------------------
+            # mortar matrix seeds
+            # -------------------------
+            seed_MC = (
+                np.outer(PA_rA, PA_wA)
+                - np.outer(PA_rA, PB_wB)
+                - np.outer(PB_rB, PA_wA)
+                + np.outer(PB_rB, PB_wB)
+            )
+
+            # SC has the same algebraic placement as MC
+            seed_SC = seed_MC.copy()
+
+            # KC only appears on diagonal terms with -0.5 coefficient
+            seed_KC = (
+                -0.5 * np.outer(PA_rA, PA_wA)
+                -0.5 * np.outer(PB_rB, PB_wB)
+            )
+            if DEBUG_MORTAR:
+                dRdx_C += self._compute_vjp_dMC(seed_MC, collision)
+                dRdx_C += self._compute_vjp_dSC(seed_SC, collision)
+                dRdx_C += self._compute_vjp_dKC(seed_KC, collision)
+
+            # -------------------------
+            # interpolation matrix seeds
+            # -------------------------
+            # d/dP_A of:
+            #   r_A^T P_A^T T P_A w_A
+            # - r_A^T P_A^T U P_B w_B
+            # - r_B^T P_B^T U P_A w_A
+            seed_P_A = (
+                np.outer(T @ PA_wA, r_A)
+                + np.outer(T.T @ PA_rA, w_A)
+                - np.outer(U @ PB_wB, r_A)
+                - np.outer(U.T @ PB_rB, w_A)
+            )
+
+            # d/dP_B of:
+            # - r_A^T P_A^T U P_B w_B
+            # - r_B^T P_B^T U P_A w_A
+            # + r_B^T P_B^T T P_B w_B
+            seed_P_B = (
+                - np.outer(U.T @ PA_rA, w_B)
+                - np.outer(U @ PA_wA, r_B)
+                + np.outer(T @ PB_wB, r_B)
+                + np.outer(T.T @ PB_rB, w_B)
+            )
+            if DEBUG_INTERP:
+                dPdx_A, dPdx_C_from_A = self._compute_vjp_dP(seed_P_A, collision, mesh_id=0)
+                dPdx_B, dPdx_C_from_B = self._compute_vjp_dP(seed_P_B, collision, mesh_id=1)
+
+                dRdx_A += dPdx_A
+                dRdx_B += dPdx_B
+                dRdx_C += dPdx_C_from_A + dPdx_C_from_B
+
+        return dRdx_A, dRdx_B, dRdx_C
+
+
+    def _compute_vjp_dP(self, d_output, collision, mesh_id):
+        """
+        Compute VJP of an interpolation matrix P wrt:
+            - foreground mesh geometry (mesh_id)
+            - mortar mesh geometry
+
+        Returns:
+            dRdx_foreground : full coordinate derivative vector on foreground mesh
+            dRdx_mortar     : full coordinate derivative vector on mortar mesh
+        """
+        from ALBATROSS.nonmatching_utils import action_of_geom_on_nm_interpolation_matrix
+
+        xs_fg = self.XSs[mesh_id]
+        mortar = self.collisions[collision].mortar_mesh
+
+        dx_fg_nodes = np.zeros((xs_fg.msh.geometry.x.shape[0], 2))
+        dx_C_nodes = np.zeros((mortar.msh.geometry.x.shape[0], 2))
+
+        # identical logic to your current explicit op
+        for i in range(4):
+            for j in range(3):
+                sub_space_fg, sub_space_fg_dofmap = xs_fg.V_w.sub(i).sub(j).collapse()
+                sub_space_C, sub_space_C_dofmap = self.collisions[collision].fxn_space.sub(i).sub(j).collapse()
+
+                dP_block = d_output[np.ix_(sub_space_C_dofmap, sub_space_fg_dofmap)]
+
+                dx_fg_ij, dx_C_ij = action_of_geom_on_nm_interpolation_matrix(
+                    sub_space_C,
+                    sub_space_fg,
+                    dP=dP_block,
+                )
+
+                dx_fg_nodes += dx_fg_ij
+                dx_C_nodes += dx_C_ij
+
+        # convert node-wise x/y perturbations to the V_x dof ordering
+        dRdx_fg = np.zeros(xs_fg.V_x.dofmap.index_map_bs * xs_fg.V_x.dofmap.index_map.size_global)
+        dRdx_C = np.zeros(mortar.V_x.dofmap.index_map_bs * mortar.V_x.dofmap.index_map.size_global)
+
+        dRdx_fg[xs_fg.dofs_x_boundary] = dx_fg_nodes[xs_fg.boundary_nodes, 0]
+        dRdx_fg[xs_fg.dofs_y_boundary] = dx_fg_nodes[xs_fg.boundary_nodes, 1]
+        dRdx_fg[xs_fg.dofs_x_interior] = dx_fg_nodes[xs_fg.interior_nodes, 0]
+        dRdx_fg[xs_fg.dofs_y_interior] = dx_fg_nodes[xs_fg.interior_nodes, 1]
+
+        dRdx_C[mortar.dofs_x_boundary] = dx_C_nodes[mortar.boundary_nodes, 0]
+        dRdx_C[mortar.dofs_y_boundary] = dx_C_nodes[mortar.boundary_nodes, 1]
+        dRdx_C[mortar.dofs_x_interior] = dx_C_nodes[mortar.interior_nodes, 0]
+        dRdx_C[mortar.dofs_y_interior] = dx_C_nodes[mortar.interior_nodes, 1]
+
+        return dRdx_fg, dRdx_C
+
+    # def compute_VJP(self, d_residuals_w_a, d_residuals_w_b, d_residuals_w_c, d_residuals_lmbda):
+    #     '''
+    #     INPUTS:
+    #     d_residual_w_a shape : num_dofs_a x 6
+    #     d_residual_w_b shape : num_dofs_a x 6
+    #     d_residual_w_c shape : num_dofs_a x 6
+    #     d_residual_l shape : num_lms x 6
+
+    #     OUTPUTS:
+    #     dRdxa_dr = num_nodes_a
+    #     dRdxb_dr = num_nodes_b
+    #     dRdxc_dr = num_nodes_c
+    #     '''
+    #     #set up input vector sizes
+    #     d_residuals_w_a_vec_size = d_residuals_w_a.shape[0]
+    #     d_residuals_w_a_vec = PETSc.Vec().createSeq(d_residuals_w_a_vec_size, comm=PETSc.COMM_SELF)
+
+    #     d_residuals_w_b_vec_size = d_residuals_w_b.shape[0]
+    #     d_residuals_w_b_vec = PETSc.Vec().createSeq(d_residuals_w_b_vec_size, comm=PETSc.COMM_SELF)
+
+    #     d_residuals_w_c_vec_size = d_residuals_w_c.shape[0]
+    #     d_residuals_w_c_vec = PETSc.Vec().createSeq(d_residuals_w_c_vec_size, comm=PETSc.COMM_SELF)
         
-        d_residuals_lmbda_vec_size = d_residuals_lmbda.shape[0]
-        d_residuals_lmbda_vec = PETSc.Vec().createSeq(d_residuals_lmbda_vec_size, comm=PETSc.COMM_SELF)
+    #     d_residuals_lmbda_vec_size = d_residuals_lmbda.shape[0]
+    #     d_residuals_lmbda_vec = PETSc.Vec().createSeq(d_residuals_lmbda_vec_size, comm=PETSc.COMM_SELF)
         
-        #set up output vector sizes
-        d_inputs_a_vec_size = self.XSs[0].V_x.dofmap.index_map_bs*self.XSs[0].V_x.dofmap.index_map.size_global
-        d_inputs_a_vec = PETSc.Vec().createSeq(d_inputs_a_vec_size, comm=PETSc.COMM_SELF)
+    #     #set up output vector sizes
+    #     d_inputs_a_vec_size = self.XSs[0].V_x.dofmap.index_map_bs*self.XSs[0].V_x.dofmap.index_map.size_global
+    #     d_inputs_a_vec = PETSc.Vec().createSeq(d_inputs_a_vec_size, comm=PETSc.COMM_SELF)
 
-        d_inputs_b_vec_size = self.XSs[1].V_x.dofmap.index_map_bs*self.XSs[1].V_x.dofmap.index_map.size_global
-        d_inputs_b_vec = PETSc.Vec().createSeq(d_inputs_b_vec_size, comm=PETSc.COMM_SELF)
+    #     d_inputs_b_vec_size = self.XSs[1].V_x.dofmap.index_map_bs*self.XSs[1].V_x.dofmap.index_map.size_global
+    #     d_inputs_b_vec = PETSc.Vec().createSeq(d_inputs_b_vec_size, comm=PETSc.COMM_SELF)
 
-        d_inputs_c_vec_size = self.collisions[(0,1)].mortar_mesh.V_x.dofmap.index_map_bs*self.collisions[(0,1)].mortar_mesh.V_x.dofmap.index_map.size_global
-        d_inputs_c_vec = PETSc.Vec().createSeq(d_inputs_c_vec_size, comm=PETSc.COMM_SELF)
+    #     d_inputs_c_vec_size = self.collisions[(0,1)].mortar_mesh.V_x.dofmap.index_map_bs*self.collisions[(0,1)].mortar_mesh.V_x.dofmap.index_map.size_global
+    #     d_inputs_c_vec = PETSc.Vec().createSeq(d_inputs_c_vec_size, comm=PETSc.COMM_SELF)
         
-        dRdxa_dr = np.zeros(d_inputs_a_vec_size)
-        dRdxb_dr = np.zeros(d_inputs_b_vec_size)
-        dRdxc_dr = np.zeros(d_inputs_c_vec_size)
+    #     dRdxa_dr = np.zeros(d_inputs_a_vec_size)
+    #     dRdxb_dr = np.zeros(d_inputs_b_vec_size)
+    #     dRdxc_dr = np.zeros(d_inputs_c_vec_size)
         
-        #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
-        #TODO: self._compute_spatial_partials_penalty_term() needs to be implemented
-        #TODO: need to store residual forms for each individual mesh region (this is done in the ._solve_system() method for the uncoupled case)
-        for idx in range(d_residuals_w_a.shape[1]):
-            #====== dRadx_dr =======#
-            dRwadxa = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
-            dRwbdxa = self._compute_spatial_partials_penalty_term(of=coupled_residual_b,wrt=x_a)
-            dRwcdxa = self._compute_spatial_partials_penalty_term(of=coupled_residual_c,wrt=x_a)
+    #     #TODO: these really need to be re-formulated to compute actions, not full vec-mat products
+    #     #TODO: self._compute_spatial_partials_penalty_term() needs to be implemented
+    #     #TODO: need to store residual forms for each individual mesh region (this is done in the ._solve_system() method for the uncoupled case)
+    #     for idx in range(d_residuals_w_a.shape[1]):
+    #         #====== dRadx_dr =======#
+    #         dRwadxa = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
+    #         dRwbdxa = self._compute_spatial_partials_penalty_term(of=coupled_residual_b,wrt=x_a)
+    #         dRwcdxa = self._compute_spatial_partials_penalty_term(of=coupled_residual_c,wrt=x_a)
             
-            #"uncoupled" portion over the foreground mesh
-            d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
-            dRwadxa.multTranspose(d_residuals_w_a_vec,d_inputs_a_vec) #perform vec-mat product
-            dRdxa_dr += d_inputs_a_vec.array
+    #         #"uncoupled" portion over the foreground mesh
+    #         d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
+    #         dRwadxa.multTranspose(d_residuals_w_a_vec,d_inputs_a_vec) #perform vec-mat product
+    #         dRdxa_dr += d_inputs_a_vec.array
             
-            dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
-            d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
-            dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_a_vec) #perform vec-mat product
-            dRdxa_dr += d_inputs_a_vec.array
+    #         dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
+    #         d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
+    #         dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_a_vec) #perform vec-mat product
+    #         dRdxa_dr += d_inputs_a_vec.array
 
-            #coupled portion:
-            d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
-            dRwbdxa.multTranspose(d_residuals_w_b_vec,d_inputs_a_vec) #perform vec-mat product
-            dRdxa_dr += d_inputs_a_vec.array
+    #         #coupled portion:
+    #         d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
+    #         dRwbdxa.multTranspose(d_residuals_w_b_vec,d_inputs_a_vec) #perform vec-mat product
+    #         dRdxa_dr += d_inputs_a_vec.array
 
-            d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
-            dRwcdxa.multTranspose(d_residuals_w_c_vec,d_inputs_a_vec) #perform vec-mat product
-            dRdxa_dr += d_inputs_a_vec.array
+    #         d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
+    #         dRwcdxa.multTranspose(d_residuals_w_c_vec,d_inputs_a_vec) #perform vec-mat product
+    #         dRdxa_dr += d_inputs_a_vec.array
 
 
-            #====== dRbdx_dr =======#
-            dRwadxb = self._compute_spatial_partials_penalty_term(of=coupled_residual_a,wrt=x_b)
-            dRwbdxb = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
-            dRwcdxb = self._compute_spatial_partials_penalty_term(of=coupled_residual_c,wrt=x_b)
+    #         #====== dRbdx_dr =======#
+    #         dRwadxb = self._compute_spatial_partials_penalty_term(of=coupled_residual_a,wrt=x_b)
+    #         dRwbdxb = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
+    #         dRwcdxb = self._compute_spatial_partials_penalty_term(of=coupled_residual_c,wrt=x_b)
             
-            #"uncoupled" portion over the foreground mesh
-            d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
-            dRwbdxb.multTranspose(d_residuals_w_b_vec,d_inputs_b_vec) #perform vec-mat product
-            dRdxb_dr += d_inputs_b_vec.array
+    #         #"uncoupled" portion over the foreground mesh
+    #         d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
+    #         dRwbdxb.multTranspose(d_residuals_w_b_vec,d_inputs_b_vec) #perform vec-mat product
+    #         dRdxb_dr += d_inputs_b_vec.array
             
-            dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
-            d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
-            dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_b_vec) #perform vec-mat product
-            dRdxb_dr += d_inputs_b_vec.array
+    #         dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
+    #         d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
+    #         dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_b_vec) #perform vec-mat product
+    #         dRdxb_dr += d_inputs_b_vec.array
 
-            #coupled portion:
-            d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
-            dRwadxb.multTranspose(d_residuals_w_b_vec,d_inputs_b_vec) #perform vec-mat product
-            dRdxb_dr += d_inputs_b_vec.array
+    #         #coupled portion:
+    #         d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
+    #         dRwadxb.multTranspose(d_residuals_w_b_vec,d_inputs_b_vec) #perform vec-mat product
+    #         dRdxb_dr += d_inputs_b_vec.array
 
-            d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
-            dRwcdxb.multTranspose(d_residuals_w_c_vec,d_inputs_b_vec) #perform vec-mat product
-            dRdxb_dr += d_inputs_b_vec.array
+    #         d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
+    #         dRwcdxb.multTranspose(d_residuals_w_c_vec,d_inputs_b_vec) #perform vec-mat product
+    #         dRdxb_dr += d_inputs_b_vec.array
             
-            #====== dRcdx_dr =======#
-            dRwadxc = self._compute_spatial_partials_penalty_term(of=coupled_residual_a,wrt=x_c)
-            dRwbdxc = self._compute_spatial_partials_penalty_term(of=coupled_residual_b,wrt=x_c)
-            dRwcdxc = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
+    #         #====== dRcdx_dr =======#
+    #         dRwadxc = self._compute_spatial_partials_penalty_term(of=coupled_residual_a,wrt=x_c)
+    #         dRwbdxc = self._compute_spatial_partials_penalty_term(of=coupled_residual_b,wrt=x_c)
+    #         dRwcdxc = self._compute_spatial_partials(self.residuals[idx][0]) #num_dofs x num_nodes
 
-            #"uncoupled" portion over the mortar mesh
-            d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
-            dRwcdxc.multTranspose(d_residuals_w_c_vec,d_inputs_c_vec) #perform vec-mat product
-            dRdxc_dr += d_inputs_c_vec.array
+    #         #"uncoupled" portion over the mortar mesh
+    #         d_residuals_w_c_vec.array = d_residuals_w_c[:,idx]
+    #         dRwcdxc.multTranspose(d_residuals_w_c_vec,d_inputs_c_vec) #perform vec-mat product
+    #         dRdxc_dr += d_inputs_c_vec.array
             
-            dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
-            d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
-            dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_c_vec) #perform vec-mat product
-            dRdxc_dr += d_inputs_c_vec.array
+    #         dRldx = self._compute_spatial_partials(self.residuals[idx][1] )#num_lms x num_nodes
+    #         d_residuals_lmbda_vec.array = d_residuals_lmbda[:,idx]
+    #         dRldx.multTranspose(d_residuals_lmbda_vec,d_inputs_c_vec) #perform vec-mat product
+    #         dRdxc_dr += d_inputs_c_vec.array
 
-            #coupled portion:
-            d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
-            dRwadxc.multTranspose(d_residuals_w_b_vec,d_inputs_c_vec) #perform vec-mat product
-            dRdxc_dr += d_inputs_c_vec.array
+    #         #coupled portion:
+    #         d_residuals_w_a_vec.array = d_residuals_w_a[:,idx]
+    #         dRwadxc.multTranspose(d_residuals_w_b_vec,d_inputs_c_vec) #perform vec-mat product
+    #         dRdxc_dr += d_inputs_c_vec.array
 
-            d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
-            dRwbdxc.multTranspose(d_residuals_w_b_vec,d_inputs_c_vec) #perform vec-mat product
-            dRdxc_dr += d_inputs_c_vec.array
+    #         d_residuals_w_b_vec.array = d_residuals_w_b[:,idx]
+    #         dRwbdxc.multTranspose(d_residuals_w_b_vec,d_inputs_c_vec) #perform vec-mat product
+    #         dRdxc_dr += d_inputs_c_vec.array
 
 
-        return dRdx_dr
+    #     return dRdx_dr
     
     # def _compute_pA_action(self,dK,mesh_id=0,derivative_type='x'):
     #     '''
@@ -2385,7 +2595,7 @@ class CoupledCrossSection:
         K2 = self.K2
 
         #get K1 and K2 adjoint loads for the full coupled matrix
-        W_1 = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
+        W_1 = dK @ K1 @ K2inv + K2inv @ K1.T @ dK
         W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
 
         if derivative_type == 'x':
@@ -2542,26 +2752,18 @@ class CoupledCrossSection:
             for idx in range(6):
                 self.collisions[collision].PA.mult(self.XSs[0].warping_functions[idx].x.petsc_vec,self.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
             self.collisions[collision].mortar_xs._compute_xs_stiffness_matrix()
-            # self.K1 -= self.collisions[collision].mortar_xs.K1
-            # self.K2 -= self.collisions[collision].mortar_xs.K2
-            
-            K1CA = self.collisions[collision].mortar_xs.K1
-            K2CA = self.collisions[collision].mortar_xs.K2
-            
             self.K1 -= 0.5*self.collisions[collision].mortar_xs.K1
             self.K2 -= 0.5*self.collisions[collision].mortar_xs.K2
 
             for idx in range(6):
                 self.collisions[collision].PB.mult(self.XSs[1].warping_functions[idx].x.petsc_vec,self.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
             self.collisions[collision].mortar_xs._compute_xs_stiffness_matrix()
-            K1CB = self.collisions[collision].mortar_xs.K1
-            K2CB = self.collisions[collision].mortar_xs.K2
 
             self.K1 -= 0.5*self.collisions[collision].mortar_xs.K1
             self.K2 -= 0.5*self.collisions[collision].mortar_xs.K2
         
         #apply threshholding:
-        s1 = np.max(np.abs(np.diag(self.K2)))
+        s1 = np.max(np.abs(np.diag(self.K1)))
         s2 = np.max(np.abs(np.diag(self.K2)))
         eta = 1e-8
         mask_1 = (np.abs(self.K1) < s1*eta)
@@ -2575,7 +2777,7 @@ class CoupledCrossSection:
 
         self.K2inv = np.linalg.inv(self.K2)
 
-        self.K = self.K1 @ np.linalg.inv(self.K2) @ self.K1.T
+        self.K = self.K1 @ self.K2inv @ self.K1.T
 
         self.A -= self.get_overlap_area()
 
@@ -2817,6 +3019,264 @@ class CoupledCrossSection:
             vm_list.append(von_Mises)
         
         return vm_list
+
+
+    def _ensure_section_vjp_forms_compiled(self, collision=(0, 1)):
+        """
+        Compile-once helper for all UFL derivative forms needed by the coupled
+        constitutive VJP.
+
+        This should be called lazily and never inside a tight loop more than once.
+        """
+        # Foreground XS constitutive derivative forms
+        for xs in self.XSs:
+            if not hasattr(xs, "dKdx_form"):
+                xs._set_up_dK_forms()
+
+        # Mortar constitutive derivative forms
+        mortar_xs = self.collisions[collision].mortar_xs
+        if not hasattr(mortar_xs, "dKdx_form"):
+            mortar_xs._set_up_dK_forms()
+
+        # Coupling / interpolation VJP forms
+        if not hasattr(self.collisions[collision], "pMCpx_form"):
+            self._compile_coupling_vjp_forms(collision)
+
+
+    def _compute_global_section_adjoint_weights(self, dK):
+        """
+        For K = K1 @ K2^{-1} @ K1.T, return reverse weights W_1, W_2 such that
+
+            <dK, dK_total> = <W_1, dK1_total> - <W_2, dK2_total>
+
+        under the Frobenius inner product.
+        """
+        K1 = self.K1
+        K2inv = self.K2inv
+
+        W_1 = dK @ K1 @ K2inv + dK.T @ K1 @ K2inv
+        W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
+
+        return W_1, W_2
+
+
+    def _apply_section_adjoint_weights(self, XS, W_1, W_2, derivative_type='x', scale=1.0):
+        """
+        Apply the *global* coupled constitutive adjoint weights to a target
+        CrossSection's local K1/K2 forms.
+
+        Parameters
+        ----------
+        XS : CrossSection
+            Section whose K1_form / K2_form contribution is being differentiated.
+        W_1, W_2 : (6,6) ndarray
+            Global coupled constitutive adjoint weights.
+        derivative_type : str
+            'x' or 'w'
+        scale : float
+            Optional scaling, e.g. -0.5 for overlap-correction terms.
+
+        Returns
+        -------
+        derivative_type == 'x' :
+            ndarray of shape (n_x_dofs,)
+        derivative_type == 'w' :
+            ndarray of shape (n_w_dofs, 6)
+        """
+        XS.W_1.value = scale * W_1
+        XS.W_2.value = scale * W_2
+
+        if derivative_type == 'x':
+            vec = fem.petsc.assemble_vector(XS.dKdx_form)
+            return vec.array.copy()
+
+        elif derivative_type == 'w':
+            n_w = XS.V_w.dofmap.index_map_bs * XS.V_w.dofmap.index_map.size_global
+            out = np.zeros((n_w, 6))
+            for k in range(6):
+                out[:, k] = fem.petsc.assemble_vector(XS.dKdw_form[k]).array
+            return out
+
+        else:
+            raise ValueError(f"Unsupported derivative_type '{derivative_type}'")
+
+
+    def _save_mortar_warping_state(self, collision=(0, 1)):
+        mortar_xs = self.collisions[collision].mortar_xs
+        return [wf.x.array.copy() for wf in mortar_xs.warping_functions]
+
+
+    def _restore_mortar_warping_state(self, state, collision=(0, 1)):
+        mortar_xs = self.collisions[collision].mortar_xs
+        for k in range(6):
+            mortar_xs.warping_functions[k].x.array[:] = state[k]
+
+
+    def _load_projected_mortar_warping(self, collision=(0, 1), mesh_id=0):
+        """
+        Load mortar_xs.warping_functions with projected foreground warping state.
+
+        mesh_id = 0 -> use PA and foreground A
+        mesh_id = 1 -> use PB and foreground B
+
+        Returns
+        -------
+        P_np : ndarray
+            Dense interpolation matrix used in the projection.
+        w_fg : ndarray
+            Foreground warping state with shape (n_fg_dofs, 6)
+        """
+        mortar_xs = self.collisions[collision].mortar_xs
+
+        if mesh_id == 0:
+            P = self.collisions[collision].PA
+            xs_fg = self.XSs[collision[0]]
+        elif mesh_id == 1:
+            P = self.collisions[collision].PB
+            xs_fg = self.XSs[collision[1]]
+        else:
+            raise ValueError("mesh_id must be 0 or 1")
+
+        w_fg = np.column_stack([xs_fg.warping_functions[k].x.array.copy() for k in range(6)])
+
+        for k in range(6):
+            P.mult(
+                xs_fg.warping_functions[k].x.petsc_vec,
+                mortar_xs.warping_functions[k].x.petsc_vec
+            )
+
+        return convert_petsc_to_numpy(P), w_fg
+
+
+    def compute_section_vjp(self, dK, collision=(0, 1)):
+        """
+        Reverse-mode VJP for the explicit coupled constitutive map
+
+            K = K(x_A, x_B, x_C, w_A, w_B)
+
+        evaluated at the current state already loaded into self.
+
+        Assumptions
+        -----------
+        - Foreground and mortar geometries are already updated to the current inputs.
+        - Foreground warping states w_A and w_B are already updated to the current inputs.
+        - Current interpolation operators PA/PB correspond to the current geometry.
+        - self._compute_xs_stiffness_matrix() has already been run for this same state.
+
+        Returns
+        -------
+        dict with keys:
+            'x_A', 'x_B', 'x_C' : full V_x derivative vectors
+            'w_A', 'w_B'        : arrays of shape (n_w_dofs, 6)
+        """
+        assert collision == (0, 1), "Current implementation assumes a single collision (0,1)."
+
+        self._ensure_section_vjp_forms_compiled(collision)
+
+        xs_A = self.XSs[collision[0]]
+        xs_B = self.XSs[collision[1]]
+        mortar = self.collisions[collision].mortar_mesh
+        mortar_xs = self.collisions[collision].mortar_xs
+
+        # Use current coupled K1/K2
+        W_1, W_2 = self._compute_global_section_adjoint_weights(dK)
+
+        # Allocate accumulators
+        nXA = xs_A.V_x.dofmap.index_map_bs * xs_A.V_x.dofmap.index_map.size_global
+        nXB = xs_B.V_x.dofmap.index_map_bs * xs_B.V_x.dofmap.index_map.size_global
+        nXC = mortar.V_x.dofmap.index_map_bs * mortar.V_x.dofmap.index_map.size_global
+
+        nWA = xs_A.V_w.dofmap.index_map_bs * xs_A.V_w.dofmap.index_map.size_global
+        nWB = xs_B.V_w.dofmap.index_map_bs * xs_B.V_w.dofmap.index_map.size_global
+
+        dRdx_A = np.zeros(nXA)
+        dRdx_B = np.zeros(nXB)
+        dRdx_C = np.zeros(nXC)
+
+        dRdw_A = np.zeros((nWA, 6))
+        dRdw_B = np.zeros((nWB, 6))
+
+        # ==========================================================
+        # 1) Direct foreground contributions
+        # ==========================================================
+        dRdx_A += self._apply_section_adjoint_weights(xs_A, W_1, W_2, derivative_type='x', scale=1.0)
+        dRdw_A += self._apply_section_adjoint_weights(xs_A, W_1, W_2, derivative_type='w', scale=1.0)
+
+        dRdx_B += self._apply_section_adjoint_weights(xs_B, W_1, W_2, derivative_type='x', scale=1.0)
+        dRdw_B += self._apply_section_adjoint_weights(xs_B, W_1, W_2, derivative_type='w', scale=1.0)
+
+        # Save mortar warping state because we overwrite it twice below
+        mortar_state = self._save_mortar_warping_state(collision)
+
+        try:
+            # ==========================================================
+            # 2) A-side overlap correction:
+            #
+            #   -0.5 * K_C( x_C, P_A w_A )
+            # ==========================================================
+            P_A_np, w_A = self._load_projected_mortar_warping(collision=collision, mesh_id=0)
+
+            # Recompute mortar constitutive quantities at projected A-state
+            mortar_xs._compute_xs_stiffness_matrix()
+
+            # Direct constitutive sensitivities wrt mortar geometry / mortar warping
+            dRdx_C_A_direct = self._apply_section_adjoint_weights(
+                mortar_xs, W_1, W_2, derivative_type='x', scale=-0.5
+            )
+            dRdw_C_A = self._apply_section_adjoint_weights(
+                mortar_xs, W_1, W_2, derivative_type='w', scale=-0.5
+            )
+
+            dRdx_C += dRdx_C_A_direct
+
+            # Chain rule through w_C^A = P_A w_A
+            seed_P_A = np.zeros_like(P_A_np)
+            for k in range(6):
+                dRdw_A[:, k] += P_A_np.T @ dRdw_C_A[:, k]
+                seed_P_A += np.outer(dRdw_C_A[:, k], w_A[:, k])
+
+            # Projection-operator geometry VJP
+            dPdx_A, dPdx_C_from_A = self._compute_vjp_dP(seed_P_A, collision, mesh_id=0)
+            dRdx_A += dPdx_A
+            dRdx_C += dPdx_C_from_A
+
+            # ==========================================================
+            # 3) B-side overlap correction:
+            #
+            #   -0.5 * K_C( x_C, P_B w_B )
+            # ==========================================================
+            P_B_np, w_B = self._load_projected_mortar_warping(collision=collision, mesh_id=1)
+
+            mortar_xs._compute_xs_stiffness_matrix()
+
+            dRdx_C_B_direct = self._apply_section_adjoint_weights(
+                mortar_xs, W_1, W_2, derivative_type='x', scale=-0.5
+            )
+            dRdw_C_B = self._apply_section_adjoint_weights(
+                mortar_xs, W_1, W_2, derivative_type='w', scale=-0.5
+            )
+
+            dRdx_C += dRdx_C_B_direct
+
+            seed_P_B = np.zeros_like(P_B_np)
+            for k in range(6):
+                dRdw_B[:, k] += P_B_np.T @ dRdw_C_B[:, k]
+                seed_P_B += np.outer(dRdw_C_B[:, k], w_B[:, k])
+
+            dPdx_B, dPdx_C_from_B = self._compute_vjp_dP(seed_P_B, collision, mesh_id=1)
+            dRdx_B += dPdx_B
+            dRdx_C += dPdx_C_from_B
+
+        finally:
+            self._restore_mortar_warping_state(mortar_state, collision)
+
+        return {
+            'x_A': dRdx_A,
+            'x_B': dRdx_B,
+            'x_C': dRdx_C,
+            'w_A': dRdw_A,
+            'w_B': dRdw_B,
+        }
 
 
 class CrossSectionAnalytical:
