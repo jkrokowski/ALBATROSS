@@ -604,10 +604,13 @@ class CrossSectionCouplingComponents(csdl.CustomExplicitOperation):
         MC_petsc = self.xs.collisions[self.collision].MC
         SC_petsc = self.xs.collisions[self.collision].S_C
         KC_petsc = self.xs.collisions[self.collision].mortar_xs.K_bar
-                
+
         outputs['MC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(MC_petsc)
         outputs['SC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(SC_petsc)
-        outputs['KC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(KC_petsc)
+        if self.xs.enable_overlap_correction and KC_petsc is not None:
+            outputs['KC'] = ALBATROSS.petsc_utils.convert_petsc_to_numpy(KC_petsc)
+        else:
+            outputs['KC'] = np.zeros_like(outputs['MC'])
 
         #return mesh geometry to original state:
         self.xs.collisions[self.collision].mortar_mesh.msh.geometry.x[:] = geometry
@@ -1207,14 +1210,14 @@ class BeamDeflection(csdl.experimental.CustomImplicitOperation):
     
     outputs: deflection
     '''
-    def __init__(self, beam, tip_point, verbose=True, write_deformation=True):
+    def __init__(self, beam, output_pts, verbose=True, write_deformation=True):
         super().__init__()
         self.beam = beam
-        self.tip_point = tip_point
+        self.output_pts = output_pts
         self.verbose = verbose
         self.write_deformation = write_deformation
-        self.output_dofs_disp = beam._get_dofs(tip_point,'disp')
-        self.output_dofs_rot = beam._get_dofs(tip_point,'rot')
+        self.output_dofs_disp = [beam._get_dofs(output_pt,'disp') for output_pt in output_pts]
+        self.output_dofs_rot = [beam._get_dofs(output_pt,'rot') for output_pt in output_pts]
 
         
     def evaluate(self,inputs: csdl.VariableGroup):

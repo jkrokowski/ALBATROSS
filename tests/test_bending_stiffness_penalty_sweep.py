@@ -126,7 +126,8 @@ for pen_u in pen_u_vals:
             TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(
                 XSs,
                 pen_u=pen_u,
-                pen_t=pen_t)
+                pen_t=pen_t,
+                enable_overlap_correction=False)
 
             TXS_nm.get_xs_stiffness_matrix()
 

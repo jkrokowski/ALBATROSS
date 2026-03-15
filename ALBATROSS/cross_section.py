@@ -1510,9 +1510,9 @@ class CrossSection:
             plotter.show()
 
 class CoupledCrossSection:
-    '''class containing methods for gluing multiple overlapping, nonmatching meshes to 
+    '''class containing methods for gluing multiple overlapping, nonmatching meshes to
         compute combined beam cross-sectional properties'''
-    def __init__(self,XSs,pen_u=1e2,pen_t=1):
+    def __init__(self,XSs,pen_u=1e2,pen_t=1,enable_overlap_correction=False):
         
         #assign cross-sections objects to regions 
         self.XSs = XSs
@@ -1523,6 +1523,7 @@ class CoupledCrossSection:
         #base penalty parameter
         self.pen_u = pen_u
         self.pen_t = pen_t
+        self.enable_overlap_correction = enable_overlap_correction
 
         #adjust penalty based on average mesh size
         self._set_penalty_values()
@@ -1911,10 +1912,14 @@ class CoupledCrossSection:
             self.collisions[collision].SC_form = SC_form
             self.collisions[collision].S_C = S_C
 
-            #construct overlap correction forms:
-            self.collisions[collision].mortar_xs._construct_xs_form()
-            
-            self.collisions[collision].mortar_xs.a_form = fem.form(self.collisions[collision].mortar_xs.a00)
+            if self.enable_overlap_correction:
+                # Construct the overlap-correction form only when requested.
+                self.collisions[collision].mortar_xs._construct_xs_form()
+                self.collisions[collision].mortar_xs.a_form = fem.form(
+                    self.collisions[collision].mortar_xs.a00
+                )
+            else:
+                self.collisions[collision].mortar_xs.a_form = None
             
 
     def _assemble_mortar_matrices(self):
@@ -1932,9 +1937,13 @@ class CoupledCrossSection:
             # self.collisions[collision].SC_form = S_C_form
             self.collisions[collision].S_C = S_C
 
-            #assemble overlap correction term:
-            self.collisions[collision].mortar_xs.K_bar = fem.petsc.assemble_matrix(self.collisions[collision].mortar_xs.a_form)
-            self.collisions[collision].mortar_xs.K_bar.assemble()
+            if self.enable_overlap_correction:
+                self.collisions[collision].mortar_xs.K_bar = fem.petsc.assemble_matrix(
+                    self.collisions[collision].mortar_xs.a_form
+                )
+                self.collisions[collision].mortar_xs.K_bar.assemble()
+            else:
+                self.collisions[collision].mortar_xs.K_bar = None
     
     # def _construct_overlap_correction(self):
     #     '''
@@ -1969,11 +1978,10 @@ class CoupledCrossSection:
             S_BA.axpy(1.0, AT_C_B(PB, S_C, PA) )
             S_BB.axpy(1.0, AT_C_B(PB, S_C, PB) )
 
-            #add overlap correction to main system diagonal blocks
-            K_C = self.collisions[collision].mortar_xs.K_bar
-
-            S_AA.axpy(-0.5,AT_C_B(PA,K_C,PA))
-            S_BB.axpy(-0.5,AT_C_B(PB,K_C,PB))
+            if self.enable_overlap_correction:
+                K_C = self.collisions[collision].mortar_xs.K_bar
+                S_AA.axpy(-0.5,AT_C_B(PA,K_C,PA))
+                S_BB.axpy(-0.5,AT_C_B(PB,K_C,PB))
 
             #store to collision for later addition to overall system
             self.collisions[collision].Sij = [[S_AA,S_AB],
@@ -2056,11 +2064,15 @@ class CoupledCrossSection:
         v_j = self.collisions[collision].v_j 
         MC_ufl= self.collisions[collision].MC_ufl
         SC_ufl = self.collisions[collision].SC_ufl
-        KC_ufl = self.collisions[collision].mortar_xs.a00
-
         self.collisions[collision].pMCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(MC_ufl,u_j),v_j),x,dX))
         self.collisions[collision].pSCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(SC_ufl,u_j),v_j),x,dX))
-        self.collisions[collision].pKCpx_form = fem.form(ufl.derivative(ufl.action(ufl.action(KC_ufl,u_j),v_j),x,dX))
+        if self.enable_overlap_correction:
+            KC_ufl = self.collisions[collision].mortar_xs.a00
+            self.collisions[collision].pKCpx_form = fem.form(
+                ufl.derivative(ufl.action(ufl.action(KC_ufl, u_j), v_j), x, dX)
+            )
+        else:
+            self.collisions[collision].pKCpx_form = None
         print('DONE compling coupling forms')
 
 
@@ -2119,6 +2131,11 @@ class CoupledCrossSection:
         return d_input
 
     def _compute_vjp_dKC(self,d_output,collision):
+        if not self.enable_overlap_correction:
+            VX = self.collisions[collision].mortar_mesh.V_x
+            d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
+            return np.zeros(d_inputs_size)
+
         VX = self.collisions[collision].mortar_mesh.V_x
         d_inputs_size = VX.dofmap.index_map_bs * VX.dofmap.index_map.size_global
         d_input = np.zeros(d_inputs_size)
@@ -2278,10 +2295,12 @@ class CoupledCrossSection:
 
         MC = convert_petsc_to_numpy(self.collisions[collision].MC)
         SC = convert_petsc_to_numpy(self.collisions[collision].S_C)
-        KC = convert_petsc_to_numpy(self.collisions[collision].mortar_xs.K_bar)
-
         U = MC + SC
-        T = MC + SC - 0.5 * KC
+        if self.enable_overlap_correction:
+            KC = convert_petsc_to_numpy(self.collisions[collision].mortar_xs.K_bar)
+            T = U - 0.5 * KC
+        else:
+            T = U
 
         dRdx_A = np.zeros(self.XSs[0].V_x.dofmap.index_map_bs * self.XSs[0].V_x.dofmap.index_map.size_global)
         dRdx_B = np.zeros(self.XSs[1].V_x.dofmap.index_map_bs * self.XSs[1].V_x.dofmap.index_map.size_global)
@@ -2341,14 +2360,15 @@ class CoupledCrossSection:
             seed_SC = seed_MC.copy()
 
             # KC only appears on diagonal terms with -0.5 coefficient
-            seed_KC = (
-                -0.5 * np.outer(PA_rA, PA_wA)
-                -0.5 * np.outer(PB_rB, PB_wB)
-            )
             if DEBUG_MORTAR:
                 dRdx_C += self._compute_vjp_dMC(seed_MC, collision)
                 dRdx_C += self._compute_vjp_dSC(seed_SC, collision)
-                dRdx_C += self._compute_vjp_dKC(seed_KC, collision)
+                if self.enable_overlap_correction:
+                    seed_KC = (
+                        -0.5 * np.outer(PA_rA, PA_wA)
+                        -0.5 * np.outer(PB_rB, PB_wB)
+                    )
+                    dRdx_C += self._compute_vjp_dKC(seed_KC, collision)
 
             # -------------------------
             # interpolation matrix seeds
@@ -2748,19 +2768,26 @@ class CoupledCrossSection:
 
             self.A += self.XSs[i].A
 
-        for collision in self.collisions:
-            for idx in range(6):
-                self.collisions[collision].PA.mult(self.XSs[0].warping_functions[idx].x.petsc_vec,self.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
-            self.collisions[collision].mortar_xs._compute_xs_stiffness_matrix()
-            self.K1 -= 0.5*self.collisions[collision].mortar_xs.K1
-            self.K2 -= 0.5*self.collisions[collision].mortar_xs.K2
+        if self.enable_overlap_correction:
+            for collision in self.collisions:
+                for idx in range(6):
+                    self.collisions[collision].PA.mult(
+                        self.XSs[0].warping_functions[idx].x.petsc_vec,
+                        self.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec,
+                    )
+                self.collisions[collision].mortar_xs._compute_xs_stiffness_matrix()
+                self.K1 -= 0.5 * self.collisions[collision].mortar_xs.K1
+                self.K2 -= 0.5 * self.collisions[collision].mortar_xs.K2
 
-            for idx in range(6):
-                self.collisions[collision].PB.mult(self.XSs[1].warping_functions[idx].x.petsc_vec,self.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec)
-            self.collisions[collision].mortar_xs._compute_xs_stiffness_matrix()
+                for idx in range(6):
+                    self.collisions[collision].PB.mult(
+                        self.XSs[1].warping_functions[idx].x.petsc_vec,
+                        self.collisions[collision].mortar_xs.warping_functions[idx].x.petsc_vec,
+                    )
+                self.collisions[collision].mortar_xs._compute_xs_stiffness_matrix()
 
-            self.K1 -= 0.5*self.collisions[collision].mortar_xs.K1
-            self.K2 -= 0.5*self.collisions[collision].mortar_xs.K2
+                self.K1 -= 0.5 * self.collisions[collision].mortar_xs.K1
+                self.K2 -= 0.5 * self.collisions[collision].mortar_xs.K2
         
         #apply threshholding:
         s1 = np.max(np.abs(np.diag(self.K1)))
@@ -3033,10 +3060,14 @@ class CoupledCrossSection:
             if not hasattr(xs, "dKdx_form"):
                 xs._set_up_dK_forms()
 
-        # Mortar constitutive derivative forms
-        mortar_xs = self.collisions[collision].mortar_xs
-        if not hasattr(mortar_xs, "dKdx_form"):
-            mortar_xs._set_up_dK_forms()
+        # Mortar constitutive derivative forms are only needed when the
+        # overlap-correction constitutive term is active.
+        if self.enable_overlap_correction:
+            mortar_xs = self.collisions[collision].mortar_xs
+            if not hasattr(mortar_xs, "K1_form"):
+                mortar_xs._compute_xs_stiffness_matrix()
+            if not hasattr(mortar_xs, "dKdx_form"):
+                mortar_xs._set_up_dK_forms()
 
         # Coupling / interpolation VJP forms
         if not hasattr(self.collisions[collision], "pMCpx_form"):
@@ -3204,6 +3235,15 @@ class CoupledCrossSection:
 
         dRdx_B += self._apply_section_adjoint_weights(xs_B, W_1, W_2, derivative_type='x', scale=1.0)
         dRdw_B += self._apply_section_adjoint_weights(xs_B, W_1, W_2, derivative_type='w', scale=1.0)
+
+        if not self.enable_overlap_correction:
+            return {
+                'x_A': dRdx_A,
+                'x_B': dRdx_B,
+                'x_C': dRdx_C,
+                'w_A': dRdw_A,
+                'w_B': dRdw_B,
+            }
 
         # Save mortar warping state because we overwrite it twice below
         mortar_state = self._save_mortar_warping_state(collision)

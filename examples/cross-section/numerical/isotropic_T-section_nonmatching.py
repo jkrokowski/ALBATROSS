@@ -10,8 +10,8 @@ import basix.ufl
 default_scalar_type = PETSc.ScalarType   
 
 #=================== mesh construction ==================#
-N = 12
-offset = 0
+N = 4
+offset = 1
 
 h_to_f = 10
 w_to_w = 10
@@ -52,7 +52,9 @@ XSs = [ALBATROSS.cross_section.CrossSection(msh,[unobtainium]) for msh in meshes
 
 #================= initialize coupled cross-section ===========#
 # val = 
-TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e1,pen_t=1e-1)
+TXS_nm = ALBATROSS.cross_section.CoupledCrossSection(XSs,pen_u=1e1,
+                                                     pen_t=1e-1,
+                                                     enable_overlap_correction=False)
 TXS_nm.plot_meshes()
 
 #identify meshes:
