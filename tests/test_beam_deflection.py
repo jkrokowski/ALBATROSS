@@ -103,12 +103,12 @@ inputs_beam = csdl.VariableGroup()
 inputs_beam.K = K
 
 beam_model = ALBATROSS.csdl_utils.BeamDeflection(CantileverBeam,
-                                            tip_point = p2)
+                                            output_pts = [p2])
 
 outputs_beam = beam_model.evaluate(inputs_beam)
 
 #  = csdl.Variable(shape=(1,))
-tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs_disp[2]])
+tip_displacement = outputs_beam.d.get(csdl.slice[beam_model.output_dofs_disp[0][2]])
 tip_displacement.name = 'tip_deflection'
 
 #APPARENTLY the simulator still needs to access csdl stuff, so stopping the recorder causes issues

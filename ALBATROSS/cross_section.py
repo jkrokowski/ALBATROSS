@@ -1795,7 +1795,7 @@ class CoupledCrossSection:
             # minimum mesh size in the overlap region, not the min of both meshes' average cell size
             mesh_size = np.min([self.XSs[collision[0]].mesh_size,
                                self.XSs[collision[1]].mesh_size])
-            mesh_C = mesh_from_polygon(poly_C,mesh_size=0.25*mesh_size,mesh_name='mortar_mesh')
+            mesh_C = mesh_from_polygon(poly_C,mesh_size=0.5*mesh_size,mesh_name='mortar_mesh')
             self.collisions[collision].mortar_mesh = MortarMesh(mesh_C)
             #TODO: the material field could be interpolated from the foreground meshes instead of just 
             #       populating straight from a single material property
@@ -2615,7 +2615,7 @@ class CoupledCrossSection:
         K2 = self.K2
 
         #get K1 and K2 adjoint loads for the full coupled matrix
-        W_1 = dK @ K1 @ K2inv + K2inv @ K1.T @ dK
+        W_1 = dK @ K1 @ K2inv + dK.T @ K2inv @ K1
         W_2 = K2inv @ K1.T @ dK @ K1 @ K2inv
 
         if derivative_type == 'x':

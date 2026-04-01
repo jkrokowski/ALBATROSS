@@ -24,10 +24,10 @@ N = 20 #number of quad elements per side on xc mesh
 W = .1 #xs width
 H = .1 #xs height
 A = W*H #xs area
-L = 20 
+L = 2 
 
 #define tip load magnitude 
-F = .01 
+F = 10000
 
 #beam endpoint locations
 p1 = (0,0,0)
@@ -40,7 +40,7 @@ squareXSmesh = ALBATROSS.mesh.create_rectangle(points,[N,N])
 #initialize material object
 unobtainium = ALBATROSS.material.Material(name='unobtainium',
                                            mat_type='ISOTROPIC',
-                                           mech_props={'E':10e6,'nu':0.2},
+                                           mech_props={'E':70e9,'nu':0.2},
                                            density=2700)
 
 #initialize and run cross-sectional analysis
@@ -78,6 +78,7 @@ CantileverBeam.add_clamped_point(p1)
 
 #apply force at free end in the negative z direction
 CantileverBeam.add_point_load([(0,0,-F)],[p2])
+CantileverBeam.add_point_moment([(-F*W/2,0,0)],[p2])
 
 #solve the linear problem
 CantileverBeam.solve()

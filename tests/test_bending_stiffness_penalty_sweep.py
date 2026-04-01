@@ -8,20 +8,23 @@ from mpi4py import MPI
 # PARAMETERS
 #################################################################
 
-N = 6
+N = 3
 W = 0.1
-H = 0.1
-L = 2.0
+H = 0.03
+L = 1.0
 
-offset = 1
-h_to_f = 10
-w_to_w = 10
+offset = 0
+tf = H/10 #m
+tw = W/25 #m
 
-m1,n1 = N*h_to_f+offset,N
-m2,n2 = N,N*w_to_w+offset
+tw_to_tf = int(tw/tf)
 
-tf = H/h_to_f
-tw = W/w_to_w
+h_to_w = int(H/tw)
+w_to_f = int(W/tf)
+
+m1,n1 = N*w_to_f+offset,N
+m2,n2 = tw_to_tf*N,N*tw_to_tf*h_to_w+offset
+
 eps = 1e-3
 dx_vals = np.linspace(-0.045,0.045,201)
 
@@ -35,14 +38,13 @@ dx_vals = np.linspace(-0.045,0.045,201)
 # pen_u_vals = [1e0,1e1,1e2]
 # pen_t_vals = [1e-2,1e0,1e2]
 pen_u_vals = [1e1]
-pen_t_vals = [1e-6]
+pen_t_vals = [1e-5]
 
 #################################################################
 # STORAGE
 #################################################################
 
-K44_results = {}
-K55_results = {}
+K_results = {}
 cond_results = {}
 
 #################################################################
@@ -58,8 +60,7 @@ for pen_u in pen_u_vals:
         print(f"Running pen_u = {pen_u}, pen_t = {pen_t}")
         print("====================================")
 
-        K44_vals = []
-        K55_vals = []
+        K_vals = []
         cond_vals = []
 
         for dx_w in dx_vals:
@@ -138,8 +139,7 @@ for pen_u in pen_u_vals:
             # RECORD VALUES
             ############################################################
 
-            K44_vals.append(K[4,4])
-            K55_vals.append(K[5,5])
+            K_vals.append(K)
 
             try:
                 cond_vals.append(np.linalg.cond(K))
@@ -147,8 +147,7 @@ for pen_u in pen_u_vals:
                 cond_vals.append(np.nan)
 
 
-        K44_results[key] = np.array(K44_vals)
-        K55_results[key] = np.array(K55_vals)
+        K_results[key] = np.array(K_vals)
         cond_results[key] = np.array(cond_vals)
 
 #################################################################
@@ -163,7 +162,7 @@ print("\n\nAll sweeps complete. Plotting results...")
 
 plt.figure(figsize=(10,6))
 
-for key,val in K44_results.items():
+for key,val in K_results.items():
     pen_u,pen_t = key
     label = f"pu={pen_u:.0e}, pt={pen_t:.0e}"
     plt.plot(dx_vals,val,label=label)

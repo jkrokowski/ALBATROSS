@@ -11,7 +11,7 @@ default_scalar_type = PETSc.ScalarType
 
 #=================== mesh construction ==================#
 N = 4
-offset = 1
+offset = 0
 
 h_to_f = 10
 w_to_w = 10

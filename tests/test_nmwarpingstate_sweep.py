@@ -9,7 +9,7 @@ from dolfinx import mesh
 # geometry parameters
 # ============================================================
 
-dx_w_init = 0.037
+dx_w_init = -0.040
 EPS = 1e-6
 
 N = 3
@@ -147,6 +147,123 @@ f.add_name('f')
 sim = csdl.experimental.PySimulator(recorder)
 # sim.run()
 
+# ============================================================
+# sweep setup
+# ============================================================
+
+n_samples = 2
+dx_vals = np.linspace(-0.048, 0.048, n_samples)
+
+f_vals = []
+adj_vals = []
+fd_vals = []
+abs_err = []
+rel_err = []
+
+
+# ============================================================
+# sweep loop
+# ============================================================
+
+for i, dx in enumerate(dx_vals):
+
+    # ---------------------------
+    # base evaluation
+    # ---------------------------
+    dx_w.value = np.array([dx])
+    sim.run()
+
+    f0 = float(f.value)
+
+    # adjoint at this point
+    adj = sim.compute_totals(ofs=[f], wrts=[dx_w])[(f, dx_w)][0][0]
+
+    # ---------------------------
+    # finite difference
+    # ---------------------------
+    dx_w.value = np.array([dx + EPS])
+    sim.run()
+    f_plus = float(f.value)
+
+    dx_w.value = np.array([dx - EPS])
+    sim.run()
+    f_minus = float(f.value)
+
+    fd = (f_plus - f_minus) / (2 * EPS)
+
+    # ---------------------------
+    # store
+    # ---------------------------
+    f_vals.append(f0)
+    adj_vals.append(adj)
+    fd_vals.append(fd)
+
+    err_abs = abs(adj - fd)
+    err_rel = err_abs / max(abs(fd), 1e-14)
+
+    abs_err.append(err_abs)
+    rel_err.append(err_rel)
+
+    print(f"[{i+1}/{n_samples}] dx={dx: .4f} | f={f0: .3e} | adj={adj: .3e} | fd={fd: .3e} | rel={err_rel: .3e}")
+
+
+# convert to arrays
+f_vals = np.array(f_vals)
+adj_vals = np.array(adj_vals)
+fd_vals = np.array(fd_vals)
+abs_err = np.array(abs_err)
+rel_err = np.array(rel_err)
+
+import matplotlib.pyplot as plt
+
+# --------------------------------------------------
+# forward solution
+# --------------------------------------------------
+plt.figure()
+plt.plot(dx_vals, f_vals, 'o-')
+plt.xlabel('dx_w')
+plt.ylabel('f (warping energy)')
+plt.title('Forward solution smoothness')
+plt.grid()
+
+
+# --------------------------------------------------
+# derivatives comparison
+# --------------------------------------------------
+plt.figure()
+plt.plot(dx_vals, adj_vals, 'o-', label='Adjoint')
+plt.plot(dx_vals, fd_vals, 'x--', label='FD')
+plt.xlabel('dx_w')
+plt.ylabel('df/dx_w')
+plt.title('Derivative comparison')
+plt.legend()
+plt.grid()
+
+
+# --------------------------------------------------
+# error
+# --------------------------------------------------
+plt.figure()
+plt.semilogy(dx_vals, rel_err, 'o-')
+plt.xlabel('dx_w')
+plt.ylabel('Relative error')
+plt.title('Adjoint vs FD error')
+plt.grid()
+
+
+# --------------------------------------------------
+# derivative smoothness (second derivative proxy)
+# --------------------------------------------------
+d_adj = np.gradient(adj_vals, dx_vals)
+
+plt.figure()
+plt.plot(dx_vals, d_adj, 'o-')
+plt.xlabel('dx_w')
+plt.ylabel('d^2f/dx_w^2 (approx)')
+plt.title('Derivative smoothness')
+plt.grid()
+
+plt.show()
 
 # ============================================================
 # derivative check
